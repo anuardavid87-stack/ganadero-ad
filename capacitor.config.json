@@ -1,0 +1,15 @@
+{
+  "appId": "com.ganaderoad.app",
+  "appName": "Ganadero AD",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}

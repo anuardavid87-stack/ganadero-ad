@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ganadero AD</string>
+    <string name="title_activity_main">Ganadero AD</string>
+    <string name="package_name">com.ganaderoad.app</string>
+    <string name="custom_url_scheme">com.ganaderoad.app</string>
+</resources>

@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Android Build Outputs & Caches
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/captures/
+.gradle/
+
+# Web distribution / compiled cache (optional, keeping bundles in repo)
+# Temporary files & snippets
+*.log
+step_*.txt
+recovered_*.txt
+renderContenido_*.txt
+
+# OS Files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="boviGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#boviGrad)" />
+  <g filter="url(#glow)" transform="translate(64, 64) scale(0.75)">
+    <!-- Silueta moderna BoviTrack -->
+    <path d="M192 128c-35.3 0-64 28.7-64 64v64c0 35.3 28.7 64 64 64h128c35.3 0 64-28.7 64-64v-64c0-35.3-28.7-64-64-64H192z" fill="#ffffff" />
+    <path d="M144 112C126.3 84.4 96.2 64 60.8 64 27.2 64 0 91.2 0 124.8c0 39.4 34.6 70.3 75.8 64.9C95.5 160 118.2 135 144 112z" fill="#34d399" />
+    <path d="M368 112c17.7-27.6 47.8-48 83.2-48 33.6 0 60.8 27.2 60.8 60.8 0 39.4-34.6 70.3-75.8 64.9C416.5 160 393.8 135 368 112z" fill="#34d399" />
+    <circle cx="216" cy="208" r="16" fill="#064e3b" />
+    <circle cx="296" cy="208" r="16" fill="#064e3b" />
+    <!-- Pulso / Sensor de Campo Agrotech -->
+    <path d="M224 288h64c8.8 0 16 7.2 16 16s-7.2 16-16 16h-64c-8.8 0-16-7.2-16-16s7.2-16 16-16z" fill="#059669" />
+  </g>
+</svg>

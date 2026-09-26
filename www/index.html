@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#059669">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Ganadero AD - Sistema Inteligente de Gestión Ganadera, Inventario de Animales, Cuadrículas Masivas de Campo y Alertas con IA.">
+  <title>Ganadero AD - Gestión y Zootecnia Ganadera</title>
+
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon.svg">
+
+  <!-- Tailwind CSS Engine -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS para lectura de archivos Excel nativos (.xlsx, .xls) y CSV -->
+  <script src="./xlsx.full.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .bottom-mobile-nav { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15); }
+  </style>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased min-h-screen flex flex-col pb-24 md:pb-6">
+
+  <!-- ====================================================================== -->
+  <!-- BARRA SUPERIOR PWA (HEADER)                                            -->
+  <!-- ====================================================================== -->
+  <header class="bg-slate-950 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-2.5 sm:px-6">
+      <div class="flex items-center justify-between h-13 sm:h-14 py-1.5">
+        <!-- Logo Ganadero AD -->
+        <div class="flex items-center space-x-2 shrink-0">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white text-base sm:text-lg shadow shrink-0">
+            🐂
+          </div>
+          <div>
+            <div class="font-black text-xs sm:text-sm tracking-tight text-white flex items-center gap-1.5">
+              <span>Ganadero AD</span>
+              <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 hidden sm:inline">PRO PWA</span>
+            </div>
+            <div class="text-[9px] text-slate-400 hidden sm:block">Zootecnia, Genealogía & IA en Campo</div>
+          </div>
+        </div>
+
+        <!-- SELECTOR DE EMPRESA MULTI-TENANT (VISIBLE PARA SUPER ADMIN) -->
+        <div id="container-empresa-nav" class="hidden items-center gap-1 bg-purple-950/80 px-2 sm:px-2.5 py-1 rounded-xl border border-purple-700/60 shadow-sm">
+          <span class="text-xs text-purple-300 font-bold hidden md:inline">🏢 Empresa:</span>
+          <select id="select-empresa-nav" class="bg-transparent text-purple-100 font-black text-xs outline-none cursor-pointer max-w-[90px] sm:max-w-xs">
+            <!-- Inyectado dinámicamente para Super Admin -->
+          </select>
+        </div>
+
+        <!-- SELECTOR DE FINCA GLOBAL -->
+        <div class="flex items-center gap-1 bg-slate-900 px-2 sm:px-2.5 py-1 rounded-xl border border-slate-800">
+          <span class="text-xs text-emerald-400 font-bold hidden md:inline">🏡 Finca:</span>
+          <span class="text-xs text-emerald-400 md:hidden">🏡</span>
+          <select id="select-finca-nav" class="bg-transparent text-white font-black text-xs outline-none cursor-pointer max-w-[105px] sm:max-w-xs">
+            <!-- Inyectado dinámicamente -->
+          </select>
+        </div>
+
+        <!-- ESTADO RED & PERFIL DE USUARIO EN SESIÓN -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <!-- BOTÓN COPIA DE SEGURIDAD EXCEL MULTI-HOJA -->
+          <button id="btn-backup-excel-header" class="px-2 sm:px-2.5 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 active:scale-95 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Descargar Copia de Seguridad Completa en Excel (.xlsx) con todas las hojas">
+            <span>💾</span> <span class="hidden md:inline">Copia de Seguridad</span>
+          </button>
+
+          <div id="status-red-pwa" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer" title="Sincronización con Supabase Cloud">
+            <span class="hidden sm:inline">● Conectado (Sync)</span>
+            <span class="sm:hidden">⚡</span>
+          </div>
+
+          <!-- IDENTIFICADOR DE USUARIO ACTIVO (NO INTERACTIVO) -->
+          <div id="badge-usuario-activo" class="flex items-center gap-1.5 bg-slate-900 px-1.5 sm:px-2.5 py-1 rounded-xl border border-slate-800">
+            <span id="user-avatar-nav" class="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">AD</span>
+            <div class="hidden sm:flex flex-col leading-tight">
+              <div class="flex items-center gap-1.5">
+                <span id="user-nombre-nav" class="text-xs font-bold text-white max-w-[110px] truncate">Admin</span>
+                <span id="user-empresa-nav" class="text-[9px] text-purple-300 font-bold truncate max-w-[110px]">El Porvenir</span>
+              </div>
+              <span id="user-rol-badge-nav" class="text-[9px] font-mono font-black text-purple-300 uppercase">Administrador</span>
+            </div>
+          </div>
+
+          <!-- BOTÓN CERRAR SESIÓN -->
+          <button id="btn-logout" class="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer" title="Cerrar sesión en este dispositivo">
+            <span>🚪</span> <span class="hidden sm:inline">Salir</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- NAVEGACIÓN DESKTOP -->
+      <nav class="hidden md:flex space-x-1 py-1.5 border-t border-slate-800/80 overflow-x-auto">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-emerald-400 bg-slate-800" data-vista="animales">
+          <span>🏷️</span> Animales
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="masivo">
+          <span>📋</span> Cuadrícula Masiva
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="alertas">
+          <span>🚨</span> Alertas & IA
+          <span id="contador-alertas-header" class="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-rose-500 text-white font-bold">0</span>
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="dinamica">
+          <span>🔄</span> Tablas Dinámicas
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="reproduccion">
+          <span>🧬</span> Reproducción
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="nutricion">
+          <span>🥗</span> Nutrición IA
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="dashboard">
+          <span>📊</span> Dashboard & Finanzas
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="excel">
+          <span>📤</span> Plantilla Excel
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="traslados">
+          <span>🚚</span> Traslados
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="ingresos">
+          <span>📅</span> Ingresos Diarios
+        </button>
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-purple-300 hover:text-purple-100" data-vista="admin">
+          <span>🔐</span> Administración
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- BANNER PROPIETARIO / SOLO LECTURA -->
+  <div id="banner-modo-propietario" class="bg-amber-500 text-slate-950 px-4 py-1.5 text-xs font-bold text-center hidden">
+    👁️ Modo Consulta Activo: Permisos de sólo lectura habilitados.
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- CONTENEDOR DE PANTALLAS DINÁMICAS                                      -->
+  <!-- ====================================================================== -->
+  <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex-1 w-full">
+    <!-- 1. Pestaña General de Animales (Portada Principal con Buscador Directo y Ficha) -->
+    <section id="pantalla-animales" class="bovi-view">
+      <!-- PestanaAnimales montada aquí -->
+    </section>
+
+    <!-- 2. Cuadrícula Masiva Rápida en Brete / Báscula -->
+    <section id="pantalla-masivo" class="bovi-view hidden">
+      <!-- CuadriculaMasiva montada aquí -->
+    </section>
+
+    <!-- 3. Panel de Alertas Zootécnicas e IA -->
+    <section id="pantalla-alertas" class="bovi-view hidden">
+      <!-- PanelAlertas montado aquí -->
+    </section>
+
+    <!-- 4. Tablas Dinámicas Individualizadas -->
+    <section id="pantalla-dinamica" class="bovi-view hidden">
+      <!-- TablaDinamica montada aquí -->
+    </section>
+
+    <!-- 5. Dashboard Gráfico & Finanzas -->
+    <section id="pantalla-dashboard" class="bovi-view hidden">
+      <!-- DashboardGrafico montado aquí -->
+    </section>
+
+    <!-- 6. Módulo de Reproducción (IA / TE / Monta con Toro) -->
+    <section id="pantalla-reproduccion" class="bovi-view hidden">
+      <!-- ModuloReproduccion montado aquí -->
+    </section>
+
+    <!-- 7. Módulo Especial de Nutrición Animal & Biotecnología IA -->
+    <section id="pantalla-nutricion" class="bovi-view hidden">
+      <!-- ModuloNutricion montado aquí -->
+    </section>
+
+    <!-- 7. Importador Excel -->
+    <section id="pantalla-excel" class="bovi-view hidden">
+      <!-- ImportadorExcel montado aquí -->
+    </section>
+
+    <!-- 8. Administración Multi-Finca & Seguridad -->
+    <!-- 9. Módulo de Traslados de Animales entre Fincas -->
+    <section id="pantalla-traslados" class="bovi-view hidden">
+      <!-- ModuloTraslados montado aquí -->
+    </section>
+
+    <!-- 10. Módulo de Consulta de Ingresos Diarios & Auditoría con Exportación Excel -->
+    <section id="pantalla-ingresos" class="bovi-view hidden">
+      <!-- ModuloIngresosDiarios montado aquí -->
+    </section>
+
+    <section id="pantalla-admin" class="bovi-view hidden">
+      <!-- ModuloAdmin montado aquí -->
+    </section>
+  </main>
+
+  <!-- CONTENEDOR PARA MODAL FICHA ZOOTÉCNICA INDIVIDUAL -->
+  <div id="modal-ficha-animal"></div>
+
+  <!-- ====================================================================== -->
+  <!-- NAVEGACIÓN INFERIOR MOBILE FIRST (ERGONÓMICA EN CAMPO)                  -->
+  <!-- ====================================================================== -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t border-slate-800 z-40 px-1 py-1 flex justify-around items-center bottom-mobile-nav">
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-emerald-400 active transition" data-vista="animales">
+      <span class="text-xl">🏷️</span>
+      <span class="text-[9px] font-black mt-0.5">Animales</span>
+    </button>
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="masivo">
+      <span class="text-xl">📋</span>
+      <span class="text-[9px] font-black mt-0.5">Manga</span>
+    </button>
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="traslados">
+      <span class="text-xl">🚚</span>
+      <span class="text-[9px] font-black mt-0.5">Traslados</span>
+    </button>
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="ingresos">
+      <span class="text-xl">📅</span>
+      <span class="text-[9px] font-black mt-0.5">Ingresos</span>
+    </button>
+    <button id="btn-toggle-mas-mobile" class="flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition cursor-pointer">
+      <span class="text-xl">☰</span>
+      <span class="text-[9px] font-black mt-0.5">Más</span>
+    </button>
+  </nav>
+
+  <!-- MENÚ FLOTANTE "MÁS OPCIONES" EN MÓVIL -->
+  <div id="backdrop-mas-mobile" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 hidden md:hidden"></div>
+  <div id="menu-mas-opciones-mobile" class="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-50 p-4 space-y-3 hidden md:hidden">
+    <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+      <div class="font-black text-white text-xs flex items-center gap-2">
+        <span class="text-base">✨</span> Módulos y Herramientas Adicionales
+      </div>
+      <button id="btn-cerrar-mas-mobile" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-sm font-bold cursor-pointer">✕ Cerrar</button>
+    </div>
+    <div class="grid grid-cols-2 gap-2.5 pt-1">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="reproduccion">
+        <span class="text-2xl">🧬</span>
+        <div>
+          <div class="font-black text-slate-100">Reproducción</div>
+          <div class="text-[9px] text-slate-400">IA / TE / Monta</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="nutricion">
+        <span class="text-2xl">🥗</span>
+        <div>
+          <div class="font-black text-slate-100">Nutrición IA</div>
+          <div class="text-[9px] text-slate-400">Dietas & Biotecnología</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="alertas">
+        <span class="text-2xl">🚨</span>
+        <div>
+          <div class="font-black text-slate-100">Alertas & IA</div>
+          <div class="text-[9px] text-slate-400">Diagnóstico hato</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dinamica">
+        <span class="text-2xl">🔄</span>
+        <div>
+          <div class="font-black text-slate-100">Tablas Dinámicas</div>
+          <div class="text-[9px] text-slate-400">Filtros zootécnicos</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dashboard">
+        <span class="text-2xl">📊</span>
+        <div>
+          <div class="font-black text-slate-100">Finanzas</div>
+          <div class="text-[9px] text-slate-400">Costos & Métricas</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="excel">
+        <span class="text-2xl">📤</span>
+        <div>
+          <div class="font-black text-slate-100">Plantilla Excel</div>
+          <div class="text-[9px] text-slate-400">Importar / Exportar</div>
+        </div>
+      </button>
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 border border-purple-500/30 active:scale-95 text-purple-200 text-xs font-bold text-left transition cursor-pointer" data-vista="admin">
+        <span class="text-2xl">🔐</span>
+        <div>
+          <div class="font-black text-purple-100">Administración</div>
+          <div class="text-[9px] text-purple-300">Empresas & Accesos</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- PANTALLA DE AUTENTICACIÓN / LOGIN OBLIGATORIO (EMPRESA + USUARIO + CLAVE)-->
+  <!-- ====================================================================== -->
+  <div id="pantalla-login" class="fixed inset-0 bg-slate-950 z-[100] flex items-center justify-center p-4 overflow-y-auto hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto">
+      <!-- HEADER LOGIN -->
+      <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 text-white text-center border-b border-purple-900/40">
+        <div class="w-16 h-16 mx-auto bg-white/10 rounded-2xl flex items-center justify-center text-3xl mb-3 shadow-inner border border-white/10">
+          🐂
+        </div>
+        <h2 class="text-xl font-black tracking-tight">Ganadero AD</h2>
+        <p class="text-xs text-purple-200 mt-1">Control Ganadero, Multi-Tenant & Gestión de Campo</p>
+      </div>
+
+      <!-- FORMULARIO DE ACCESO (SOLO USUARIO Y CONTRASEÑA) -->
+      <form id="form-login" class="p-6 space-y-4 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Usuario de Acceso *:</label>
+          <div class="relative">
+            <span class="absolute left-3 top-2.5 text-slate-400 font-mono">@</span>
+            <input type="text" id="login-usuario" required placeholder="ej. anuardavid o tu usuario" autocomplete="username" class="w-full pl-8 pr-3 py-2.5 font-mono font-bold rounded-xl border border-slate-300 outline-none bg-slate-50 focus:bg-white focus:border-purple-600 transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Clave / Contraseña *:</label>
+          <div class="relative">
+            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password" class="w-full pl-3 pr-10 py-2.5 font-mono font-bold rounded-xl border border-slate-300 outline-none bg-slate-50 focus:bg-white focus:border-purple-600 transition">
+            <button type="button" id="btn-toggle-login-pass" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 font-bold cursor-pointer" tabindex="-1">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <!-- ERROR FEEDBACK -->
+        <div id="login-error-msg" class="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl font-bold text-xs hidden">
+          <!-- Mensaje dinámico de error -->
+        </div>
+
+        <button type="submit" id="btn-submit-login" class="w-full py-3 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 active:scale-[0.98] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+          <span>🚀 Iniciar Sesión</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="./bundle.js?v=1790459670509"></script>
+</body>
+</html>

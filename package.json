@@ -1,0 +1,30 @@
+{
+  "name": "ganadero-ad",
+  "version": "1.0.0",
+  "description": "Ganadero AD - Sistema Inteligente de Gestión Ganadera, Zootecnia y Báscula de Campo",
+  "main": "index.html",
+  "scripts": {
+    "bundle": "node build_bundle.mjs",
+    "test": "node test_suite.mjs",
+    "cap:sync": "node build_bundle.mjs && node sync_android.mjs && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:build": "node sync_android.mjs && cd android && gradlew.bat assembleDebug"
+  },
+  "keywords": [
+    "ganaderia",
+    "zootecnia",
+    "bovitrack",
+    "pwa",
+    "android",
+    "capacitor"
+  ],
+  "author": "Ganadero AD",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/core": "^7.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.1"
+  }
+}

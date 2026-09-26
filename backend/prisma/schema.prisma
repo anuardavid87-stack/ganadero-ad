@@ -1,0 +1,364 @@
+// ============================================================================
+// BOVITRACK PRO PWA: ESQUEMA PRISMA ORM
+// Modelado para Backend Node.js / TypeScript
+// ============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RolSistema {
+  administrador
+  propietario
+  operario
+  veterinario
+  consulta
+}
+
+enum Especie {
+  bovino
+  bufalino
+}
+
+enum Sexo {
+  hembra
+  macho
+}
+
+enum EstadoVida {
+  activo
+  descarte
+  vendido
+  muerto
+}
+
+enum CategoriaGanado {
+  vaca_ordeno
+  vaca_seca
+  novilla_vientre
+  novilla_levante
+  ternera_cria
+  toro_reproductor
+  novillo_ceba
+  ternero_cria
+}
+
+enum EstadoReproductivo {
+  vacia
+  prenada
+  servida_inseminada
+  dudosa
+  no_aplica
+}
+
+enum ResultadoDiagnosticoRepro {
+  prenada
+  vacia
+  sospechosa
+}
+
+enum TipoServicioReproductivo {
+  inseminacion_artificial
+  transferencia_embriones
+  monta_natural
+}
+
+enum SeveridadAlerta {
+  critica
+  advertencia
+  sanidad_preventiva
+}
+
+model Finca {
+  id                String       @id @default(uuid()) @db.Uuid
+  codigo            String       @unique @db.VarChar(30)
+  nombre            String       @db.VarChar(150)
+  ubicacion         String       @db.VarChar(255)
+  municipio         String?      @db.VarChar(100)
+  departamento      String?      @map("departamento_estado") @db.VarChar(100)
+  areaTotalHa       Decimal      @map("area_total_ha") @db.Decimal(10, 2)
+  areaPastoreoHa    Decimal?     @map("area_pastoreo_ha") @db.Decimal(10, 2)
+  precioLecheLitro  Decimal      @default(2400.00) @map("precio_leche_litro") @db.Decimal(10, 2)
+  precioCarneKgPie  Decimal      @default(8800.00) @map("precio_carne_kg_pie") @db.Decimal(10, 2)
+  moneda            String       @default("COP") @db.VarChar(5)
+  creadoEn          DateTime     @default(now()) @map("creado_en")
+  actualizadoEn     DateTime     @updatedAt @map("actualizado_en")
+
+  usuarios          FincaUsuario[]
+  costosFijos       CostosFijosFinca[]
+  inversiones       InversionDiferida[]
+  animales          Animal[]
+  alertas           AlertaZootecnica[]
+  auditoriasIA      LogAuditoriaIA[]
+
+  @@map("fincas")
+}
+
+model Usuario {
+  id             String       @id @default(uuid()) @db.Uuid
+  usuario        String       @unique @db.VarChar(50)
+  email          String       @unique @db.VarChar(120)
+  passwordHash   String       @map("password_hash") @db.VarChar(255)
+  nombreCompleto String       @map("nombre_completo") @db.VarChar(150)
+  telefono       String?      @db.VarChar(30)
+  rol            RolSistema   @default(operario)
+  activo         Boolean      @default(true)
+  ultimoLogin    DateTime?    @map("ultimo_login")
+  creadoEn       DateTime     @default(now()) @map("creado_en")
+
+  fincasAsignadas FincaUsuario[]
+  inversiones     InversionDiferida[]
+  pesajes         PesajeAnimal[]
+  palpaciones     PalpacionReproductiva[]
+  controlesLeche  ControlLechero[]
+  partos          RegistroPartoDestete[]
+  alertasResueltas AlertaZootecnica[]
+
+  @@map("usuarios")
+}
+
+model FincaUsuario {
+  id               String     @id @default(uuid()) @db.Uuid
+  fincaId          String     @map("finca_id") @db.Uuid
+  usuarioId        String     @map("usuario_id") @db.Uuid
+  rolEnFinca       RolSistema @map("rol_en_finca")
+  esPredeterminada Boolean    @default(false) @map("es_predeterminada")
+  asignadoEn       DateTime   @default(now()) @map("asignado_en")
+
+  finca            Finca      @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+  usuario          Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([fincaId, usuarioId])
+  @@map("fincas_usuarios")
+}
+
+model CostosFijosFinca {
+  id                     String   @id @default(uuid()) @db.Uuid
+  fincaId                String   @map("finca_id") @db.Uuid
+  periodoAnio            Int      @map("periodo_anio")
+  periodoMes             Int      @map("periodo_mes")
+  nominaFija             Decimal  @default(0) @map("nomina_fija") @db.Decimal(14, 2)
+  insumosVeterinarios    Decimal  @default(0) @map("insumos_veterinarios_sales") @db.Decimal(14, 2)
+  fertilizantes          Decimal  @default(0) @map("fertilizantes_herbicidas") @db.Decimal(14, 2)
+  combustibles           Decimal  @default(0) @map("combustibles_mantenimiento") @db.Decimal(14, 2)
+  serviciosPublicos      Decimal  @default(0) @map("servicios_publicos_canon") @db.Decimal(14, 2)
+  otrosGastos            Decimal  @default(0) @map("otros_gastos_operativos") @db.Decimal(14, 2)
+  totalCostosFijos       Decimal  @map("total_costos_fijos") @db.Decimal(14, 2)
+  fechaRegistro          DateTime @default(now()) @map("fecha_registro")
+
+  finca                  Finca    @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+
+  @@unique([fincaId, periodoAnio, periodoMes])
+  @@map("costos_fijos_finca")
+}
+
+model InversionDiferida {
+  id                   String   @id @default(uuid()) @db.Uuid
+  fincaId              String   @map("finca_id") @db.Uuid
+  descripcionActivo    String   @map("descripcion_activo") @db.VarChar(255)
+  categoriaActivo      String?  @default("Infraestructura") @map("categoria_activo") @db.VarChar(100)
+  montoTotalInversion  Decimal  @map("monto_total_inversion") @db.Decimal(14, 2)
+  fechaInicio          DateTime @map("fecha_inicio") @db.Date
+  plazoMesesDiferido   Int      @map("plazo_meses_diferido")
+  cuotaMensual         Decimal  @map("cuota_mensual_amortizacion") @db.Decimal(14, 2)
+  estado               String   @default("Activa") @db.VarChar(20)
+  registradoPor        String?  @map("registrado_por") @db.Uuid
+  creadoEn             DateTime @default(now()) @map("creado_en")
+
+  finca                Finca    @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+  usuario              Usuario? @relation(fields: [registradoPor], references: [id], onDelete: SetNull)
+
+  @@map("inversiones_diferidas")
+}
+
+model Animal {
+  id                   String             @id @default(uuid()) @db.Uuid
+  fincaId              String             @map("finca_id") @db.Uuid
+  identificacionTag    String             @map("identificacion_tag") @db.VarChar(40)
+  chipRfid             String?            @map("chip_rfid") @db.VarChar(60)
+  nombreAlias          String?            @map("nombre_alias") @db.VarChar(100)
+  especie              Especie            @default(bovino)
+  raza                 String             @db.VarChar(100)
+  sexo                 Sexo
+  fechaNacimiento      DateTime           @map("fecha_nacimiento") @db.Date
+  padreTag             String?            @map("padre_tag") @db.VarChar(40)
+  madreTag             String?            @map("madre_tag") @db.VarChar(40)
+  categoria            CategoriaGanado
+  lote                 String             @default("General") @db.VarChar(80)
+  potreroActual        String?            @map("potrero_actual") @db.VarChar(100)
+  estadoVida           EstadoVida         @default(activo) @map("estado_vida")
+  estadoReproductivo   EstadoReproductivo @default(vacia) @map("estado_reproductivo")
+  fechaUltimoParto     DateTime?          @map("fecha_ultimo_parto") @db.Date
+  diasGestacionActual  Int                @default(0) @map("dias_gestacion_actual")
+  ultimoPesoKg         Decimal?           @map("ultimo_peso_kg") @db.Decimal(6, 2)
+  fechaUltimoPesaje    DateTime?          @map("fecha_ultimo_pesaje") @db.Date
+  gdpPromedioGDia      Decimal?           @map("gdp_promedio_g_dia") @db.Decimal(6, 1)
+  condicionCorporal    Decimal?           @map("condicion_corporal") @db.Decimal(3, 2)
+  promedioLecheDiariaL Decimal?           @default(0) @map("promedio_leche_diaria_l") @db.Decimal(5, 2)
+  esCandidatoDescarte  Boolean            @default(false) @map("es_candidato_descarte")
+  motivoDescarte       String?            @map("motivo_descarte") @db.Text
+  creadoEn             DateTime           @default(now()) @map("creado_en")
+  actualizadoEn        DateTime           @updatedAt @map("actualizado_en")
+
+  finca                Finca              @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+  pesajes              PesajeAnimal[]
+  palpaciones          PalpacionReproductiva[]
+  servicios            ServicioReproductivo[]
+  controlesLeche       ControlLechero[]
+  partosComoMadre      RegistroPartoDestete[]  @relation("MadreParto")
+  partosComoCria       RegistroPartoDestete[]  @relation("CriaParto")
+  alertas              AlertaZootecnica[]
+
+  @@unique([fincaId, identificacionTag])
+  @@map("animales")
+}
+
+model PesajeAnimal {
+  id               String    @id @default(uuid()) @db.Uuid
+  animalId         String    @map("animal_id") @db.Uuid
+  fechaPesaje      DateTime  @default(now()) @map("fecha_pesaje") @db.Date
+  pesoKg           Decimal   @map("peso_kg") @db.Decimal(6, 2)
+  pesoPrevioKg     Decimal?  @map("peso_previo_kg") @db.Decimal(6, 2)
+  diasEntrePesajes Int?      @map("dias_entre_pesajes")
+  gdpCalculadaGDia Decimal?  @map("gdp_calculada_g_dia") @db.Decimal(7, 2)
+  condicionCorporal Decimal? @map("condicion_corporal") @db.Decimal(3, 2)
+  notas            String?   @db.Text
+  operarioId       String?   @map("operario_id") @db.Uuid
+  registradoEn     DateTime  @default(now()) @map("registrado_en")
+
+  animal           Animal    @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  operario         Usuario?  @relation(fields: [operarioId], references: [id], onDelete: SetNull)
+
+  @@unique([animalId, fechaPesaje])
+  @@map("pesajes_animales")
+}
+
+model PalpacionReproductiva {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  animalId               String                    @map("animal_id") @db.Uuid
+  fechaPalpacion         DateTime                  @default(now()) @map("fecha_palpacion") @db.Date
+  diagnostico            ResultadoDiagnosticoRepro
+  diasGestacionEstimados Int                       @default(0) @map("dias_gestacion_estimados")
+  fechaEstimadaParto     DateTime?                 @map("fecha_estimada_parto") @db.Date
+  estructuraOvarica      String?                   @map("estructura_ovarica") @db.VarChar(120)
+  observaciones          String?                   @db.Text
+  veterinarioId          String?                   @map("veterinario_id") @db.Uuid
+  registradoEn           DateTime                  @default(now()) @map("registrado_en")
+
+  animal                 Animal                    @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  veterinario            Usuario?                  @relation(fields: [veterinarioId], references: [id], onDelete: SetNull)
+
+  @@map("palpaciones_reproductivas")
+}
+
+model ServicioReproductivo {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  fincaId                 String                   @map("finca_id") @db.Uuid
+  animalId                String                   @map("animal_id") @db.Uuid
+  tipoServicio            TipoServicioReproductivo @map("tipo_servicio")
+  fechaServicio           DateTime                 @default(now()) @map("fecha_servicio") @db.Date
+  reproductorToroPajilla  String                   @map("reproductor_toro_pajilla") @db.VarChar(120)
+  codigoPajilla           String?                  @map("codigo_pajilla") @db.VarChar(80)
+  donadoraEmbrion         String?                  @map("donadora_embrion") @db.VarChar(100)
+  razaSemenEmbrion        String?                  @map("raza_semen_embrion") @db.VarChar(80)
+  tecnicoResponsable      String?                  @map("tecnico_responsable") @db.VarChar(120)
+  protocoloSincronizacion String?                  @map("protocolo_sincronizacion") @db.VarChar(120)
+  resultadoServicio       String?                  @default("Pendiente Chequeo") @map("resultado_servicio") @db.VarChar(40)
+  fechaEcografiaEstimada  DateTime?                @map("fecha_ecografia_estimada") @db.Date
+  fechaPalpacionEstimada  DateTime?                @map("fecha_palpacion_estimada") @db.Date
+  fechaPartoEstimada      DateTime?                @map("fecha_parto_estimada") @db.Date
+  observaciones           String?                  @db.Text
+  registradoEn            DateTime                 @default(now()) @map("registrado_en")
+
+  animal                  Animal                   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@map("servicios_reproductivos")
+}
+
+model ControlLechero {
+  id                String   @id @default(uuid()) @db.Uuid
+  animalId          String   @map("animal_id") @db.Uuid
+  fechaControl      DateTime @default(now()) @map("fecha_control") @db.Date
+  litrosTurnoManana Decimal  @default(0) @map("litros_turno_manana") @db.Decimal(5, 2)
+  litrosTurnoTarde  Decimal  @default(0) @map("litros_turno_tarde") @db.Decimal(5, 2)
+  totalLitrosDia    Decimal  @map("total_litros_dia") @db.Decimal(5, 2)
+  diasEnLecheDEL    Int?     @map("dias_en_leche_del")
+  calidadGrasaPct   Decimal? @map("calidad_grasa_pct") @db.Decimal(4, 2)
+  calidadProteinaPct Decimal? @map("calidad_proteina_pct") @db.Decimal(4, 2)
+  notasUbre         String?  @map("notas_ubre") @db.Text
+  operarioId        String?  @map("operario_id") @db.Uuid
+  registradoEn      DateTime @default(now()) @map("registrado_en")
+
+  animal            Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  operario          Usuario? @relation(fields: [operarioId], references: [id], onDelete: SetNull)
+
+  @@unique([animalId, fechaControl])
+  @@map("controles_lecheros")
+}
+
+model RegistroPartoDestete {
+  id                  String    @id @default(uuid()) @db.Uuid
+  madreId             String    @map("madre_id") @db.Uuid
+  criaId              String?   @unique @map("cria_id") @db.Uuid
+  fechaParto         DateTime  @map("fecha_parto") @db.Date
+  tipoParto           String?   @default("Normal") @map("tipo_parto") @db.VarChar(60)
+  sexoCria            Sexo?     @map("sexo_cria")
+  pesoAlNacerKg       Decimal?  @map("peso_al_nacer_kg") @db.Decimal(5, 2)
+  tagCriaGenerado     String?   @map("tag_cria_generado") @db.VarChar(40)
+  fechaDestete        DateTime? @map("fecha_destete") @db.Date
+  pesoDesteteKg       Decimal?  @map("peso_destete_kg") @db.Decimal(6, 2)
+  diasLactanciaDestete Int?     @map("dias_lactancia_destete")
+  observaciones       String?   @db.Text
+  operarioId          String?   @map("operario_id") @db.Uuid
+  registradoEn        DateTime  @default(now()) @map("registrado_en")
+
+  madre               Animal    @relation("MadreParto", fields: [madreId], references: [id], onDelete: Cascade)
+  cria                Animal?   @relation("CriaParto", fields: [criaId], references: [id], onDelete: SetNull)
+  operario            Usuario?  @relation(fields: [operarioId], references: [id], onDelete: SetNull)
+
+  @@map("registros_partos_destetes")
+}
+
+model AlertaZootecnica {
+  id                  String          @id @default(uuid()) @db.Uuid
+  fincaId             String          @map("finca_id") @db.Uuid
+  animalId            String          @map("animal_id") @db.Uuid
+  codigoRegla         String          @map("codigo_regla") @db.VarChar(80)
+  severidad           SeveridadAlerta
+  titulo              String          @db.VarChar(160)
+  mensajeDetallado    String          @map("mensaje_detallado") @db.Text
+  valorMedido         String?         @map("valor_medido") @db.VarChar(80)
+  valorLimiteEsperado String?         @map("valor_limite_esperado") @db.VarChar(80)
+  resuelta            Boolean         @default(false)
+  fechaGeneracion     DateTime        @default(now()) @map("fecha_generacion")
+  fechaResolucion     DateTime?       @map("fecha_resolucion")
+  resueltaPor         String?         @map("resuelta_por") @db.Uuid
+
+  finca               Finca           @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+  animal              Animal          @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  usuarioResuelve     Usuario?        @relation(fields: [resueltaPor], references: [id], onDelete: SetNull)
+
+  @@map("alertas_zootecnicas")
+}
+
+model LogAuditoriaIA {
+  id                  String   @id @default(uuid()) @db.Uuid
+  fincaId             String   @map("finca_id") @db.Uuid
+  usuarioId           String?  @map("usuario_id") @db.Uuid
+  moduloEvento        String   @map("modulo_evento") @db.VarChar(50)
+  tagAnimal           String   @map("tag_animal") @db.VarChar(40)
+  tipoInconsistencia  String   @map("tipo_inconsistencia") @db.VarChar(100)
+  mensajeIA           String   @map("mensaje_ia") @db.Text
+  datosEnviados       Json     @map("datos_enviados")
+  fueBloqueado        Boolean  @default(true) @map("fue_bloqueado")
+  creadoEn            DateTime @default(now()) @map("creado_en")
+
+  finca               Finca    @relation(fields: [fincaId], references: [id], onDelete: Cascade)
+
+  @@map("logs_auditoria_ia")
+}
