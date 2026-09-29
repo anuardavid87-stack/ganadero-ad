@@ -31,16 +31,13 @@ if (fs.existsSync(cssSrc)) {
 }
 
 // 3. Copiar iconos y manifest
-const iconSrc = path.join(ROOT_DIR, 'frontend', 'public', 'icon.svg');
-if (fs.existsSync(iconSrc)) {
-  fs.copyFileSync(iconSrc, path.join(WWW_DIR, 'icon.svg'));
-  console.log('✓ www/icon.svg copiado');
-}
-
-const manifestSrc = path.join(ROOT_DIR, 'frontend', 'public', 'manifest.webmanifest');
-if (fs.existsSync(manifestSrc)) {
-  fs.copyFileSync(manifestSrc, path.join(WWW_DIR, 'manifest.webmanifest'));
-  console.log('✓ www/manifest.webmanifest copiado');
+const iconFiles = ['icon.svg', 'icon.png', 'icon-192.png', 'manifest.webmanifest'];
+for (const file of iconFiles) {
+  const src = path.join(ROOT_DIR, 'frontend', 'public', file);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(WWW_DIR, file));
+    console.log(`✓ www/${file} copiado`);
+  }
 }
 
 // 4. Descargar / Copiar SheetJS local para soporte 100% offline en potreros
@@ -69,6 +66,8 @@ let html = fs.readFileSync(path.join(ROOT_DIR, 'index.html'), 'utf8');
 // Reemplazar rutas relativas para el esquema de Capacitor
 html = html.replace(/\.\/frontend\/public\/manifest\.webmanifest/g, './manifest.webmanifest');
 html = html.replace(/\.\/frontend\/public\/icon\.svg/g, './icon.svg');
+html = html.replace(/\.\/frontend\/public\/icon\.png/g, './icon.png');
+html = html.replace(/\.\/frontend\/public\/icon-192\.png/g, './icon-192.png');
 html = html.replace(/\.\/frontend\/src\/styles\.css/g, './styles.css');
 html = html.replace(/src="\.\/bundle\.js"/g, 'src="./bundle.js"');
 

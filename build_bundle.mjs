@@ -93,14 +93,18 @@ if (fs.existsSync('frontend/index.html')) {
   let rootHtml = fHtml
     .replace(/href="\.\/public\/manifest\.webmanifest"/g, 'href="./manifest.webmanifest"')
     .replace(/href="\.\/public\/icon\.svg"/g, 'href="./icon.svg"')
+    .replace(/href="\.\/public\/icon\.png"/g, 'href="./icon.png"')
+    .replace(/src="\.\/public\/icon\.png"/g, 'src="./icon.png"')
+    .replace(/src="\.\/public\/icon-192\.png"/g, 'src="./icon-192.png"')
     .replace(/href="\.\/public\//g, 'href="./frontend/public/')
+    .replace(/src="\.\/public\//g, 'src="./frontend/public/')
     .replace(/href="\.\/src\/styles\.css"/g, 'href="./frontend/src/styles.css"');
   fs.writeFileSync('index.html', rootHtml, 'utf8');
   console.log(`✓ index.html raíz sincronizado con frontend/index.html (${versionTag}).`);
 }
 
 // Sincronizar activos PWA (manifest, sw, icon) en todas las ubicaciones necesarias
-const pwaFiles = ['manifest.webmanifest', 'sw.js', 'icon.svg'];
+const pwaFiles = ['manifest.webmanifest', 'sw.js', 'icon.svg', 'icon.png', 'icon-192.png'];
 for (const pwaFile of pwaFiles) {
   const src = fs.existsSync(`frontend/public/${pwaFile}`) ? `frontend/public/${pwaFile}` : (fs.existsSync(pwaFile) ? pwaFile : null);
   if (src) {
