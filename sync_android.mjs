@@ -31,7 +31,7 @@ if (fs.existsSync(cssSrc)) {
 }
 
 // 3. Copiar iconos y manifest
-const iconFiles = ['icon.svg', 'icon.png', 'icon-192.png', 'manifest.webmanifest'];
+const iconFiles = ['icon.svg', 'icon.png', 'icon-192.png', 'favicon.ico', 'manifest.webmanifest'];
 for (const file of iconFiles) {
   const src = path.join(ROOT_DIR, 'frontend', 'public', file);
   if (fs.existsSync(src)) {

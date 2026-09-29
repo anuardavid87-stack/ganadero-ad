@@ -2,16 +2,27 @@
 // GANADERO AD PWA: SERVICE WORKER v3.8.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v3.8.0-pwa-final';
+const CACHE_NAME = 'ganadero-ad-v3.9.5-icon-refresh';
 const CORE_FILES = [
-  '/',
-  '/index.html',
-  '/bundle.js',
-  '/manifest.webmanifest',
-  '/icon.svg',
-  '/frontend/public/manifest.webmanifest',
-  '/frontend/public/icon.svg',
-  '/frontend/src/styles.css'
+  './',
+  './index.html',
+  './bundle.js',
+  './manifest.webmanifest',
+  './icon.png',
+  './icon-192.png',
+  './icon.svg',
+  './favicon.ico',
+  './public/manifest.webmanifest',
+  './public/icon.png',
+  './public/icon-192.png',
+  './public/icon.svg',
+  './public/favicon.ico',
+  './frontend/public/manifest.webmanifest',
+  './frontend/public/icon.png',
+  './frontend/public/icon-192.png',
+  './frontend/public/icon.svg',
+  './frontend/public/favicon.ico',
+  './frontend/src/styles.css'
 ];
 
 self.addEventListener('install', (event) => {

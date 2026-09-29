@@ -92,6 +92,7 @@ if (fs.existsSync('frontend/index.html')) {
   // Generar root index.html adaptando rutas relativas
   let rootHtml = fHtml
     .replace(/href="\.\/public\/manifest\.webmanifest"/g, 'href="./manifest.webmanifest"')
+    .replace(/href="\.\/public\/favicon\.ico"/g, 'href="./favicon.ico"')
     .replace(/href="\.\/public\/icon\.svg"/g, 'href="./icon.svg"')
     .replace(/href="\.\/public\/icon\.png"/g, 'href="./icon.png"')
     .replace(/src="\.\/public\/icon\.png"/g, 'src="./icon.png"')
@@ -103,12 +104,14 @@ if (fs.existsSync('frontend/index.html')) {
   console.log(`✓ index.html raíz sincronizado con frontend/index.html (${versionTag}).`);
 }
 
-// Sincronizar activos PWA (manifest, sw, icon) en todas las ubicaciones necesarias
-const pwaFiles = ['manifest.webmanifest', 'sw.js', 'icon.svg', 'icon.png', 'icon-192.png'];
+// Sincronizar activos PWA (manifest, sw, icon, favicon) en todas las ubicaciones necesarias
+const pwaFiles = ['manifest.webmanifest', 'sw.js', 'icon.svg', 'icon.png', 'icon-192.png', 'favicon.ico'];
+if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
 for (const pwaFile of pwaFiles) {
   const src = fs.existsSync(`frontend/public/${pwaFile}`) ? `frontend/public/${pwaFile}` : (fs.existsSync(pwaFile) ? pwaFile : null);
   if (src) {
     fs.copyFileSync(src, pwaFile);
+    fs.copyFileSync(src, `public/${pwaFile}`);
     if (!fs.existsSync(`frontend/${pwaFile}`)) fs.copyFileSync(src, `frontend/${pwaFile}`);
     if (fs.existsSync('www')) fs.copyFileSync(src, `www/${pwaFile}`);
   }
