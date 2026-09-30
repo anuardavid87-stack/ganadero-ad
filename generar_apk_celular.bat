@@ -5,7 +5,11 @@ echo   GANADERO AD - COMPILACION DEL INSTALADOR APK PARA CELULAR
 echo =====================================================================
 echo.
 
-set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+if exist "%USERPROFILE%\.jdks\temurin-21" (
+    set "JAVA_HOME=%USERPROFILE%\.jdks\temurin-21"
+) else (
+    set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+)
 set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
 set "ANDROID_SDK_ROOT=%LOCALAPPDATA%\Android\Sdk"
 set "PATH=%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
@@ -13,7 +17,7 @@ set "PATH=%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
 echo 1. Empaquetando bundle y hojas de calculo offline...
 call node "%~dp0build_bundle.mjs"
 call node "%~dp0sync_android.mjs"
-call cmd /c npx cap copy android
+call cmd /c npx cap sync android
 
 echo.
 echo 2. Compilando APK con Gradle de Android Studio...
@@ -27,12 +31,16 @@ if %ERRORLEVEL% equ 0 (
     echo =====================================================================
     cd /d "%~dp0"
     if exist "android\app\build\outputs\apk\debug\app-debug.apk" (
+        copy /y "android\app\build\outputs\apk\debug\app-debug.apk" "%~dp0Ganadero_AD.apk" > nul
         copy /y "android\app\build\outputs\apk\debug\app-debug.apk" "%~dp0Ganadero_AD_debug.apk" > nul
         echo.
-        echo Se ha copiado el instalador listo a la raiz del proyecto:
-        echo   %~dp0Ganadero_AD_debug.apk
+        echo Se ha generado el instalador de la aplicacion Android:
+        echo   %~dp0Ganadero_AD.apk
         echo.
-        echo Ya puedes pasar este archivo a tu celular Android e instalarlo.
+        echo Pasos para instalar en tu celular:
+        echo  1. Conecta tu celular por USB o envia el archivo Ganadero_AD.apk por WhatsApp/Telegram/Drive.
+        echo  2. Abre el archivo en tu celular y pulsa "Instalar".
+        echo  3. Listo, tendras Ganadero AD como una app nativa en tu telefono.
     )
 ) else (
     echo.
