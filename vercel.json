@@ -1,32 +1,21 @@
 {
   "version": 2,
   "name": "ganadero-ad",
+  "buildCommand": "node build_bundle.mjs",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/frontend/public/index.html",
+      "source": "/frontend/public/(.*)",
+      "destination": "/$1"
+    },
+    {
+      "source": "/frontend/(.*)",
+      "destination": "/$1"
+    },
+    {
+      "source": "/((?!.*\\.[\\w]+$).*)",
       "destination": "/index.html"
-    },
-    {
-      "source": "/frontend/index.html",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/frontend",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/frontend/public/manifest.webmanifest",
-      "destination": "/manifest.webmanifest"
-    },
-    {
-      "source": "/frontend/public/sw.js",
-      "destination": "/sw.js"
-    },
-    {
-      "source": "/frontend/public/icon.svg",
-      "destination": "/icon.svg"
     }
   ],
   "headers": [
@@ -39,7 +28,7 @@
         },
         {
           "key": "X-Frame-Options",
-          "value": "DENY"
+          "value": "SAMEORIGIN"
         },
         {
           "key": "X-XSS-Protection",
@@ -87,11 +76,33 @@
       ]
     },
     {
+      "source": "/(.*)styles.css",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/css; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(.*)index.html",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).apk",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/vnd.android.package-archive"
         }
       ]
     }

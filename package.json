@@ -4,6 +4,7 @@
   "description": "Ganadero AD - Sistema Inteligente de Gestión Ganadera, Zootecnia y Báscula de Campo",
   "main": "index.html",
   "scripts": {
+    "build": "node build_bundle.mjs",
     "bundle": "node build_bundle.mjs",
     "test": "node test_suite.mjs",
     "cap:sync": "node build_bundle.mjs && node sync_android.mjs && npx cap sync android",

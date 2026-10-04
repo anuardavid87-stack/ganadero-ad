@@ -99,9 +99,36 @@ if (fs.existsSync('frontend/index.html')) {
     .replace(/src="\.\/public\/icon-192\.png"/g, 'src="./icon-192.png"')
     .replace(/href="\.\/public\//g, 'href="./frontend/public/')
     .replace(/src="\.\/public\//g, 'src="./frontend/public/')
-    .replace(/href="\.\/src\/styles\.css"/g, 'href="./frontend/src/styles.css"');
+    .replace(/href="\.\/src\/styles\.css"/g, 'href="./styles.css"');
   fs.writeFileSync('index.html', rootHtml, 'utf8');
   console.log(`✓ index.html raíz sincronizado con frontend/index.html (${versionTag}).`);
+
+  // Sincronizar index.html en public/ para despliegues Vercel/Static
+  if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
+  fs.writeFileSync('public/index.html', rootHtml, 'utf8');
+  console.log(`✓ public/index.html generado para Vercel.`);
+}
+
+// Sincronizar estilos CSS
+if (fs.existsSync('frontend/src/styles.css')) {
+  const css = fs.readFileSync('frontend/src/styles.css', 'utf8');
+  fs.writeFileSync('styles.css', css, 'utf8');
+  if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
+  fs.writeFileSync('public/styles.css', css, 'utf8');
+  if (fs.existsSync('www')) fs.writeFileSync('www/styles.css', css, 'utf8');
+  if (fs.existsSync('frontend')) fs.writeFileSync('frontend/styles.css', css, 'utf8');
+  console.log(`✓ styles.css sincronizado en raíz, public/ y www/.`);
+}
+
+// Sincronizar bundles en public/
+if (fs.existsSync('bundle.js')) {
+  fs.copyFileSync('bundle.js', 'public/bundle.js');
+  fs.copyFileSync('bundle.js', 'public/bovitrack_bundle.js');
+}
+
+// Sincronizar APK si existe
+if (fs.existsSync('Ganadero_AD.apk')) {
+  fs.copyFileSync('Ganadero_AD.apk', 'public/Ganadero_AD.apk');
 }
 
 // Sincronizar activos PWA (manifest, sw, icon, favicon) en todas las ubicaciones necesarias
@@ -116,7 +143,7 @@ for (const pwaFile of pwaFiles) {
     if (fs.existsSync('www')) fs.copyFileSync(src, `www/${pwaFile}`);
   }
 }
-console.log('✓ Activos PWA (manifest, sw, icon) sincronizados en raíz, frontend y www.');
+console.log('✓ Activos PWA (manifest, sw, icon, html, bundle, css) sincronizados en raíz, frontend, public y www.');
 
 // Validación de sintaxis
 try {

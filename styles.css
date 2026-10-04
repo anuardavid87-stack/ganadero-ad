@@ -1,0 +1,143 @@
+﻿/* ==========================================================================
+   GANADERO AD PWA - ESTILOS ZOOTÉCNICOS MOBILE FIRST Y RESPONSIVE
+   ========================================================================== */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8fafc;
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  body {
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* Scrollbars limpias */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+/* Efectos en inputs numéricos */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ==========================================================================
+   ADAPTACIONES MÓVILES PARA CELULARES (<= 640px)
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Evitar zoom automático en Safari iOS al tocar campos de texto */
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="date"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* Touch targets ergonómicos para botones de acción */
+  button, 
+  .btn-touch {
+    min-height: 40px;
+  }
+
+  /* Modales a pantalla completa en celulares para máxima visibilidad */
+  .modal-fullscreen-mobile {
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Padding adaptado al viewport pequeño */
+  .p-mobile-tight {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* ==========================================================================
+   BARRA DE NAVEGACIÓN INFERIOR MOBILE ERGONÓMICA
+   ========================================================================== */
+.bottom-mobile-nav {
+  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.3), 0 -4px 6px -2px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding-bottom: env(safe-area-inset-bottom, 6px);
+}
+
+.bottom-mobile-nav .nav-item-active {
+  color: #10b981 !important; /* emerald-500 */
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 12px;
+}
+
+/* Menú flotante "Más Opciones" en Móvil */
+#menu-mas-opciones-mobile {
+  box-shadow: 0 -15px 30px rgba(0, 0, 0, 0.35);
+  animation: slideUpMobile 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 12px));
+}
+
+@keyframes slideUpMobile {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ==========================================================================
+   TARJETAS MÓVILES PARA LISTADOS (ANIMALES, REGISTROS, ACTIVIDAD)
+   ========================================================================== */
+.card-animal-mobile {
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  touch-action: manipulation;
+}
+
+.card-animal-mobile:active {
+  transform: scale(0.985);
+  background-color: #f8fafc;
+}
+
+/* ==========================================================================
+   DROPDOWN DE AUTOSUGGEST ADAPTADO A PANTALLA TÁCTIL
+   ========================================================================== */
+.autosuggest-dropdown-touch {
+  max-height: 48vh !important;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+}
+
+.autosuggest-dropdown-touch .autosuggest-item {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
