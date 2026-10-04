@@ -12,13 +12,16 @@ import { auditarServicioInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class ModuloReproduccion {
-  constructor({ containerId, getAnimales, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal }) {
     this.container = document.getElementById(containerId);
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getServicios = getServicios;
     this.onRegistrarServicio = onRegistrarServicio;
     this.onActualizarServicio = onActualizarServicio;
     this.onEliminarServicio = onEliminarServicio;
+    this.onTrasladarAFinca = onTrasladarAFinca;
+    this.onReactivarAnimal = onReactivarAnimal;
 
     this.subvistaActiva = 'formulario'; // 'formulario' | 'historial' | 'kpis'
     this.tipoServicioSeleccionado = 'inseminacion_artificial';
@@ -600,7 +603,9 @@ export class ModuloReproduccion {
         return;
       }
       const cleanTag = tag.trim().toUpperCase();
-      const match = hembras.find((h) => (h.identificacionTag || h.numero || '').toUpperCase() === cleanTag);
+      const todosHembras = (this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []))
+        .filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+      const match = todosHembras.find((h) => (h.identificacionTag || h.numero || '').toUpperCase() === cleanTag);
       this.animalSeleccionado = match || null;
       this.actualizarCardAntecedentes(match);
       this.actualizarProyeccionesEnVivo();
@@ -617,9 +622,18 @@ export class ModuloReproduccion {
     if (inputTagManual) {
       conectarAutosuggestAnimales({
         inputElement: inputTagManual,
-        getAnimales: () => hembras,
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+        },
         theme: 'indigo',
         maxResultados: 8,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTagManual.value = tag;
@@ -639,9 +653,18 @@ export class ModuloReproduccion {
     if (inDonadora) {
       conectarAutosuggestAnimales({
         inputElement: inDonadora,
-        getAnimales: () => hembras,
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+        },
         theme: 'purple',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inDonadora.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }
@@ -653,9 +676,18 @@ export class ModuloReproduccion {
     if (inToroTE) {
       conectarAutosuggestAnimales({
         inputElement: inToroTE,
-        getAnimales: () => (this.getAnimales ? this.getAnimales() : []).filter((a) => (a.sexo || '').toLowerCase() === 'macho'),
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'macho');
+        },
         theme: 'purple',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inToroTE.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }
@@ -667,9 +699,18 @@ export class ModuloReproduccion {
     if (inToroMonta) {
       conectarAutosuggestAnimales({
         inputElement: inToroMonta,
-        getAnimales: () => (this.getAnimales ? this.getAnimales() : []).filter((a) => (a.sexo || '').toLowerCase() === 'macho'),
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'macho');
+        },
         theme: 'amber',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inToroMonta.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }

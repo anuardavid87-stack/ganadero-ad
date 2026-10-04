@@ -16,20 +16,26 @@ export class ModuloNutricion {
   constructor({
     containerId = 'pantalla-nutricion',
     getAnimales,
+    getAnimalesBusqueda,
     getFincaActiva,
     getNutricion,
     onGuardarPlan,
     onEliminarRegistro,
-    onVerFicha
+    onVerFicha,
+    onTrasladarAFinca,
+    onReactivarAnimal
   }) {
     this.containerId = containerId;
     this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getFincaActiva = getFincaActiva;
     this.getNutricion = getNutricion;
     this.onGuardarPlan = onGuardarPlan;
     this.onEliminarRegistro = onEliminarRegistro;
     this.onVerFicha = onVerFicha;
+    this.onTrasladarAFinca = onTrasladarAFinca;
+    this.onReactivarAnimal = onReactivarAnimal;
 
     this.animalSeleccionado = null;
     this.planGenerado = null;
@@ -85,9 +91,23 @@ export class ModuloNutricion {
       animal = tagOAnimal;
     } else {
       const cleanTag = String(tagOAnimal).trim().toUpperCase();
-      const todos = this.getAnimales ? this.getAnimales() : [];
+      const todos = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
       animal = todos.find(a => String(a.identificacionTag || a.numero || a.tag || '').toUpperCase() === cleanTag);
-      if (!animal) {
+
+      if (animal) {
+        if (animal._estaEnOtraFinca) {
+          const confirmacion = confirm(`El animal "${animal.identificacionTag || animal.numero}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
+          if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
+            this.onTrasladarAFinca(animal);
+          }
+        } else if (animal._estaExtraido) {
+          const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
+          const confirmacion = confirm(`El animal "${animal.identificacionTag || animal.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+          if (confirmacion && typeof this.onReactivarAnimal === 'function') {
+            this.onReactivarAnimal(animal);
+          }
+        }
+      } else {
         // Permitir enrolar creando un registro provisional con ese Tag
         animal = {
           id: 'ANM-' + cleanTag,
@@ -876,37 +896,30 @@ export class ModuloNutricion {
     const dropdownAutosuggest = this.container.querySelector('#dropdown-nutricion-autosuggest');
     const btnAgregar = this.container.querySelector('#btn-agregar-animal-nutricion');
 
-    if (inputBuscador && dropdownAutosuggest) {
-      inputBuscador.addEventListener('input', (e) => {
-        const q = e.target.value;
-        const animales = this.getAnimales ? this.getAnimales() : [];
-        const matches = buscarCoincidenciasAnimales(animales, q, 6);
+    if (dropdownAutosuggest) {
+      if (dropdownAutosuggest.style) dropdownAutosuggest.style.display = 'none';
+      if (dropdownAutosuggest.classList && typeof dropdownAutosuggest.classList.add === 'function') {
+        dropdownAutosuggest.classList.add('hidden');
+      }
+    }
 
-        if (matches.length === 0 || !q.trim()) {
-          dropdownAutosuggest.classList.add('hidden');
-          dropdownAutosuggest.innerHTML = '';
-          return;
+    if (inputBuscador) {
+      conectarAutosuggestAnimales({
+        inputElement: inputBuscador,
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
+        theme: 'emerald',
+        maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
+        onSeleccionar: (animal) => {
+          const tag = animal.identificacionTag || animal.numero;
+          inputBuscador.value = tag;
+          this.enrolarAnimalPorTag(animal);
         }
-
-        dropdownAutosuggest.classList.remove('hidden');
-        dropdownAutosuggest.innerHTML = matches.map(m => `
-          <div class="item-nutri-autosuggest p-3 hover:bg-slate-800/90 cursor-pointer flex items-center justify-between" data-tag="${m.identificacionTag}">
-            <div>
-              <div class="font-mono font-black text-white text-xs">${m.identificacionTag} <span class="font-sans font-bold text-slate-300">"${m.nombreAlias || ''}"</span></div>
-              <div class="text-[10px] text-emerald-400">${m.raza || 'Comercial'} • ${m.peso || 400} kg • ${m.categoria || 'Hembra'}</div>
-            </div>
-            <span class="text-xs text-slate-400">➕ Agregar</span>
-          </div>
-        `).join('');
-
-        dropdownAutosuggest.querySelectorAll('.item-nutri-autosuggest').forEach(item => {
-          item.addEventListener('click', () => {
-            const tag = item.getAttribute('data-tag');
-            inputBuscador.value = tag;
-            dropdownAutosuggest.classList.add('hidden');
-            this.enrolarAnimalPorTag(tag);
-          });
-        });
       });
 
       inputBuscador.addEventListener('keydown', (e) => {
@@ -914,7 +927,6 @@ export class ModuloNutricion {
           e.preventDefault();
           const tag = inputBuscador.value.trim();
           if (tag) {
-            dropdownAutosuggest.classList.add('hidden');
             this.enrolarAnimalPorTag(tag);
           }
         }
@@ -925,7 +937,6 @@ export class ModuloNutricion {
       btnAgregar.addEventListener('click', () => {
         const tag = inputBuscador.value.trim();
         if (tag) {
-          if (dropdownAutosuggest) dropdownAutosuggest.classList.add('hidden');
           this.enrolarAnimalPorTag(tag);
         } else {
           alert('Por favor ingrese el arete o tag del animal.');

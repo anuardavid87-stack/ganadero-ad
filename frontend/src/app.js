@@ -1187,6 +1187,7 @@ class BoviTrackApp {
     this.compAnimales = new PestanaAnimales({
       containerId: 'pantalla-animales',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       getRol: () => this.state.usuarioActual ? this.state.usuarioActual.rol : 'consultor',
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId),
@@ -1196,8 +1197,8 @@ class BoviTrackApp {
       onActualizarAnimal: (animal) => this.actualizarAnimal(animal),
       onEliminarAnimal: (animalId) => this.eliminarAnimal(animalId),
       onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal),
-      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal.id),
-      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal.id, targetFincaId)
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId)
     });
 
     // 5. Modal Ficha Zootécnica del Animal
@@ -1354,10 +1355,13 @@ class BoviTrackApp {
     this.compReproduccion = new ModuloReproduccion({
       containerId: 'pantalla-reproduccion',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getServicios: () => this.getServiciosPredio(),
       onRegistrarServicio: (srv) => this.registrarServicioReproductivo(srv),
       onActualizarServicio: (data) => this.actualizarEstadoServicio(data),
-      onEliminarServicio: (id) => this.eliminarServicioReproductivo(id)
+      onEliminarServicio: (id) => this.eliminarServicioReproductivo(id),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
     });
 
     // 10. Módulo de Traslados de Animales entre Fincas
@@ -1388,11 +1392,14 @@ class BoviTrackApp {
     this.compNutricion = new ModuloNutricion({
       containerId: 'pantalla-nutricion',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getFincaActiva: () => this.getFincaActiva(),
       getNutricion: () => this.state.nutricion || [],
       onGuardarPlan: (registro) => this.guardarPlanNutricion(registro),
       onEliminarRegistro: (tag) => this.eliminarPlanNutricion(tag),
-      onVerFicha: (id) => this.abrirFichaAnimal(id)
+      onVerFicha: (id) => this.abrirFichaAnimal(id),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
     });
   }
 
@@ -1889,13 +1896,13 @@ class BoviTrackApp {
 
     // Incluir todos los animales asociados a las fincas de la empresa (o todos si no hay restricción)
     const animalesBase = (this.state.animales || []).filter((a) =>
-      fincasEmpresaIds.size === 0 || fincasEmpresaIds.has(a.fincaId)
+      fincasEmpresaIds.size === 0 || !a.fincaId || fincasEmpresaIds.has(a.fincaId)
     );
 
     return animalesBase.map((a) => {
       const estaEnOtraFinca = Boolean(fincaActivaId && a.fincaId && a.fincaId !== fincaActivaId);
       const estaExtraido = (a.estadoVida || a.estado) === 'inactivo' || Boolean(a.motivoBaja);
-      const fincaNombre = fincaMap.get(a.fincaId) || 'Otra Finca';
+      const fincaNombre = a.fincaNombre || fincaMap.get(a.fincaId) || 'Otra Finca';
       const motivoExtraido = a.motivoBaja || (estaExtraido ? 'Inactivo' : null);
 
       return {
@@ -2028,16 +2035,19 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
   }
 
-  reactivarAnimalExtraido(animalId, targetFincaId = null) {
+  reactivarAnimalExtraido(animalOrId, targetFincaId = null) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
+    const animalId = typeof animalOrId === 'object' && animalOrId !== null ? animalOrId.id : animalOrId;
     if (!animalId) return;
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
@@ -2050,6 +2060,8 @@ class BoviTrackApp {
     animal.motivoBaja = null;
     animal.fechaBaja = null;
     animal.fincaId = fincaDestino;
+    animal._estaExtraido = false;
+    animal._motivoExtraido = null;
 
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
@@ -2076,16 +2088,19 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
   }
 
-  trasladarAnimalInmediato(animalId, targetFincaId = null) {
+  trasladarAnimalInmediato(animalOrId, targetFincaId = null) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
+    const animalId = typeof animalOrId === 'object' && animalOrId !== null ? animalOrId.id : animalOrId;
     if (!animalId) return;
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
@@ -2100,12 +2115,18 @@ class BoviTrackApp {
     const destinoNombre = fincaDestino ? fincaDestino.nombre : destinoId;
 
     animal.fincaId = destinoId;
+    animal.fincaNombre = destinoNombre;
+    animal._fincaNombre = destinoNombre;
+    animal._estaEnOtraFinca = false;
+
     // Si estaba inactivo, lo reactivamos en la nueva finca
     if (animal.estadoVida === 'inactivo' || animal.motivoBaja) {
       animal.estadoVida = 'activo';
       animal.estado = 'activo';
       animal.motivoBaja = null;
       animal.fechaBaja = null;
+      animal._estaExtraido = false;
+      animal._motivoExtraido = null;
     }
 
     const hoy = new Date().toISOString().split('T')[0];
@@ -2149,6 +2170,8 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
@@ -2221,6 +2244,14 @@ class BoviTrackApp {
   abrirFichaAnimal(animalId) {
     const animal = this.state.animales.find((a) => a.id === animalId);
     if (!animal) return;
+
+    const fincaMap = new Map((this.state.fincas || []).map((f) => [f.id, f.nombre]));
+    if (animal.fincaId) {
+      animal.fincaNombre = fincaMap.get(animal.fincaId) || animal.fincaNombre || 'Finca';
+    }
+    animal._fincaNombre = animal.fincaNombre || (fincaMap.get(animal.fincaId) || 'Finca');
+    animal._estaEnOtraFinca = Boolean(this.state.fincaActivaId && animal.fincaId && animal.fincaId !== this.state.fincaActivaId);
+    animal._estaExtraido = (animal.estadoVida || animal.estado) === 'inactivo' || Boolean(animal.motivoBaja);
 
     const aTag = animal.identificacionTag || animal.numero;
 

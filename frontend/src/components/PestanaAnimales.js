@@ -14,6 +14,7 @@ export class PestanaAnimales {
   constructor({
     containerId,
     getAnimales,
+    getAnimalesBusqueda,
     getLotes,
     getRol,
     onVerFicha,
@@ -28,6 +29,7 @@ export class PestanaAnimales {
   }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getLotes = getLotes;
     this.getRol = getRol;
     this.onVerFicha = onVerFicha;
@@ -867,11 +869,15 @@ export class PestanaAnimales {
     if (inputTag) {
       conectarAutosuggestAnimales({
         inputElement: inputTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
-        onTrasladarAFinca: this.onTrasladarAFinca,
-        onReactivarAnimal: this.onReactivarAnimal,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTag.value = tag;
@@ -903,7 +909,7 @@ export class PestanaAnimales {
           return;
         }
 
-        const todos = this.getAnimales ? this.getAnimales() : [];
+        const todos = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
 
         // 1. Buscar coincidencia exacta por arete/tag o número
         let matchExacto = todos.find((a) =>
@@ -911,8 +917,21 @@ export class PestanaAnimales {
           (a.numero || '').toUpperCase() === q
         );
 
-        // Si es exacto, abre la ficha zootécnica de inmediato
+        // Si es exacto, comprobar si está en otra finca o extraído
         if (matchExacto) {
+          if (matchExacto._estaEnOtraFinca) {
+            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra registrado en la finca "${matchExacto._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
+            if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
+              this.onTrasladarAFinca(matchExacto);
+            }
+          } else if (matchExacto._estaExtraido) {
+            const motivo = matchExacto.motivoBaja || matchExacto._motivoExtraido || 'Baja';
+            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+            if (confirmacion && typeof this.onReactivarAnimal === 'function') {
+              this.onReactivarAnimal(matchExacto);
+            }
+          }
+
           if (this.onVerFicha) {
             this.onVerFicha(matchExacto.id);
           }

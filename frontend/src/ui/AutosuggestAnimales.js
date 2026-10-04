@@ -263,13 +263,16 @@ export function conectarAutosuggestAnimales({
       const esAtenuado = esEnOtraFinca || esExtraido;
 
       let badgeEstadoExtra = '';
+      let mensajeAccion = '';
       if (esEnOtraFinca) {
-        badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En: ${a._fincaNombre || 'Otra Finca'}</span>`;
+        badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}</span>`;
+        mensajeAccion = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
       } else if (esExtraido) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">🚪 Extraído (${a.motivoBaja || a._motivoExtraido || 'Baja'})</span>`;
+        mensajeAccion = `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
-      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-2 border-slate-300' : ''}" data-index="${idx}">` +
+      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
         `<div class="flex items-center gap-2.5 min-w-0">` +
           `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale opacity-70' : ''}">${especie}</span>` +
           `<div class="min-w-0">` +
@@ -289,7 +292,8 @@ export function conectarAutosuggestAnimales({
             `</div>` +
           `</div>` +
         `</div>` +
-        `<div class="text-right flex-shrink-0 flex flex-col items-end">` +
+        `<div class="text-right flex-shrink-0 flex flex-col items-end gap-1">` +
+          (mensajeAccion ? mensajeAccion : '') +
           (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-400' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
           (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-400' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-500')}">${repro}</span>` : '') +
         `</div>` +

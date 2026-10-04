@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-09-29T13:13:54.650Z
+ * Generado automáticamente: 2026-10-04T20:40:34.729Z
  */
 (function() {
   "use strict";
@@ -3244,13 +3244,16 @@ function conectarAutosuggestAnimales({
       const esAtenuado = esEnOtraFinca || esExtraido;
 
       let badgeEstadoExtra = '';
+      let mensajeAccion = '';
       if (esEnOtraFinca) {
-        badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En: ${a._fincaNombre || 'Otra Finca'}</span>`;
+        badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}</span>`;
+        mensajeAccion = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
       } else if (esExtraido) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">🚪 Extraído (${a.motivoBaja || a._motivoExtraido || 'Baja'})</span>`;
+        mensajeAccion = `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
-      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-2 border-slate-300' : ''}" data-index="${idx}">` +
+      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
         `<div class="flex items-center gap-2.5 min-w-0">` +
           `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale opacity-70' : ''}">${especie}</span>` +
           `<div class="min-w-0">` +
@@ -3270,7 +3273,8 @@ function conectarAutosuggestAnimales({
             `</div>` +
           `</div>` +
         `</div>` +
-        `<div class="text-right flex-shrink-0 flex flex-col items-end">` +
+        `<div class="text-right flex-shrink-0 flex flex-col items-end gap-1">` +
+          (mensajeAccion ? mensajeAccion : '') +
           (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-400' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
           (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-400' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-500')}">${repro}</span>` : '') +
         `</div>` +
@@ -3567,6 +3571,11 @@ class FichaAnimal {
                   <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${especie === 'bufalino' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'}">
                     ${especie === 'bufalino' ? 'Bufalino' : 'Vacuno'}
                   </span>
+                  ${a._estaEnOtraFinca ? `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                      🏡 En otra finca: ${a._fincaNombre || a.fincaNombre || 'Otra Finca'}
+                    </span>
+                  ` : ''}
                   ${(a.estadoVida === 'inactivo' || a.estado === 'inactivo' || a.motivoBaja) ? `
                     <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-rose-500/30 text-rose-300 border border-rose-500/50">
                       🚪 Extraído (${a.motivoBaja || 'Baja'})
@@ -3574,7 +3583,7 @@ class FichaAnimal {
                   ` : ''}
                 </div>
                 <h3 class="text-sm sm:text-base font-bold text-slate-200 mt-0.5">${a.nombreAlias || a.nombre || 'Sin Alias Asignado'}</h3>
-                <p class="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}</p>
+                <p class="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}${a._fincaNombre || a.fincaNombre ? ` • 🏡 Finca: ${a._fincaNombre || a.fincaNombre}` : ''}</p>
               </div>
             </div>
 
@@ -10372,13 +10381,16 @@ ModuloAdmin;
 
 
 class ModuloReproduccion {
-  constructor({ containerId, getAnimales, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal }) {
     this.container = document.getElementById(containerId);
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getServicios = getServicios;
     this.onRegistrarServicio = onRegistrarServicio;
     this.onActualizarServicio = onActualizarServicio;
     this.onEliminarServicio = onEliminarServicio;
+    this.onTrasladarAFinca = onTrasladarAFinca;
+    this.onReactivarAnimal = onReactivarAnimal;
 
     this.subvistaActiva = 'formulario'; // 'formulario' | 'historial' | 'kpis'
     this.tipoServicioSeleccionado = 'inseminacion_artificial';
@@ -10960,7 +10972,9 @@ class ModuloReproduccion {
         return;
       }
       const cleanTag = tag.trim().toUpperCase();
-      const match = hembras.find((h) => (h.identificacionTag || h.numero || '').toUpperCase() === cleanTag);
+      const todosHembras = (this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []))
+        .filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+      const match = todosHembras.find((h) => (h.identificacionTag || h.numero || '').toUpperCase() === cleanTag);
       this.animalSeleccionado = match || null;
       this.actualizarCardAntecedentes(match);
       this.actualizarProyeccionesEnVivo();
@@ -10977,9 +10991,18 @@ class ModuloReproduccion {
     if (inputTagManual) {
       conectarAutosuggestAnimales({
         inputElement: inputTagManual,
-        getAnimales: () => hembras,
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+        },
         theme: 'indigo',
         maxResultados: 8,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTagManual.value = tag;
@@ -10999,9 +11022,18 @@ class ModuloReproduccion {
     if (inDonadora) {
       conectarAutosuggestAnimales({
         inputElement: inDonadora,
-        getAnimales: () => hembras,
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'hembra');
+        },
         theme: 'purple',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inDonadora.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }
@@ -11013,9 +11045,18 @@ class ModuloReproduccion {
     if (inToroTE) {
       conectarAutosuggestAnimales({
         inputElement: inToroTE,
-        getAnimales: () => (this.getAnimales ? this.getAnimales() : []).filter((a) => (a.sexo || '').toLowerCase() === 'macho'),
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'macho');
+        },
         theme: 'purple',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inToroTE.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }
@@ -11027,9 +11068,18 @@ class ModuloReproduccion {
     if (inToroMonta) {
       conectarAutosuggestAnimales({
         inputElement: inToroMonta,
-        getAnimales: () => (this.getAnimales ? this.getAnimales() : []).filter((a) => (a.sexo || '').toLowerCase() === 'macho'),
+        getAnimales: () => {
+          const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+          return base.filter((a) => (a.sexo || '').toLowerCase() === 'macho');
+        },
         theme: 'amber',
         maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           inToroMonta.value = (animal.identificacionTag || animal.numero) + (animal.nombreAlias ? ` (${animal.nombreAlias})` : '');
         }
@@ -11315,6 +11365,7 @@ class PestanaAnimales {
   constructor({
     containerId,
     getAnimales,
+    getAnimalesBusqueda,
     getLotes,
     getRol,
     onVerFicha,
@@ -11329,6 +11380,7 @@ class PestanaAnimales {
   }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getLotes = getLotes;
     this.getRol = getRol;
     this.onVerFicha = onVerFicha;
@@ -12168,11 +12220,15 @@ class PestanaAnimales {
     if (inputTag) {
       conectarAutosuggestAnimales({
         inputElement: inputTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
-        onTrasladarAFinca: this.onTrasladarAFinca,
-        onReactivarAnimal: this.onReactivarAnimal,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTag.value = tag;
@@ -12204,7 +12260,7 @@ class PestanaAnimales {
           return;
         }
 
-        const todos = this.getAnimales ? this.getAnimales() : [];
+        const todos = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
 
         // 1. Buscar coincidencia exacta por arete/tag o número
         let matchExacto = todos.find((a) =>
@@ -12212,8 +12268,21 @@ class PestanaAnimales {
           (a.numero || '').toUpperCase() === q
         );
 
-        // Si es exacto, abre la ficha zootécnica de inmediato
+        // Si es exacto, comprobar si está en otra finca o extraído
         if (matchExacto) {
+          if (matchExacto._estaEnOtraFinca) {
+            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra registrado en la finca "${matchExacto._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
+            if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
+              this.onTrasladarAFinca(matchExacto);
+            }
+          } else if (matchExacto._estaExtraido) {
+            const motivo = matchExacto.motivoBaja || matchExacto._motivoExtraido || 'Baja';
+            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+            if (confirmacion && typeof this.onReactivarAnimal === 'function') {
+              this.onReactivarAnimal(matchExacto);
+            }
+          }
+
           if (this.onVerFicha) {
             this.onVerFicha(matchExacto.id);
           }
@@ -14126,20 +14195,26 @@ class ModuloNutricion {
   constructor({
     containerId = 'pantalla-nutricion',
     getAnimales,
+    getAnimalesBusqueda,
     getFincaActiva,
     getNutricion,
     onGuardarPlan,
     onEliminarRegistro,
-    onVerFicha
+    onVerFicha,
+    onTrasladarAFinca,
+    onReactivarAnimal
   }) {
     this.containerId = containerId;
     this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getFincaActiva = getFincaActiva;
     this.getNutricion = getNutricion;
     this.onGuardarPlan = onGuardarPlan;
     this.onEliminarRegistro = onEliminarRegistro;
     this.onVerFicha = onVerFicha;
+    this.onTrasladarAFinca = onTrasladarAFinca;
+    this.onReactivarAnimal = onReactivarAnimal;
 
     this.animalSeleccionado = null;
     this.planGenerado = null;
@@ -14195,9 +14270,23 @@ class ModuloNutricion {
       animal = tagOAnimal;
     } else {
       const cleanTag = String(tagOAnimal).trim().toUpperCase();
-      const todos = this.getAnimales ? this.getAnimales() : [];
+      const todos = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
       animal = todos.find(a => String(a.identificacionTag || a.numero || a.tag || '').toUpperCase() === cleanTag);
-      if (!animal) {
+
+      if (animal) {
+        if (animal._estaEnOtraFinca) {
+          const confirmacion = confirm(`El animal "${animal.identificacionTag || animal.numero}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
+          if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
+            this.onTrasladarAFinca(animal);
+          }
+        } else if (animal._estaExtraido) {
+          const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
+          const confirmacion = confirm(`El animal "${animal.identificacionTag || animal.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+          if (confirmacion && typeof this.onReactivarAnimal === 'function') {
+            this.onReactivarAnimal(animal);
+          }
+        }
+      } else {
         // Permitir enrolar creando un registro provisional con ese Tag
         animal = {
           id: 'ANM-' + cleanTag,
@@ -14986,37 +15075,30 @@ class ModuloNutricion {
     const dropdownAutosuggest = this.container.querySelector('#dropdown-nutricion-autosuggest');
     const btnAgregar = this.container.querySelector('#btn-agregar-animal-nutricion');
 
-    if (inputBuscador && dropdownAutosuggest) {
-      inputBuscador.addEventListener('input', (e) => {
-        const q = e.target.value;
-        const animales = this.getAnimales ? this.getAnimales() : [];
-        const matches = buscarCoincidenciasAnimales(animales, q, 6);
+    if (dropdownAutosuggest) {
+      if (dropdownAutosuggest.style) dropdownAutosuggest.style.display = 'none';
+      if (dropdownAutosuggest.classList && typeof dropdownAutosuggest.classList.add === 'function') {
+        dropdownAutosuggest.classList.add('hidden');
+      }
+    }
 
-        if (matches.length === 0 || !q.trim()) {
-          dropdownAutosuggest.classList.add('hidden');
-          dropdownAutosuggest.innerHTML = '';
-          return;
+    if (inputBuscador) {
+      conectarAutosuggestAnimales({
+        inputElement: inputBuscador,
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
+        theme: 'emerald',
+        maxResultados: 6,
+        onTrasladarAFinca: (animal) => {
+          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
+        },
+        onReactivarAnimal: (animal) => {
+          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
+        onSeleccionar: (animal) => {
+          const tag = animal.identificacionTag || animal.numero;
+          inputBuscador.value = tag;
+          this.enrolarAnimalPorTag(animal);
         }
-
-        dropdownAutosuggest.classList.remove('hidden');
-        dropdownAutosuggest.innerHTML = matches.map(m => `
-          <div class="item-nutri-autosuggest p-3 hover:bg-slate-800/90 cursor-pointer flex items-center justify-between" data-tag="${m.identificacionTag}">
-            <div>
-              <div class="font-mono font-black text-white text-xs">${m.identificacionTag} <span class="font-sans font-bold text-slate-300">"${m.nombreAlias || ''}"</span></div>
-              <div class="text-[10px] text-emerald-400">${m.raza || 'Comercial'} • ${m.peso || 400} kg • ${m.categoria || 'Hembra'}</div>
-            </div>
-            <span class="text-xs text-slate-400">➕ Agregar</span>
-          </div>
-        `).join('');
-
-        dropdownAutosuggest.querySelectorAll('.item-nutri-autosuggest').forEach(item => {
-          item.addEventListener('click', () => {
-            const tag = item.getAttribute('data-tag');
-            inputBuscador.value = tag;
-            dropdownAutosuggest.classList.add('hidden');
-            this.enrolarAnimalPorTag(tag);
-          });
-        });
       });
 
       inputBuscador.addEventListener('keydown', (e) => {
@@ -15024,7 +15106,6 @@ class ModuloNutricion {
           e.preventDefault();
           const tag = inputBuscador.value.trim();
           if (tag) {
-            dropdownAutosuggest.classList.add('hidden');
             this.enrolarAnimalPorTag(tag);
           }
         }
@@ -15035,7 +15116,6 @@ class ModuloNutricion {
       btnAgregar.addEventListener('click', () => {
         const tag = inputBuscador.value.trim();
         if (tag) {
-          if (dropdownAutosuggest) dropdownAutosuggest.classList.add('hidden');
           this.enrolarAnimalPorTag(tag);
         } else {
           alert('Por favor ingrese el arete o tag del animal.');
@@ -17323,6 +17403,7 @@ class BoviTrackApp {
     this.compAnimales = new PestanaAnimales({
       containerId: 'pantalla-animales',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       getRol: () => this.state.usuarioActual ? this.state.usuarioActual.rol : 'consultor',
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId),
@@ -17332,8 +17413,8 @@ class BoviTrackApp {
       onActualizarAnimal: (animal) => this.actualizarAnimal(animal),
       onEliminarAnimal: (animalId) => this.eliminarAnimal(animalId),
       onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal),
-      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal.id),
-      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal.id, targetFincaId)
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId)
     });
 
     // 5. Modal Ficha Zootécnica del Animal
@@ -17490,10 +17571,13 @@ class BoviTrackApp {
     this.compReproduccion = new ModuloReproduccion({
       containerId: 'pantalla-reproduccion',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getServicios: () => this.getServiciosPredio(),
       onRegistrarServicio: (srv) => this.registrarServicioReproductivo(srv),
       onActualizarServicio: (data) => this.actualizarEstadoServicio(data),
-      onEliminarServicio: (id) => this.eliminarServicioReproductivo(id)
+      onEliminarServicio: (id) => this.eliminarServicioReproductivo(id),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
     });
 
     // 10. Módulo de Traslados de Animales entre Fincas
@@ -17524,11 +17608,14 @@ class BoviTrackApp {
     this.compNutricion = new ModuloNutricion({
       containerId: 'pantalla-nutricion',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getFincaActiva: () => this.getFincaActiva(),
       getNutricion: () => this.state.nutricion || [],
       onGuardarPlan: (registro) => this.guardarPlanNutricion(registro),
       onEliminarRegistro: (tag) => this.eliminarPlanNutricion(tag),
-      onVerFicha: (id) => this.abrirFichaAnimal(id)
+      onVerFicha: (id) => this.abrirFichaAnimal(id),
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
     });
   }
 
@@ -18025,13 +18112,13 @@ class BoviTrackApp {
 
     // Incluir todos los animales asociados a las fincas de la empresa (o todos si no hay restricción)
     const animalesBase = (this.state.animales || []).filter((a) =>
-      fincasEmpresaIds.size === 0 || fincasEmpresaIds.has(a.fincaId)
+      fincasEmpresaIds.size === 0 || !a.fincaId || fincasEmpresaIds.has(a.fincaId)
     );
 
     return animalesBase.map((a) => {
       const estaEnOtraFinca = Boolean(fincaActivaId && a.fincaId && a.fincaId !== fincaActivaId);
       const estaExtraido = (a.estadoVida || a.estado) === 'inactivo' || Boolean(a.motivoBaja);
-      const fincaNombre = fincaMap.get(a.fincaId) || 'Otra Finca';
+      const fincaNombre = a.fincaNombre || fincaMap.get(a.fincaId) || 'Otra Finca';
       const motivoExtraido = a.motivoBaja || (estaExtraido ? 'Inactivo' : null);
 
       return {
@@ -18164,16 +18251,19 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
   }
 
-  reactivarAnimalExtraido(animalId, targetFincaId = null) {
+  reactivarAnimalExtraido(animalOrId, targetFincaId = null) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
+    const animalId = typeof animalOrId === 'object' && animalOrId !== null ? animalOrId.id : animalOrId;
     if (!animalId) return;
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
@@ -18186,6 +18276,8 @@ class BoviTrackApp {
     animal.motivoBaja = null;
     animal.fechaBaja = null;
     animal.fincaId = fincaDestino;
+    animal._estaExtraido = false;
+    animal._motivoExtraido = null;
 
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
@@ -18212,16 +18304,19 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
   }
 
-  trasladarAnimalInmediato(animalId, targetFincaId = null) {
+  trasladarAnimalInmediato(animalOrId, targetFincaId = null) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
+    const animalId = typeof animalOrId === 'object' && animalOrId !== null ? animalOrId.id : animalOrId;
     if (!animalId) return;
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
@@ -18236,12 +18331,18 @@ class BoviTrackApp {
     const destinoNombre = fincaDestino ? fincaDestino.nombre : destinoId;
 
     animal.fincaId = destinoId;
+    animal.fincaNombre = destinoNombre;
+    animal._fincaNombre = destinoNombre;
+    animal._estaEnOtraFinca = false;
+
     // Si estaba inactivo, lo reactivamos en la nueva finca
     if (animal.estadoVida === 'inactivo' || animal.motivoBaja) {
       animal.estadoVida = 'activo';
       animal.estado = 'activo';
       animal.motivoBaja = null;
       animal.fechaBaja = null;
+      animal._estaExtraido = false;
+      animal._motivoExtraido = null;
     }
 
     const hoy = new Date().toISOString().split('T')[0];
@@ -18285,6 +18386,8 @@ class BoviTrackApp {
     if (this.compDinamica) this.compDinamica.render();
     if (this.compCuadricula) this.compCuadricula.render();
     if (this.compDashboard) this.compDashboard.render();
+    if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
+    if (this.compNutricion && typeof this.compNutricion.render === 'function') this.compNutricion.render();
     if (this.compFicha && this.compFicha.animal && this.compFicha.animal.id === animalId) {
       this.compFicha.abrir(animal);
     }
@@ -18357,6 +18460,14 @@ class BoviTrackApp {
   abrirFichaAnimal(animalId) {
     const animal = this.state.animales.find((a) => a.id === animalId);
     if (!animal) return;
+
+    const fincaMap = new Map((this.state.fincas || []).map((f) => [f.id, f.nombre]));
+    if (animal.fincaId) {
+      animal.fincaNombre = fincaMap.get(animal.fincaId) || animal.fincaNombre || 'Finca';
+    }
+    animal._fincaNombre = animal.fincaNombre || (fincaMap.get(animal.fincaId) || 'Finca');
+    animal._estaEnOtraFinca = Boolean(this.state.fincaActivaId && animal.fincaId && animal.fincaId !== this.state.fincaActivaId);
+    animal._estaExtraido = (animal.estadoVida || animal.estado) === 'inactivo' || Boolean(animal.motivoBaja);
 
     const aTag = animal.identificacionTag || animal.numero;
 

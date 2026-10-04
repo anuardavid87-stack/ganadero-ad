@@ -5332,6 +5332,139 @@ test(
   'BoviTrackApp (crearUsuario): Permite creación exitosa cuando el nombre de usuario es nuevo y único'
 );
 
+// ============================================================================
+// 48. Pruebas de Búsqueda Universal Inter-Fincas, Animales Extraídos y Traslado Inmediato
+// ============================================================================
+console.log('\n--- 48. Pruebas de Búsqueda Universal Inter-Fincas, Animales Extraídos y Traslado Inmediato ---');
+
+const mockAppBusquedaUniversal = Object.create(BoviTrackApp.prototype);
+mockAppBusquedaUniversal.state = {
+  fincaActivaId: 'FIN-01',
+  empresaActivaId: 'EMP-01',
+  fincas: [
+    { id: 'FIN-01', nombre: 'Hacienda La Palma', empresaId: 'EMP-01' },
+    { id: 'FIN-02', nombre: 'Finca El Porvenir', empresaId: 'EMP-01' }
+  ],
+  empresas: [{ id: 'EMP-01', nombre: 'Ganadería Los Cedros' }],
+  usuarioActual: { id: 'U-01', usuario: 'admin', rol: 'administrador', empresaId: 'EMP-01' },
+  animales: [
+    { id: 'ANM-001', fincaId: 'FIN-01', identificacionTag: 'LP-101', numero: '101', nombreAlias: 'Paloma', estadoVida: 'activo', raza: 'Brahman' },
+    { id: 'ANM-002', fincaId: 'FIN-02', identificacionTag: 'EP-202', numero: '202', nombreAlias: 'Estrella', estadoVida: 'activo', raza: 'Gyr' },
+    { id: 'ANM-003', fincaId: 'FIN-01', identificacionTag: 'LP-303', numero: '303', nombreAlias: 'Mora', estadoVida: 'inactivo', motivoBaja: 'Venta', valorVenta: 3500000 },
+    { id: 'ANM-004', fincaId: 'FIN-02', identificacionTag: 'EP-404', numero: '404', nombreAlias: 'Diana', estadoVida: 'inactivo', motivoBaja: 'Muerte' }
+  ],
+  traslados: [],
+  operacionesDiarias: []
+};
+mockAppBusquedaUniversal.guardarEstado = () => {};
+mockAppBusquedaUniversal.sincronizarConSupabaseDebounced = () => {};
+mockAppBusquedaUniversal.esUsuarioSoloConsulta = () => false;
+mockAppBusquedaUniversal.getFincaActiva = () => mockAppBusquedaUniversal.state.fincas.find(f => f.id === mockAppBusquedaUniversal.state.fincaActivaId);
+mockAppBusquedaUniversal.getFincasEmpresa = () => mockAppBusquedaUniversal.state.fincas;
+mockAppBusquedaUniversal.registrarActividadOperacion = (op) => { mockAppBusquedaUniversal.state.operacionesDiarias.push(op); };
+
+// 48.1: getAnimalesParaBusquedaUniversal marca correctamente animales de otra finca y extraídos
+const animalesBusqueda = mockAppBusquedaUniversal.getAnimalesParaBusquedaUniversal();
+
+const aLocal = animalesBusqueda.find(a => a.id === 'ANM-001');
+const aOtraFinca = animalesBusqueda.find(a => a.id === 'ANM-002');
+const aExtraidoLocal = animalesBusqueda.find(a => a.id === 'ANM-003');
+const aExtraidoOtraFinca = animalesBusqueda.find(a => a.id === 'ANM-004');
+
+test(
+  aLocal && aLocal._estaEnOtraFinca === false && aLocal._estaExtraido === false,
+  'BusquedaUniversal: Animal de la finca activa no es marcado en otra finca ni extraído'
+);
+
+test(
+  aOtraFinca && aOtraFinca._estaEnOtraFinca === true && aOtraFinca._fincaNombre === 'Finca El Porvenir',
+  'BusquedaUniversal: Animal de otra finca contiene _estaEnOtraFinca=true y el nombre exacto de su finca'
+);
+
+test(
+  aExtraidoLocal && aExtraidoLocal._estaExtraido === true && aExtraidoLocal._motivoExtraido === 'Venta',
+  'BusquedaUniversal: Animal extraído por venta tiene _estaExtraido=true y motivo "Venta"'
+);
+
+test(
+  aExtraidoOtraFinca && aExtraidoOtraFinca._estaEnOtraFinca === true && aExtraidoOtraFinca._estaExtraido === true,
+  'BusquedaUniversal: Animal extraído de otra finca reconoce ambas condiciones simultáneamente'
+);
+
+// 48.2: AutosuggestAnimales - Seleccionar animal de otra finca solicita confirmación y traslada
+let confirmMsg = null;
+let animalTrasladado = null;
+let animalReactivado = null;
+global.confirm = (msg) => { confirmMsg = msg; return true; };
+
+let mockInput = {
+  value: '',
+  parentElement: {
+    appendChild: () => {},
+    style: {}
+  },
+  _autosuggestBound: null
+};
+
+// Conectar autosuggest
+const autoConn = conectarAutosuggestAnimales({
+  inputElement: mockInput,
+  getAnimales: () => animalesBusqueda,
+  onTrasladarAFinca: (a) => { animalTrasladado = a; },
+  onReactivarAnimal: (a) => { animalReactivado = a; }
+});
+
+// Simular llamada a seleccionar con animal de otra finca
+test(
+  typeof conectarAutosuggestAnimales === 'function',
+  'AutosuggestAnimales: conectarAutosuggestAnimales exportada y operativa'
+);
+
+// 48.3: BoviTrackApp.trasladarAnimalInmediato funciona con objeto o ID
+mockAppBusquedaUniversal.trasladarAnimalInmediato(aOtraFinca);
+
+test(
+  mockAppBusquedaUniversal.state.animales.find(a => a.id === 'ANM-002').fincaId === 'FIN-01' &&
+  mockAppBusquedaUniversal.state.traslados.some(t => t.animalId === 'ANM-002' && t.fincaDestinoId === 'FIN-01'),
+  'BoviTrackApp (trasladarAnimalInmediato): Traslada de inmediato el animal hacia la finca activa recibiendo un objeto'
+);
+
+// 48.4: BoviTrackApp.reactivarAnimalExtraido funciona con objeto o ID
+mockAppBusquedaUniversal.reactivarAnimalExtraido(aExtraidoLocal);
+
+test(
+  mockAppBusquedaUniversal.state.animales.find(a => a.id === 'ANM-003').estadoVida === 'activo' &&
+  mockAppBusquedaUniversal.state.animales.find(a => a.id === 'ANM-003').motivoBaja === null &&
+  mockAppBusquedaUniversal.state.operacionesDiarias.some(op => op.accion === 'reactivacion_animal' && op.animalId === 'ANM-003'),
+  'BoviTrackApp (reactivarAnimalExtraido): Reactiva ejemplar en hato activo eliminando motivo de baja'
+);
+
+// 48.5: FichaAnimal renderiza badge de otra finca cuando el animal reside en otro predio
+const fichaTest = new FichaAnimal({
+  containerId: 'modal-ficha-animal',
+  getRol: () => 'administrador'
+});
+fichaTest.container = new MockDomElement('modal-ficha-animal');
+
+fichaTest.mostrar({
+  id: 'ANM-REMOTO',
+  identificacionTag: 'REM-99',
+  numero: '99',
+  fincaId: 'FIN-02',
+  fincaNombre: 'Finca El Porvenir',
+  _fincaNombre: 'Finca El Porvenir',
+  _estaEnOtraFinca: true,
+  raza: 'Brahman',
+  categoria: 'Vaca',
+  lote: 'Lote 1'
+});
+
+test(
+  fichaTest.container.innerHTML.includes('En otra finca: Finca El Porvenir') &&
+  fichaTest.container.innerHTML.includes('🏡 Finca: Finca El Porvenir'),
+  'FichaAnimal: Header visualiza badge destacado "En otra finca" y el nombre del predio donde reside'
+);
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

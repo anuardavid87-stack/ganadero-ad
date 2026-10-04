@@ -159,6 +159,11 @@ export class FichaAnimal {
                   <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${especie === 'bufalino' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'}">
                     ${especie === 'bufalino' ? 'Bufalino' : 'Vacuno'}
                   </span>
+                  ${a._estaEnOtraFinca ? `
+                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                      🏡 En otra finca: ${a._fincaNombre || a.fincaNombre || 'Otra Finca'}
+                    </span>
+                  ` : ''}
                   ${(a.estadoVida === 'inactivo' || a.estado === 'inactivo' || a.motivoBaja) ? `
                     <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-rose-500/30 text-rose-300 border border-rose-500/50">
                       🚪 Extraído (${a.motivoBaja || 'Baja'})
@@ -166,7 +171,7 @@ export class FichaAnimal {
                   ` : ''}
                 </div>
                 <h3 class="text-sm sm:text-base font-bold text-slate-200 mt-0.5">${a.nombreAlias || a.nombre || 'Sin Alias Asignado'}</h3>
-                <p class="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}</p>
+                <p class="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}${a._fincaNombre || a.fincaNombre ? ` • 🏡 Finca: ${a._fincaNombre || a.fincaNombre}` : ''}</p>
               </div>
             </div>
 
