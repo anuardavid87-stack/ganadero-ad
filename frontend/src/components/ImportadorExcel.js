@@ -1146,8 +1146,8 @@ export class ImportadorExcel {
                 <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
                 <span class="text-[10px] text-slate-500">Asignación automática</span>
               </div>
-              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-900 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}
+              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-black shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
               </select>
             </div>
           </div>

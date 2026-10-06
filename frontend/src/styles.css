@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GANADERO AD PWA - ESTILOS ZOOTÉCNICOS MOBILE FIRST Y RESPONSIVE
    ========================================================================== */
 
@@ -140,4 +140,49 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
+}
+
+
+/* ==========================================================================
+   SELECTORES Y LISTAS DESPLEGABLES (FINCAS, EMPRESAS Y OPCIONES EN COLOR NEGRO)
+   ========================================================================== */
+select {
+  color: #000000 !important;
+}
+
+select option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+#select-finca-nav,
+#select-empresa-nav,
+#select-finca-dashboard,
+#select-finca-importador,
+#select-finca-finanzas,
+#sel-filtro-finca,
+#sel-finca-origen-traslado,
+#sel-finca-destino-traslado,
+#select-filtro-empresa-usr,
+#usr-empresa,
+#edit-empresa {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+#select-finca-nav option,
+#select-empresa-nav option,
+#select-finca-dashboard option,
+#select-finca-importador option,
+#select-finca-finanzas option,
+#sel-filtro-finca option,
+#sel-finca-origen-traslado option,
+#sel-finca-destino-traslado option,
+#select-filtro-empresa-usr option,
+#usr-empresa option,
+#edit-empresa option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  font-weight: 600 !important;
 }

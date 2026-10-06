@@ -173,8 +173,8 @@ export class ModuloTraslados {
                 <label class="block font-black text-slate-800 uppercase tracking-wider text-[10px] flex items-center gap-1">
                   <span>🏡</span> Finca de Origen (Emisora) *:
                 </label>
-                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-slate-50 font-bold text-slate-900 rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer">
-                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                 </select>
                 <div class="text-[10px] text-slate-500 flex justify-between">
                   <span>Predio de salida</span>
@@ -188,8 +188,8 @@ export class ModuloTraslados {
                   <span>🏁</span> Finca de Destino (Receptora) *:
                 </label>
                 ${fincasDestino.length > 0 ? `
-                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-purple-50/50 font-bold text-purple-950 rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer">
-                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                   </select>
                 ` : `
                   <div class="p-2 bg-amber-50 text-amber-900 font-bold rounded-lg text-[11px] border border-amber-200">

@@ -178,9 +178,9 @@ export class ModuloIngresosDiarios {
               <!-- FILTRO FINCA -->
               <div class="flex items-center gap-1">
                 <span class="font-bold text-slate-600 text-[11px] whitespace-nowrap">🏡 Finca:</span>
-                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 outline-none cursor-pointer">
-                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''}>🌐 Todas las Fincas</option>
-                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-black outline-none cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🌐 Todas las Fincas</option>
+                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                 </select>
               </div>
             </div>

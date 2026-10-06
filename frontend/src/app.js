@@ -4174,11 +4174,11 @@ class BoviTrackApp {
         if (selEmp) {
           const empList = this.state.empresas || [];
           if (empList.length === 0) {
-            selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
+            selEmp.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Empresas Registradas)</option>';
           } else {
             selEmp.innerHTML = `
-              <option value="todas" ${this.state.empresaActivaId === 'todas' || !this.state.empresaActivaId ? 'selected' : ''}>🌐 Todas las Empresas</option>
-              ${empList.map((e) => `<option value="${e.id}" ${e.id === this.state.empresaActivaId ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+              <option value="todas" ${this.state.empresaActivaId === 'todas' || !this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🌐 Todas las Empresas</option>
+              ${empList.map((e) => `<option value="${e.id}" ${e.id === this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
             `;
           }
         }
@@ -4194,10 +4194,10 @@ class BoviTrackApp {
     const selF = document.getElementById('select-finca-nav');
     if (selF) {
       if (fincasPermitidas.length === 0) {
-        selF.innerHTML = '<option value="">(Sin Fincas Registradas)</option>';
+        selF.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Fincas Registradas)</option>';
       } else {
         selF.innerHTML = fincasPermitidas
-          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''}>${f.nombre}</option>`)
+          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`)
           .join('');
       }
     }

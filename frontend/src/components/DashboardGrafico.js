@@ -103,8 +103,8 @@ export class DashboardGrafico {
           ${fincasPermitidas.length > 1 ? `
             <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 bg-slate-50 p-2 rounded-2xl border border-slate-200">
               <span class="text-xs font-bold text-slate-600 pl-1 whitespace-nowrap">Predio:</span>
-              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white shadow-sm outline-none cursor-pointer focus:border-emerald-600">
-                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
+              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white text-black shadow-sm outline-none cursor-pointer focus:border-emerald-600" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
               </select>
             </div>
           ` : ''}

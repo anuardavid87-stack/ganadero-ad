@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-06T19:27:51.950Z
+ * Generado automáticamente: 2026-10-06T19:55:08.168Z
  */
 (function() {
   "use strict";
@@ -5089,8 +5089,8 @@ class DashboardGrafico {
           ${fincasPermitidas.length > 1 ? `
             <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 bg-slate-50 p-2 rounded-2xl border border-slate-200">
               <span class="text-xs font-bold text-slate-600 pl-1 whitespace-nowrap">Predio:</span>
-              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white shadow-sm outline-none cursor-pointer focus:border-emerald-600">
-                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
+              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white text-black shadow-sm outline-none cursor-pointer focus:border-emerald-600" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
               </select>
             </div>
           ` : ''}
@@ -6516,8 +6516,8 @@ class ImportadorExcel {
                 <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
                 <span class="text-[10px] text-slate-500">Asignación automática</span>
               </div>
-              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-900 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}
+              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-black shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
               </select>
             </div>
           </div>
@@ -7611,9 +7611,9 @@ class ModuloAdmin {
             class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 outline-none focus:border-purple-600"
           >
           ${esSuperAdmin ? `
-            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white">
-              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''}>🏢 Todas las Empresas</option>
-              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🏢 Todas las Empresas</option>
+              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
             </select>
           ` : ''}
         </div>
@@ -7765,11 +7765,11 @@ class ModuloAdmin {
 
           <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <label for="select-finca-finanzas" class="text-xs font-bold text-purple-200 whitespace-nowrap">Predio:</label>
-            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-400 bg-slate-900 text-white shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400">
+            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-300 bg-white text-black shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400" style="color: #000000 !important; background-color: #ffffff !important;">
               ${fincas.map((f) => {
                 const emp = empresas.find(e => e.id === f.empresaId);
                 const labelEmp = emp ? ` [${emp.nombre}]` : '';
-                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''}>${f.nombre}${labelEmp}</option>`;
+                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}${labelEmp}</option>`;
               }).join('')}
             </select>
           </div>
@@ -8825,8 +8825,8 @@ class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
@@ -8939,8 +8939,8 @@ class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
@@ -12957,8 +12957,8 @@ class ModuloTraslados {
                 <label class="block font-black text-slate-800 uppercase tracking-wider text-[10px] flex items-center gap-1">
                   <span>🏡</span> Finca de Origen (Emisora) *:
                 </label>
-                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-slate-50 font-bold text-slate-900 rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer">
-                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                 </select>
                 <div class="text-[10px] text-slate-500 flex justify-between">
                   <span>Predio de salida</span>
@@ -12972,8 +12972,8 @@ class ModuloTraslados {
                   <span>🏁</span> Finca de Destino (Receptora) *:
                 </label>
                 ${fincasDestino.length > 0 ? `
-                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-purple-50/50 font-bold text-purple-950 rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer">
-                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                   </select>
                 ` : `
                   <div class="p-2 bg-amber-50 text-amber-900 font-bold rounded-lg text-[11px] border border-amber-200">
@@ -13679,9 +13679,9 @@ class ModuloIngresosDiarios {
               <!-- FILTRO FINCA -->
               <div class="flex items-center gap-1">
                 <span class="font-bold text-slate-600 text-[11px] whitespace-nowrap">🏡 Finca:</span>
-                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 outline-none cursor-pointer">
-                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''}>🌐 Todas las Fincas</option>
-                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-black outline-none cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
+                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🌐 Todas las Fincas</option>
+                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -20390,11 +20390,11 @@ class BoviTrackApp {
         if (selEmp) {
           const empList = this.state.empresas || [];
           if (empList.length === 0) {
-            selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
+            selEmp.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Empresas Registradas)</option>';
           } else {
             selEmp.innerHTML = `
-              <option value="todas" ${this.state.empresaActivaId === 'todas' || !this.state.empresaActivaId ? 'selected' : ''}>🌐 Todas las Empresas</option>
-              ${empList.map((e) => `<option value="${e.id}" ${e.id === this.state.empresaActivaId ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+              <option value="todas" ${this.state.empresaActivaId === 'todas' || !this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🌐 Todas las Empresas</option>
+              ${empList.map((e) => `<option value="${e.id}" ${e.id === this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
             `;
           }
         }
@@ -20410,10 +20410,10 @@ class BoviTrackApp {
     const selF = document.getElementById('select-finca-nav');
     if (selF) {
       if (fincasPermitidas.length === 0) {
-        selF.innerHTML = '<option value="">(Sin Fincas Registradas)</option>';
+        selF.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Fincas Registradas)</option>';
       } else {
         selF.innerHTML = fincasPermitidas
-          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''}>${f.nombre}</option>`)
+          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`)
           .join('');
       }
     }

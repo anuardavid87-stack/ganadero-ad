@@ -702,9 +702,9 @@ export class ModuloAdmin {
             class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 outline-none focus:border-purple-600"
           >
           ${esSuperAdmin ? `
-            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white">
-              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''}>🏢 Todas las Empresas</option>
-              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🏢 Todas las Empresas</option>
+              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
             </select>
           ` : ''}
         </div>
@@ -856,11 +856,11 @@ export class ModuloAdmin {
 
           <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <label for="select-finca-finanzas" class="text-xs font-bold text-purple-200 whitespace-nowrap">Predio:</label>
-            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-400 bg-slate-900 text-white shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400">
+            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-300 bg-white text-black shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400" style="color: #000000 !important; background-color: #ffffff !important;">
               ${fincas.map((f) => {
                 const emp = empresas.find(e => e.id === f.empresaId);
                 const labelEmp = emp ? ` [${emp.nombre}]` : '';
-                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''}>${f.nombre}${labelEmp}</option>`;
+                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}${labelEmp}</option>`;
               }).join('')}
             </select>
           </div>
@@ -1916,8 +1916,8 @@ export class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
@@ -2030,8 +2030,8 @@ export class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
