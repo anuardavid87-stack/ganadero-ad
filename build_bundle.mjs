@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 const files = [
   'frontend/src/core/zootecnia.js',
@@ -109,7 +110,29 @@ if (fs.existsSync('frontend/index.html')) {
   console.log(`✓ public/index.html generado para Vercel.`);
 }
 
-// Sincronizar estilos CSS
+// Compilar y sincronizar Tailwind CSS Local
+try {
+  console.log('Compilando Tailwind CSS local para uso 100% offline...');
+  execSync('npx tailwindcss -i ./tailwind-input.css -o ./tailwind.min.css --minify', { stdio: 'ignore', shell: true });
+  console.log('✓ tailwind.min.css compilado con éxito.');
+} catch (e) {
+  console.warn('Aviso: compilación de Tailwind CLI omitida o fallida, usando versión existente:', e.message);
+}
+
+// Sincronizar tailwind.min.css en todas las carpetas destino
+if (fs.existsSync('tailwind.min.css')) {
+  const twContent = fs.readFileSync('tailwind.min.css');
+  if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
+  fs.writeFileSync('public/tailwind.min.css', twContent);
+  if (fs.existsSync('frontend')) fs.writeFileSync('frontend/tailwind.min.css', twContent);
+  if (fs.existsSync('frontend/public')) fs.writeFileSync('frontend/public/tailwind.min.css', twContent);
+  if (fs.existsSync('www')) fs.writeFileSync('www/tailwind.min.css', twContent);
+  const androidPublic = 'android/app/src/main/assets/public';
+  if (fs.existsSync(androidPublic)) fs.writeFileSync(path.join(androidPublic, 'tailwind.min.css'), twContent);
+  console.log('✓ tailwind.min.css sincronizado en raíz, frontend, public, www y android.');
+}
+
+// Sincronizar estilos CSS personalizados
 if (fs.existsSync('frontend/src/styles.css')) {
   const css = fs.readFileSync('frontend/src/styles.css', 'utf8');
   fs.writeFileSync('styles.css', css, 'utf8');
@@ -117,10 +140,26 @@ if (fs.existsSync('frontend/src/styles.css')) {
   fs.writeFileSync('public/styles.css', css, 'utf8');
   if (fs.existsSync('www')) fs.writeFileSync('www/styles.css', css, 'utf8');
   if (fs.existsSync('frontend')) fs.writeFileSync('frontend/styles.css', css, 'utf8');
-  console.log(`✓ styles.css sincronizado en raíz, public/ y www/.`);
+  const androidPublic = 'android/app/src/main/assets/public';
+  if (fs.existsSync(androidPublic)) fs.writeFileSync(path.join(androidPublic, 'styles.css'), css);
+  console.log(`✓ styles.css sincronizado en raíz, frontend, public, www y android.`);
 }
 
-// Sincronizar bundles en public/
+// Sincronizar SheetJS (xlsx.full.min.js) para soporte offline de importación/exportación
+const xlsxSrc = fs.existsSync('xlsx.full.min.js') ? 'xlsx.full.min.js' : (fs.existsSync('www/xlsx.full.min.js') ? 'www/xlsx.full.min.js' : null);
+if (xlsxSrc) {
+  const xlsxContent = fs.readFileSync(xlsxSrc);
+  fs.writeFileSync('xlsx.full.min.js', xlsxContent);
+  if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
+  fs.writeFileSync('public/xlsx.full.min.js', xlsxContent);
+  if (fs.existsSync('frontend')) fs.writeFileSync('frontend/xlsx.full.min.js', xlsxContent);
+  if (fs.existsSync('www')) fs.writeFileSync('www/xlsx.full.min.js', xlsxContent);
+  const androidPublic = 'android/app/src/main/assets/public';
+  if (fs.existsSync(androidPublic)) fs.writeFileSync(path.join(androidPublic, 'xlsx.full.min.js'), xlsxContent);
+  console.log('✓ xlsx.full.min.js sincronizado para funcionamiento sin internet.');
+}
+
+// Sincronizar bundles en public/ y android
 if (fs.existsSync('bundle.js')) {
   fs.copyFileSync('bundle.js', 'public/bundle.js');
   fs.copyFileSync('bundle.js', 'public/bovitrack_bundle.js');
@@ -141,9 +180,11 @@ for (const pwaFile of pwaFiles) {
     fs.copyFileSync(src, `public/${pwaFile}`);
     if (!fs.existsSync(`frontend/${pwaFile}`)) fs.copyFileSync(src, `frontend/${pwaFile}`);
     if (fs.existsSync('www')) fs.copyFileSync(src, `www/${pwaFile}`);
+    const androidPublic = 'android/app/src/main/assets/public';
+    if (fs.existsSync(androidPublic)) fs.copyFileSync(src, path.join(androidPublic, pwaFile));
   }
 }
-console.log('✓ Activos PWA (manifest, sw, icon, html, bundle, css) sincronizados en raíz, frontend, public y www.');
+console.log('✓ Activos PWA (manifest, sw, icon, html, bundle, css, xlsx) sincronizados en raíz, frontend, public, www y android.');
 
 // Validación de sintaxis
 try {

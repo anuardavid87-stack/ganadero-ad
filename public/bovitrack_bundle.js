@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-04T20:53:27.106Z
+ * Generado automáticamente: 2026-10-06T19:27:51.950Z
  */
 (function() {
   "use strict";

@@ -2,11 +2,14 @@
 // GANADERO AD PWA: SERVICE WORKER v3.8.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v3.9.5-icon-refresh';
+const CACHE_NAME = 'ganadero-ad-v4.0.0-offline-tailwind';
 const CORE_FILES = [
   './',
   './index.html',
   './bundle.js',
+  './tailwind.min.css',
+  './styles.css',
+  './xlsx.full.min.js',
   './manifest.webmanifest',
   './icon.png',
   './icon-192.png',
@@ -17,6 +20,10 @@ const CORE_FILES = [
   './public/icon-192.png',
   './public/icon.svg',
   './public/favicon.ico',
+  './public/tailwind.min.css',
+  './public/styles.css',
+  './public/xlsx.full.min.js',
+  './frontend/tailwind.min.css',
   './frontend/public/manifest.webmanifest',
   './frontend/public/icon.png',
   './frontend/public/icon-192.png',
@@ -105,13 +112,17 @@ self.addEventListener('fetch', (event) => {
           .catch(() => {});
         return cached;
       }
-      return fetch(event.request).then((res) => {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
-        }
-        return res;
-      });
+      return fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          return new Response('', { status: 408, statusText: 'Offline' });
+        });
     })
   );
 });

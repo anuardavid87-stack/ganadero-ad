@@ -16,10 +16,19 @@
   <link rel="icon" type="image/svg+xml" href="./public/icon.svg">
   <link rel="apple-touch-icon" href="./public/icon.png">
 
-  <!-- Tailwind CSS Engine -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- SheetJS para lectura de archivos Excel nativos (.xlsx, .xls) y CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Tailwind CSS Precompilado Local (100% Offline para campo y potreros sin internet) -->
+  <link rel="stylesheet" href="./tailwind.min.css">
+  <link rel="stylesheet" href="./src/styles.css">
+
+  <!-- SheetJS para lectura offline de archivos Excel (.xlsx, .xls) y CSV -->
+  <script src="./xlsx.full.min.js"></script>
+  <script>
+    if (typeof XLSX === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      document.head.appendChild(s);
+    }
+  </script>
   <style>
     * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
@@ -28,7 +37,6 @@
     input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .bottom-mobile-nav { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15); }
   </style>
-  <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased min-h-screen flex flex-col pb-24 md:pb-6">
 
@@ -342,6 +350,6 @@
     </div>
   </div>
 
-  <script src="./bundle.js?v=1791147207124"></script>
+  <script src="./bundle.js?v=1791314871966"></script>
 </body>
 </html>

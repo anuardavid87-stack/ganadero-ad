@@ -23,11 +23,16 @@ if (fs.existsSync(bundleSrc)) {
   console.log('✓ www/bundle.js copiado');
 }
 
-// 2. Copiar styles.css
+// 2. Copiar styles.css y tailwind.min.css
 const cssSrc = path.join(ROOT_DIR, 'frontend', 'src', 'styles.css');
 if (fs.existsSync(cssSrc)) {
   fs.copyFileSync(cssSrc, path.join(WWW_DIR, 'styles.css'));
   console.log('✓ www/styles.css copiado');
+}
+const twSrc = path.join(ROOT_DIR, 'tailwind.min.css');
+if (fs.existsSync(twSrc)) {
+  fs.copyFileSync(twSrc, path.join(WWW_DIR, 'tailwind.min.css'));
+  console.log('✓ www/tailwind.min.css copiado');
 }
 
 // 3. Copiar iconos y manifest
