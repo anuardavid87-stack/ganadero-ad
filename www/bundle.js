@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-06T19:55:08.168Z
+ * Generado automáticamente: 2026-10-13T21:02:25.431Z
  */
 (function() {
   "use strict";
@@ -4992,7 +4992,7 @@ class TablaDinamica {
 
 
 class DashboardGrafico {
-  constructor({ containerId, getFincaActiva, getFincasPermitidas, getAnimales, getCostosFijos, getInversiones, onCambiarFinca, getVentasGanado }) {
+  constructor({ containerId, getFincaActiva, getFincasPermitidas, getAnimales, getCostosFijos, getInversiones, onCambiarFinca, getVentasGanado, getRolActual }) {
     this.container = document.getElementById(containerId);
     this.getFincaActiva = getFincaActiva;
     this.getFincasPermitidas = getFincasPermitidas;
@@ -5001,6 +5001,7 @@ class DashboardGrafico {
     this.getInversiones = getInversiones;
     this.onCambiarFinca = onCambiarFinca;
     this.getVentasGanado = getVentasGanado;
+    this.getRolActual = getRolActual;
   }
 
   init() {
@@ -5009,6 +5010,26 @@ class DashboardGrafico {
 
   render() {
     if (!this.container) return;
+
+    const rol = this.getRolActual ? this.getRolActual() : null;
+    const esAdmin = rol === 'superadmin' || rol === 'administrador';
+    if (rol && !esAdmin) {
+      this.container.innerHTML = `
+        <div class="max-w-2xl mx-auto my-8 sm:my-14 p-6 sm:p-10 bg-white rounded-3xl shadow-xl border border-slate-200 text-center space-y-4">
+          <div class="w-20 h-20 bg-rose-100 text-rose-800 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner border border-rose-200">
+            🔒
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-xl font-black text-slate-900">Dashboard Financiero Restringido</h3>
+            <p class="text-xs font-mono uppercase font-bold text-rose-700">Métricas Confidenciales</p>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+            El informe financiero, balance de costos fijos, EBITDA y estado de resultados está reservado exclusivamente para los perfiles de <strong>Administración</strong> y <strong>Superadministrador</strong>.
+          </p>
+        </div>
+      `;
+      return;
+    }
 
     const finca = this.getFincaActiva ? this.getFincaActiva() : null;
     const fincasPermitidas = this.getFincasPermitidas ? this.getFincasPermitidas() : [];
@@ -7101,6 +7122,28 @@ class ModuloAdmin {
           </div>
           <div class="pt-2 text-xs text-slate-400">
             Si requieres ajustes de empresa, predios o contraseñas, comunícate con tu <strong>Administrador</strong>.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 2. RESTRICCIÓN PARA CUALQUIER OTRO ROL NO ADMINISTRADOR (CONSULTOR, SOLO LECTURA, ETC.)
+    if (!esAdmin) {
+      this.container.innerHTML = `
+        <div class="max-w-2xl mx-auto my-8 sm:my-14 p-6 sm:p-10 bg-white rounded-3xl shadow-xl border border-slate-200 text-center space-y-4">
+          <div class="w-20 h-20 bg-rose-100 text-rose-800 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner border border-rose-200">
+            ⛔
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-xl font-black text-slate-900">Módulo Administrativo Restringido</h3>
+            <p class="text-xs font-mono uppercase font-bold text-rose-700">Acceso No Autorizado</p>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+            Este módulo contiene la gestión de credenciales de acceso, usuarios, predios, costos y mantenimiento de base de datos. Está reservado estrictamente para los roles de <strong>Administrador</strong> y <strong>Superadministrador</strong>.
+          </p>
+          <div class="pt-2 text-xs text-slate-400">
+            Si requieres ajustes en los parámetros de la empresa o en los accesos del sistema, comunícate con tu <strong>Administrador</strong>.
           </div>
         </div>
       `;
@@ -17015,6 +17058,18 @@ class BoviTrackApp {
     }
 
     if (sesion && sesion.usuarioId) {
+      // Validar caducidad de la sesión (máximo 7 días para seguridad en dispositivos de campo)
+      const MAX_SESSION_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+      if (sesion.fecha) {
+        const sesionTime = new Date(sesion.fecha).getTime();
+        if (isNaN(sesionTime) || Date.now() - sesionTime > MAX_SESSION_AGE_MS) {
+          if (typeof localStorage !== 'undefined') localStorage.removeItem(this.sessionKey);
+          sesion = null;
+        }
+      }
+    }
+
+    if (sesion && sesion.usuarioId) {
       const user = (this.state.usuarios || []).find((u) => u.id === sesion.usuarioId || u.usuario === sesion.usuarioId);
       if (user && user.activo !== false) {
         // Si no es superadmin, verificar que la empresa activa no haya vencido
@@ -17045,7 +17100,8 @@ class BoviTrackApp {
       }
     }
 
-    // Sin sesión activa -> Mostrar pantalla de Login obligatoria
+    // Sin sesión activa -> Limpiar estado y forzar pantalla de Login obligatoria
+    this.state.usuarioActual = null;
     this.mostrarPantallaLogin();
   }
 
@@ -17059,7 +17115,26 @@ class BoviTrackApp {
     }
     this.actualizarHeader();
     this.enlazarEventosGlobales();
+    this.configurarEnrutadorSeguro();
     this.aplicarPermisosRBAC();
+
+    // Sincronizar ruta segura desde URL hash si existe y está autorizada
+    if (typeof window !== 'undefined' && window.location && window.location.hash) {
+      const requested = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
+      if (requested && this.tienePermisoParaVista(requested, this.state.usuarioActual?.rol)) {
+        this.vistaActiva = requested;
+      } else {
+        this.vistaActiva = 'animales';
+        try {
+          history.replaceState(null, document.title, window.location.pathname + window.location.search + '#animales');
+        } catch (_) {}
+      }
+    } else {
+      if (!this.vistaActiva || !this.tienePermisoParaVista(this.vistaActiva, this.state.usuarioActual?.rol)) {
+        this.vistaActiva = 'animales';
+      }
+    }
+
     this.mostrarVistaActiva();
     if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
       this.compCuadricula.cargarFilasDesdeInventario();
@@ -17069,8 +17144,26 @@ class BoviTrackApp {
 
   mostrarPantallaLogin() {
     const pLogin = document.getElementById('pantalla-login');
-    if (!pLogin) return;
-    pLogin.classList.remove('hidden');
+    if (pLogin) pLogin.classList.remove('hidden');
+
+    const appLayout = document.getElementById('contenedor-app-segura');
+    if (appLayout) appLayout.classList.add('hidden');
+
+    // Blindaje de enlaces directos: limpiar cualquier hash privado en la URL
+    if (typeof window !== 'undefined' && window.location) {
+      if (window.location.hash && window.location.hash !== '#' && window.location.hash !== '#login') {
+        try {
+          history.replaceState(null, document.title, window.location.pathname + window.location.search);
+        } catch (_) {
+          window.location.hash = '';
+        }
+      }
+    }
+
+    // Ocultar todas las pantallas internas
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('.bovi-view').forEach((el) => el.classList.add('hidden'));
+    }
 
     // Limpiar mensaje de error previo si lo hubiera
     const errBox = document.getElementById('login-error-msg');
@@ -17083,6 +17176,9 @@ class BoviTrackApp {
   ocultarPantallaLogin() {
     const pLogin = document.getElementById('pantalla-login');
     if (pLogin) pLogin.classList.add('hidden');
+
+    const appLayout = document.getElementById('contenedor-app-segura');
+    if (appLayout) appLayout.classList.remove('hidden');
   }
 
   configurarPantallaLogin() {
@@ -17283,12 +17379,129 @@ class BoviTrackApp {
         localStorage.removeItem(this.sessionKey);
       }
       this.state.usuarioActual = null;
+      if (typeof window !== 'undefined' && window.location) {
+        try {
+          history.replaceState(null, document.title, window.location.pathname + window.location.search);
+        } catch (_) {
+          window.location.hash = '';
+        }
+      }
       this.mostrarPantallaLogin();
     }
   }
 
+  tienePermisoParaVista(vista, rol) {
+    if (!vista) return false;
+    // Si no hay rol ni sesión, ninguna vista interna está permitida
+    if (!rol && !this.state.usuarioActual) return false;
+    const r = (rol || this.state.usuarioActual?.rol || '').toLowerCase().trim();
+
+    // 1. Superadmin y Administrador (Control Total de su Entorno)
+    if (r === 'superadmin' || r === 'administrador' || r === 'propietario') {
+      return true;
+    }
+
+    // 2. Encargado / Operario / Veterinario (Módulos Operativos de Campo)
+    if (r === 'encargado' || r === 'operario' || r === 'veterinario') {
+      const vistasPermitidas = [
+        'animales', 'masivo', 'alertas', 'dinamica',
+        'reproduccion', 'nutricion', 'excel', 'traslados', 'ingresos'
+      ];
+      return vistasPermitidas.includes(vista);
+    }
+
+    // 3. Consultor / Solo Lectura (Estrictamente Lectura de Ganado, Alertas y Filtros)
+    if (r === 'consultor' || r === 'consulta') {
+      const vistasPermitidas = ['animales', 'alertas', 'dinamica'];
+      return vistasPermitidas.includes(vista);
+    }
+
+    return false;
+  }
+
+  configurarEnrutadorSeguro() {
+    if (typeof window === 'undefined' || this._enrutadorInicializado) return;
+    this._enrutadorInicializado = true;
+
+    const manejarRuta = () => {
+      // 1. Si no hay sesión, bloquear acceso a cualquier ruta interna
+      if (!this.state.usuarioActual) {
+        if (window.location.hash && window.location.hash !== '#' && window.location.hash !== '#login') {
+          try {
+            history.replaceState(null, document.title, window.location.pathname + window.location.search);
+          } catch (_) {
+            window.location.hash = '';
+          }
+        }
+        this.mostrarPantallaLogin();
+        return;
+      }
+
+      // 2. Obtener vista solicitada por hash
+      const hash = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
+      if (!hash) return;
+
+      const vistasValidas = [
+        'animales', 'masivo', 'alertas', 'dinamica', 'reproduccion',
+        'nutricion', 'dashboard', 'excel', 'traslados', 'ingresos', 'admin'
+      ];
+
+      if (!vistasValidas.includes(hash)) {
+        this.navegarSeguro('animales');
+        return;
+      }
+
+      // 3. Validar permisos para la vista solicitada
+      const rol = this.state.usuarioActual.rol;
+      if (!this.tienePermisoParaVista(hash, rol)) {
+        console.warn(`[Seguridad Ganadero AD] Intento bloqueado: el rol '${rol}' intentó acceder a la vista no autorizada '${hash}'.`);
+        alert(`⛔ ACCESO DENEGADO: Tu rol (${this.getNombreRol(rol)}) no tiene permisos para acceder al módulo '${hash}'.`);
+        this.navegarSeguro('animales');
+        return;
+      }
+
+      // 4. Si es válida y permitida, mostrar
+      if (this.vistaActiva !== hash) {
+        this.vistaActiva = hash;
+        this.mostrarVistaActiva();
+      }
+    };
+
+    window.addEventListener('hashchange', manejarRuta);
+    window.addEventListener('popstate', manejarRuta);
+  }
+
   navegarA(vista) {
+    this.navegarSeguro(vista);
+  }
+
+  navegarSeguro(vista) {
+    // 1. Validación de sesión
+    if (!this.state.usuarioActual) {
+      this.mostrarPantallaLogin();
+      return;
+    }
+
+    // 2. Validación de permisos RBAC
+    const rol = this.state.usuarioActual.rol;
+    if (!this.tienePermisoParaVista(vista, rol)) {
+      console.warn(`[Seguridad Ganadero AD] Acceso bloqueado a '${vista}' para el rol '${rol}'.`);
+      alert(`⛔ ACCESO DENEGADO: Tu rol (${this.getNombreRol(rol)}) no tiene autorización para acceder a '${vista}'.`);
+      this.vistaActiva = 'animales';
+      if (typeof window !== 'undefined' && window.location) {
+        window.location.hash = '#animales';
+      }
+      this.mostrarVistaActiva();
+      return;
+    }
+
+    // 3. Navegación autorizada
     this.vistaActiva = vista;
+    if (typeof window !== 'undefined' && window.location) {
+      if (window.location.hash !== `#${vista}`) {
+        window.location.hash = `#${vista}`;
+      }
+    }
     this.mostrarVistaActiva();
   }
 
@@ -17450,6 +17663,7 @@ class BoviTrackApp {
       getCostosFijos: () => this.state.fincaActivaId ? (this.state.costosFijos[this.state.fincaActivaId] || {}) : {},
       getInversiones: () => this.state.inversiones.filter((i) => i.fincaId === this.state.fincaActivaId),
       getVentasGanado: () => this.getVentasGanadoFinca(this.state.fincaActivaId),
+      getRolActual: () => this.state.usuarioActual?.rol,
       onCambiarFinca: (fincaId) => this.setFincaActiva(fincaId)
     });
 
@@ -20462,6 +20676,28 @@ class BoviTrackApp {
   }
 
   mostrarVistaActiva() {
+    // 1. Guard estricto de autenticación: sin sesión activa no se expone ninguna vista interna
+    if (!this.state.usuarioActual) {
+      this.mostrarPantallaLogin();
+      return;
+    }
+
+    if (!this.vistaActiva) {
+      this.vistaActiva = 'animales';
+    }
+
+    // 2. Guard estricto de autorización (RBAC): redirigir a vista base si no tiene permiso
+    const rol = this.state.usuarioActual?.rol;
+    if (!this.tienePermisoParaVista(this.vistaActiva, rol)) {
+      console.warn(`[Seguridad Ganadero AD] Intento bloqueado a '${this.vistaActiva}' por rol '${rol}'.`);
+      this.vistaActiva = 'animales';
+      if (typeof window !== 'undefined' && window.location) {
+        try {
+          history.replaceState(null, document.title, window.location.pathname + window.location.search + '#animales');
+        } catch (_) {}
+      }
+    }
+
     document.querySelectorAll('.bovi-view').forEach((el) => el.classList.add('hidden'));
     document.querySelectorAll('.btn-nav-bovi').forEach((btn) => {
       btn.classList.remove('active', 'text-emerald-400', 'bg-slate-800');
@@ -20537,8 +20773,7 @@ class BoviTrackApp {
         if (v) {
           // Cerrar menú móvil si estaba abierto
           toggleMenuMas(false);
-          this.vistaActiva = v;
-          this.mostrarVistaActiva();
+          this.navegarSeguro(v);
         }
       });
     });
@@ -21112,14 +21347,44 @@ class BoviTrackApp {
 
   aplicarPermisosRBAC() {
     if (!this.state.usuarioActual) return;
+    const rol = this.state.usuarioActual.rol;
     const esSoloConsulta = this.esUsuarioSoloConsulta();
+    const esAdmin = rol === 'superadmin' || rol === 'administrador';
 
-    // Banner de modo solo consulta
-    const bannerLector = document.getElementById('banner-modo-propietario');
-    if (bannerLector) {
-      bannerLector.style.display = esSoloConsulta ? 'block' : 'none';
-      if (esSoloConsulta) {
-        bannerLector.textContent = '👁️ Modo Consultor Activo: Permisos de sólo lectura habilitados. La creación, modificación o eliminación de datos está deshabilitada.';
+    // 1. Ocultar enlaces de navegación no autorizados en desktop y móvil
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('.btn-nav-bovi').forEach((btn) => {
+        const v = btn.getAttribute('data-vista');
+        if (v) {
+          const permitido = this.tienePermisoParaVista(v, rol);
+          btn.style.display = permitido ? '' : 'none';
+          if (!permitido) {
+            btn.classList.add('hidden');
+          } else {
+            btn.classList.remove('hidden');
+          }
+        }
+      });
+
+      // 2. Restringir botón de backup/exportación completa de base de datos a administradores
+      const btnBackup = document.getElementById('btn-backup-excel-header');
+      if (btnBackup) {
+        btnBackup.style.display = esAdmin ? '' : 'none';
+      }
+
+      // 3. Restringir botón de creación rápida de animales para consultores
+      const btnNuevoAnimal = document.getElementById('btn-abrir-modal-nuevo');
+      if (btnNuevoAnimal) {
+        btnNuevoAnimal.style.display = esSoloConsulta ? 'none' : '';
+      }
+
+      // 4. Banner de modo solo consulta
+      const bannerLector = document.getElementById('banner-modo-propietario');
+      if (bannerLector) {
+        bannerLector.style.display = esSoloConsulta ? 'block' : 'none';
+        if (esSoloConsulta) {
+          bannerLector.textContent = '👁️ Modo Consultor Activo: Permisos de sólo lectura habilitados. La creación, modificación o eliminación de datos está deshabilitada.';
+        }
       }
     }
   }

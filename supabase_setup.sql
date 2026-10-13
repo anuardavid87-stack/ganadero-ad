@@ -194,8 +194,8 @@ CREATE TABLE IF NOT EXISTS public.operaciones_diarias (
 );
 
 -- ============================================================================
--- SEGURIDAD Y PERMISOS: ROW LEVEL SECURITY (RLS) PARA EL ROL 'ANON'
--- Permite que la PWA lea y escriba directamente usando la Anon Key pública.
+-- SEGURIDAD Y PERMISOS: ROW LEVEL SECURITY (RLS) Y CONTROL DE ACCESO
+-- Protege los datos confidenciales y revoca la exposición de contraseñas.
 -- ============================================================================
 
 DO $$
@@ -211,12 +211,13 @@ BEGIN
     FOREACH tbl IN ARRAY tablas LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS "Permitir acceso publico anon" ON public.%I;', tbl);
-        EXECUTE format('CREATE POLICY "Permitir acceso publico anon" ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true);', tbl);
-        EXECUTE format('GRANT ALL ON public.%I TO anon;', tbl);
-        EXECUTE format('GRANT ALL ON public.%I TO authenticated;', tbl);
-        EXECUTE format('GRANT ALL ON public.%I TO service_role;', tbl);
+        EXECUTE format('CREATE POLICY "Permitir acceso operacional" ON public.%I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);', tbl);
+        EXECUTE format('GRANT ALL ON public.%I TO anon, authenticated, service_role;', tbl);
     END LOOP;
 END $$;
+
+-- Blindaje específico de la tabla usuarios (Prohibir SELECT público de password)
+REVOKE SELECT (password) ON public.usuarios FROM anon;
 
 -- Otorgar uso de esquemas al rol anónimo
 GRANT USAGE ON SCHEMA public TO anon;

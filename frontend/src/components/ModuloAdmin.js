@@ -198,6 +198,28 @@ export class ModuloAdmin {
       return;
     }
 
+    // 2. RESTRICCIÓN PARA CUALQUIER OTRO ROL NO ADMINISTRADOR (CONSULTOR, SOLO LECTURA, ETC.)
+    if (!esAdmin) {
+      this.container.innerHTML = `
+        <div class="max-w-2xl mx-auto my-8 sm:my-14 p-6 sm:p-10 bg-white rounded-3xl shadow-xl border border-slate-200 text-center space-y-4">
+          <div class="w-20 h-20 bg-rose-100 text-rose-800 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner border border-rose-200">
+            ⛔
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-xl font-black text-slate-900">Módulo Administrativo Restringido</h3>
+            <p class="text-xs font-mono uppercase font-bold text-rose-700">Acceso No Autorizado</p>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+            Este módulo contiene la gestión de credenciales de acceso, usuarios, predios, costos y mantenimiento de base de datos. Está reservado estrictamente para los roles de <strong>Administrador</strong> y <strong>Superadministrador</strong>.
+          </p>
+          <div class="pt-2 text-xs text-slate-400">
+            Si requieres ajustes en los parámetros de la empresa o en los accesos del sistema, comunícate con tu <strong>Administrador</strong>.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     const fincas = this.getFincas ? this.getFincas() : [];
     const fincaActiva = this.getFincaActiva ? this.getFincaActiva() : null;
     const usuarios = this.getUsuarios ? this.getUsuarios() : [];

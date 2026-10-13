@@ -6,7 +6,7 @@
 import { computarRendimientoFinanciero } from '../core/finanzas.js';
 
 export class DashboardGrafico {
-  constructor({ containerId, getFincaActiva, getFincasPermitidas, getAnimales, getCostosFijos, getInversiones, onCambiarFinca, getVentasGanado }) {
+  constructor({ containerId, getFincaActiva, getFincasPermitidas, getAnimales, getCostosFijos, getInversiones, onCambiarFinca, getVentasGanado, getRolActual }) {
     this.container = document.getElementById(containerId);
     this.getFincaActiva = getFincaActiva;
     this.getFincasPermitidas = getFincasPermitidas;
@@ -15,6 +15,7 @@ export class DashboardGrafico {
     this.getInversiones = getInversiones;
     this.onCambiarFinca = onCambiarFinca;
     this.getVentasGanado = getVentasGanado;
+    this.getRolActual = getRolActual;
   }
 
   init() {
@@ -23,6 +24,26 @@ export class DashboardGrafico {
 
   render() {
     if (!this.container) return;
+
+    const rol = this.getRolActual ? this.getRolActual() : null;
+    const esAdmin = rol === 'superadmin' || rol === 'administrador';
+    if (rol && !esAdmin) {
+      this.container.innerHTML = `
+        <div class="max-w-2xl mx-auto my-8 sm:my-14 p-6 sm:p-10 bg-white rounded-3xl shadow-xl border border-slate-200 text-center space-y-4">
+          <div class="w-20 h-20 bg-rose-100 text-rose-800 rounded-3xl flex items-center justify-center mx-auto text-4xl shadow-inner border border-rose-200">
+            🔒
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-xl font-black text-slate-900">Dashboard Financiero Restringido</h3>
+            <p class="text-xs font-mono uppercase font-bold text-rose-700">Métricas Confidenciales</p>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+            El informe financiero, balance de costos fijos, EBITDA y estado de resultados está reservado exclusivamente para los perfiles de <strong>Administración</strong> y <strong>Superadministrador</strong>.
+          </p>
+        </div>
+      `;
+      return;
+    }
 
     const finca = this.getFincaActiva ? this.getFincaActiva() : null;
     const fincasPermitidas = this.getFincasPermitidas ? this.getFincasPermitidas() : [];
