@@ -53,6 +53,7 @@ DECLARE
     v_user record;
     v_empresa record;
     v_clean_user text;
+    v_empresa_json jsonb := NULL;
 BEGIN
     -- Limpieza y normalización de usuario (sin espacios, sin arroba)
     v_clean_user := lower(trim(replace(p_usuario, '@', '')));
@@ -83,8 +84,19 @@ BEGIN
         FROM public.empresas
         WHERE id = v_user.empresa_id;
 
-        IF FOUND AND v_empresa.activa IS FALSE THEN
-            RETURN jsonb_build_object('ok', false, 'error', 'La empresa se encuentra inactiva o con suscripción suspendida.');
+        IF FOUND THEN
+            IF v_empresa.activa IS FALSE THEN
+                RETURN jsonb_build_object('ok', false, 'error', 'La empresa se encuentra inactiva o con suscripción suspendida.');
+            END IF;
+
+            v_empresa_json := jsonb_build_object(
+                'id', v_empresa.id,
+                'nit', v_empresa.nit,
+                'nombre', v_empresa.nombre,
+                'activa', v_empresa.activa,
+                'fecha_vencimiento', v_empresa.fecha_vencimiento,
+                'plan_vigencia', v_empresa.plan_vigencia
+            );
         END IF;
     END IF;
 
@@ -114,14 +126,7 @@ BEGIN
             'empresa_id', v_user.empresa_id,
             'fincas_asignadas', v_user.fincas_asignadas
         ),
-        'empresa', CASE WHEN v_empresa.id IS NOT NULL THEN jsonb_build_object(
-            'id', v_empresa.id,
-            'nit', v_empresa.nit,
-            'nombre', v_empresa.nombre,
-            'activa', v_empresa.activa,
-            'fecha_vencimiento', v_empresa.fecha_vencimiento,
-            'plan_vigencia', v_empresa.plan_vigencia
-        ) ELSE NULL END
+        'empresa', v_empresa_json
     );
 END;
 $$;
@@ -133,11 +138,13 @@ GRANT EXECUTE ON FUNCTION public.autenticar_usuario(text, text) TO anon, authent
 -- 4. POLÍTICAS RLS SEGURAS POR MULTI-INQUILINO (MULTI-TENANT ISOLATION)
 
 -- TABLA: empresas (Solo empresas activas visibles)
+DROP POLICY IF EXISTS "Empresas: Lectura autorizada" ON public.empresas;
 CREATE POLICY "Empresas: Lectura autorizada"
 ON public.empresas FOR SELECT
 TO anon, authenticated
 USING (activa = true);
 
+DROP POLICY IF EXISTS "Empresas: Gestión administradores" ON public.empresas;
 CREATE POLICY "Empresas: Gestión administradores"
 ON public.empresas FOR ALL
 TO authenticated, service_role
@@ -145,16 +152,19 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: usuarios (Lectura segura de directorio sin contraseñas)
+DROP POLICY IF EXISTS "Usuarios: Lectura sin passwords" ON public.usuarios;
 CREATE POLICY "Usuarios: Lectura sin passwords"
 ON public.usuarios FOR SELECT
 TO anon, authenticated
 USING (activo = true);
 
+DROP POLICY IF EXISTS "Usuarios: Inserción y actualización controlada" ON public.usuarios;
 CREATE POLICY "Usuarios: Inserción y actualización controlada"
 ON public.usuarios FOR INSERT
 TO anon, authenticated
 WITH CHECK (activo = true);
 
+DROP POLICY IF EXISTS "Usuarios: Modificación permitida" ON public.usuarios;
 CREATE POLICY "Usuarios: Modificación permitida"
 ON public.usuarios FOR UPDATE
 TO anon, authenticated
@@ -162,6 +172,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: fincas
+DROP POLICY IF EXISTS "Fincas: Acceso operacional" ON public.fincas;
 CREATE POLICY "Fincas: Acceso operacional"
 ON public.fincas FOR ALL
 TO anon, authenticated
@@ -169,6 +180,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: animales
+DROP POLICY IF EXISTS "Animales: Acceso operacional" ON public.animales;
 CREATE POLICY "Animales: Acceso operacional"
 ON public.animales FOR ALL
 TO anon, authenticated
@@ -176,6 +188,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: servicios_reproductivos
+DROP POLICY IF EXISTS "Servicios: Acceso operacional" ON public.servicios_reproductivos;
 CREATE POLICY "Servicios: Acceso operacional"
 ON public.servicios_reproductivos FOR ALL
 TO anon, authenticated
@@ -183,6 +196,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: pesajes_animales
+DROP POLICY IF EXISTS "Pesajes: Acceso operacional" ON public.pesajes_animales;
 CREATE POLICY "Pesajes: Acceso operacional"
 ON public.pesajes_animales FOR ALL
 TO anon, authenticated
@@ -190,6 +204,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: palpaciones_reproductivas
+DROP POLICY IF EXISTS "Palpaciones: Acceso operacional" ON public.palpaciones_reproductivas;
 CREATE POLICY "Palpaciones: Acceso operacional"
 ON public.palpaciones_reproductivas FOR ALL
 TO anon, authenticated
@@ -197,6 +212,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: controles_lecheros
+DROP POLICY IF EXISTS "Controles Lecheros: Acceso operacional" ON public.controles_lecheros;
 CREATE POLICY "Controles Lecheros: Acceso operacional"
 ON public.controles_lecheros FOR ALL
 TO anon, authenticated
@@ -204,6 +220,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: traslados_animales
+DROP POLICY IF EXISTS "Traslados: Acceso operacional" ON public.traslados_animales;
 CREATE POLICY "Traslados: Acceso operacional"
 ON public.traslados_animales FOR ALL
 TO anon, authenticated
@@ -211,6 +228,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: costos_fijos_finca
+DROP POLICY IF EXISTS "Costos: Acceso operacional" ON public.costos_fijos_finca;
 CREATE POLICY "Costos: Acceso operacional"
 ON public.costos_fijos_finca FOR ALL
 TO anon, authenticated
@@ -218,6 +236,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: inversiones_diferidas
+DROP POLICY IF EXISTS "Inversiones: Acceso operacional" ON public.inversiones_diferidas;
 CREATE POLICY "Inversiones: Acceso operacional"
 ON public.inversiones_diferidas FOR ALL
 TO anon, authenticated
@@ -225,6 +244,7 @@ USING (true)
 WITH CHECK (true);
 
 -- TABLA: operaciones_diarias
+DROP POLICY IF EXISTS "Bitacora: Acceso operacional" ON public.operaciones_diarias;
 CREATE POLICY "Bitacora: Acceso operacional"
 ON public.operaciones_diarias FOR ALL
 TO anon, authenticated
