@@ -14,7 +14,8 @@ import {
   eliminarGeminiApiKey,
   probarConexionGemini,
   consultarAsistenteZootecnicoGemini,
-  generarInformeHatoGemini
+  generarInformeHatoGemini,
+  obtenerModeloGeminiActivo
 } from '../core/nutricionIA.js';
 
 export class ModuloAdmin {
@@ -1178,7 +1179,7 @@ export class ModuloAdmin {
                   ${tieneKey ? '● CONECTADO' : '○ CLAVE PENDIENTE'}
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                  gemini-1.5-flash
+                  ${obtenerModeloGeminiActivo()}
                 </span>
               </div>
               <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">

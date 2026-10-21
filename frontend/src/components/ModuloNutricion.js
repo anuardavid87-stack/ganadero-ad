@@ -412,7 +412,7 @@ export class ModuloNutricion {
             <p>
               Obtén tu API Key gratis en 
               <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline text-purple-300 font-bold hover:text-white">Google AI Studio ↗</a>. 
-              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para <code>gemini-1.5-flash</code>.
+              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para modelos <code>gemini-flash</code>.
             </p>
           </div>
 

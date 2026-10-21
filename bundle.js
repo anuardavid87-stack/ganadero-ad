@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-21T00:46:25.851Z
+ * Generado automáticamente: 2026-10-21T01:16:38.838Z
  */
 (function() {
   "use strict";
@@ -2504,26 +2504,21 @@ async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
   "observacionesIA": "Tus observaciones y recomendaciones nutricionales..."
 }`;
 
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey.trim()
-            },
-            body: JSON.stringify({
+          const resGemini = await invocarGeminiAPI({
+            key: apiKey.trim(),
+            body: {
               contents: [{
                 parts: [
                   { text: prompt },
                   { inlineData: { mimeType: fileOrBlob.type || 'image/jpeg', data: base64Data } }
                 ]
               }]
-            })
+            }
           });
 
-          if (!response.ok) throw new Error("Error en Gemini API: " + response.status);
+          if (!resGemini.ok) throw new Error(resGemini.error || "Error en Gemini API: " + resGemini.status);
           
-          const data = await response.json();
-          const text = data.candidates[0].content.parts[0].text;
+          const text = resGemini.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
           
           const match = text.match(/\{[\s\S]*\}/);
           if (match) {
@@ -2670,6 +2665,83 @@ function eliminarGeminiApiKey() {
   return true;
 }
 
+const MODELOS_GEMINI_PRIORIDAD = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash'
+];
+
+let modeloGeminiConfirmado = 'gemini-2.5-flash';
+
+function obtenerModeloGeminiActivo() {
+  return modeloGeminiConfirmado;
+}
+
+async function invocarGeminiAPI({ key, body }) {
+  if (!key) {
+    return { ok: false, error: 'API Key no suministrada', status: 401 };
+  }
+
+  const candidatos = [
+    modeloGeminiConfirmado,
+    ...MODELOS_GEMINI_PRIORIDAD.filter((m) => m !== modeloGeminiConfirmado)
+  ];
+
+  let ultimoError = null;
+  let ultimoStatus = 500;
+
+  for (const modelo of candidatos) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key
+        },
+        body: JSON.stringify(body)
+      });
+
+      // Si Google devuelve 404 (el modelo fue retirado o no está soportado en esta versión), probar el siguiente candidato
+      if (response.status === 404) {
+        ultimoStatus = 404;
+        continue;
+      }
+
+      if (!response.ok) {
+        let errJson = null;
+        try {
+          errJson = await response.json();
+        } catch (_) {
+          errJson = { error: { message: await response.text() } };
+        }
+        return {
+          ok: false,
+          status: response.status,
+          error: errJson?.error?.message || `HTTP ${response.status}`,
+          modelo
+        };
+      }
+
+      const data = await response.json();
+      modeloGeminiConfirmado = modelo;
+      return {
+        ok: true,
+        data,
+        modelo
+      };
+    } catch (err) {
+      ultimoError = err;
+    }
+  }
+
+  return {
+    ok: false,
+    status: ultimoStatus,
+    error: ultimoError ? ultimoError.message : 'Ningún modelo de Gemini respondió satisfactoriamente (404/500).'
+  };
+}
+
 async function probarConexionGemini(apiKey = null) {
   const key = (apiKey || obtenerGeminiApiKey()).trim();
   if (!key) {
@@ -2678,44 +2750,32 @@ async function probarConexionGemini(apiKey = null) {
   try {
     const t0 = Date.now();
     const prompt = 'Responde exactamente con la frase: "CONEXION_EXITOSA" si recibes este mensaje de prueba desde Ganadero AD.';
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': key
-      },
-      body: JSON.stringify({
+    const res = await invocarGeminiAPI({
+      key,
+      body: {
         contents: [{
           parts: [{ text: prompt }]
         }]
-      })
+      }
     });
 
-    if (!response.ok) {
-      let errTxt = '';
-      try {
-        const errJson = await response.json();
-        errTxt = errJson?.error?.message || response.statusText;
-      } catch (_) {
-        errTxt = await response.text();
-      }
+    if (!res.ok) {
       return {
         ok: false,
-        status: response.status,
-        error: errTxt || `HTTP ${response.status}`,
-        mensaje: errTxt || `Error HTTP ${response.status} de Google`
+        status: res.status,
+        error: res.error,
+        mensaje: res.error || `Error conectando a Gemini con modelo ${res.modelo || 'flash'}`
       };
     }
 
-    const data = await response.json();
     const t1 = Date.now();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return {
       ok: true,
       tiempoMs: t1 - t0,
-      mensaje: `Conexión exitosa con Google Gemini (${t1 - t0} ms).`,
+      mensaje: `Conexión exitosa con Google Gemini (${t1 - t0} ms, modelo: ${res.modelo}).`,
       respuesta: text.trim(),
-      modelo: 'gemini-1.5-flash'
+      modelo: res.modelo
     };
   } catch (err) {
     return {
@@ -2763,27 +2823,21 @@ Instrucciones de formato y contenido:
 3. Incluye recomendaciones de bioseguridad o advertencias veterinarias cuando sea pertinente.
 4. Mantén un tono profesional, accesible y ganadero.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': key
-      },
-      body: JSON.stringify({
+    const res = await invocarGeminiAPI({
+      key,
+      body: {
         contents: [{
           parts: [{ text: systemPrompt }]
         }]
-      })
+      }
     });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return { ok: false, error: err?.error?.message || `Error HTTP ${response.status} en Gemini API` };
+    if (!res.ok) {
+      return { ok: false, error: res.error || 'Error consultando al Asistente Zootécnico.' };
     }
 
-    const data = await response.json();
-    const respuesta = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return { ok: true, respuesta };
+    const respuesta = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return { ok: true, respuesta, modelo: res.modelo };
   } catch (err) {
     return { ok: false, error: err.message || 'Error consultando al Asistente Zootécnico.' };
   }
@@ -2846,27 +2900,21 @@ ESTRUCTURA REQUERIDA DEL INFORME (En formato Markdown profesional con íconos):
 4. **PLAN SANITARIO & BIOMÉTRICO PRIORITARIO:** Vacunación, control antiparasitario y pesajes estratégicos.
 5. **CONCLUSIONES & ACCIONES INMEDIATAS PARA EL ADMINISTRADOR:** 3 o 4 pasos concretos a implementar esta semana.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': key
-      },
-      body: JSON.stringify({
+    const res = await invocarGeminiAPI({
+      key,
+      body: {
         contents: [{
           parts: [{ text: prompt }]
         }]
-      })
+      }
     });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return { ok: false, error: err?.error?.message || `Error HTTP ${response.status} en Gemini API` };
+    if (!res.ok) {
+      return { ok: false, error: res.error || 'Error generando informe del hato con Gemini.' };
     }
 
-    const data = await response.json();
-    const informe = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return { ok: true, informe };
+    const informe = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return { ok: true, informe, modelo: res.modelo };
   } catch (err) {
     return { ok: false, error: err.message || 'Error generando informe del hato con Gemini.' };
   }
@@ -8332,7 +8380,7 @@ class ModuloAdmin {
                   ${tieneKey ? '● CONECTADO' : '○ CLAVE PENDIENTE'}
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                  gemini-1.5-flash
+                  ${obtenerModeloGeminiActivo()}
                 </span>
               </div>
               <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">
@@ -15466,7 +15514,7 @@ class ModuloNutricion {
             <p>
               Obtén tu API Key gratis en 
               <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline text-purple-300 font-bold hover:text-white">Google AI Studio ↗</a>. 
-              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para <code>gemini-1.5-flash</code>.
+              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para modelos <code>gemini-flash</code>.
             </p>
           </div>
 
