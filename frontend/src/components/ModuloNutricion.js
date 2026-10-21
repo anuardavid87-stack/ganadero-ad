@@ -383,7 +383,7 @@ export class ModuloNutricion {
             }">
               <div class="flex items-center gap-2">
                 <span>${this.geminiFeedback.ok ? '✅' : '⚠️'}</span>
-                <span>${this.geminiFeedback.mensaje}</span>
+                <span>${this.geminiFeedback.mensaje || this.geminiFeedback.error}</span>
               </div>
               <button id="btn-cerrar-feedback-gemini-modal" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
             </div>

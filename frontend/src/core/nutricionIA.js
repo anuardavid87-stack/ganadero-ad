@@ -758,7 +758,10 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
 
           const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey.trim()
+            },
             body: JSON.stringify({
               contents: [{
                 parts: [
@@ -922,14 +925,17 @@ export function eliminarGeminiApiKey() {
 export async function probarConexionGemini(apiKey = null) {
   const key = (apiKey || obtenerGeminiApiKey()).trim();
   if (!key) {
-    return { ok: false, error: 'No se ha proporcionado una API Key de Gemini.' };
+    return { ok: false, error: 'No se ha proporcionado una API Key de Gemini.', mensaje: 'No se ha proporcionado una API Key de Gemini.' };
   }
   try {
     const t0 = Date.now();
     const prompt = 'Responde exactamente con la frase: "CONEXION_EXITOSA" si recibes este mensaje de prueba desde Ganadero AD.';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
@@ -945,7 +951,12 @@ export async function probarConexionGemini(apiKey = null) {
       } catch (_) {
         errTxt = await response.text();
       }
-      return { ok: false, status: response.status, error: errTxt || `HTTP ${response.status}` };
+      return {
+        ok: false,
+        status: response.status,
+        error: errTxt || `HTTP ${response.status}`,
+        mensaje: errTxt || `Error HTTP ${response.status} de Google`
+      };
     }
 
     const data = await response.json();
@@ -954,11 +965,16 @@ export async function probarConexionGemini(apiKey = null) {
     return {
       ok: true,
       tiempoMs: t1 - t0,
+      mensaje: `Conexión exitosa con Google Gemini (${t1 - t0} ms).`,
       respuesta: text.trim(),
       modelo: 'gemini-1.5-flash'
     };
   } catch (err) {
-    return { ok: false, error: err.message || 'Error de red o timeout conectando a Google Gemini.' };
+    return {
+      ok: false,
+      error: err.message || 'Error de red o timeout conectando a Google Gemini.',
+      mensaje: err.message || 'Error de red conectando a Google Gemini.'
+    };
   }
 }
 
@@ -1001,7 +1017,10 @@ Instrucciones de formato y contenido:
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: systemPrompt }]
@@ -1081,7 +1100,10 @@ ESTRUCTURA REQUERIDA DEL INFORME (En formato Markdown profesional con íconos):
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]

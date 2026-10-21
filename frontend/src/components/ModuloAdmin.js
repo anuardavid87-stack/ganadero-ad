@@ -1287,7 +1287,7 @@ export class ModuloAdmin {
               }">
                 <div class="flex items-center gap-2">
                   <span>${this.geminiTestResultado.ok ? '✅' : '❌'}</span>
-                  <span>${this.geminiTestResultado.mensaje}</span>
+                  <span>${this.geminiTestResultado.mensaje || this.geminiTestResultado.error || 'Respuesta recibida'}</span>
                 </div>
                 <button id="btn-cerrar-resultado-gemini" class="text-slate-400 hover:text-slate-700 text-xs px-2 cursor-pointer">✕</button>
               </div>

@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-21T00:03:31.439Z
+ * Generado automáticamente: 2026-10-21T00:46:25.851Z
  */
 (function() {
   "use strict";
@@ -2506,7 +2506,10 @@ async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
 
           const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey.trim()
+            },
             body: JSON.stringify({
               contents: [{
                 parts: [
@@ -2670,14 +2673,17 @@ function eliminarGeminiApiKey() {
 async function probarConexionGemini(apiKey = null) {
   const key = (apiKey || obtenerGeminiApiKey()).trim();
   if (!key) {
-    return { ok: false, error: 'No se ha proporcionado una API Key de Gemini.' };
+    return { ok: false, error: 'No se ha proporcionado una API Key de Gemini.', mensaje: 'No se ha proporcionado una API Key de Gemini.' };
   }
   try {
     const t0 = Date.now();
     const prompt = 'Responde exactamente con la frase: "CONEXION_EXITOSA" si recibes este mensaje de prueba desde Ganadero AD.';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
@@ -2693,7 +2699,12 @@ async function probarConexionGemini(apiKey = null) {
       } catch (_) {
         errTxt = await response.text();
       }
-      return { ok: false, status: response.status, error: errTxt || `HTTP ${response.status}` };
+      return {
+        ok: false,
+        status: response.status,
+        error: errTxt || `HTTP ${response.status}`,
+        mensaje: errTxt || `Error HTTP ${response.status} de Google`
+      };
     }
 
     const data = await response.json();
@@ -2702,11 +2713,16 @@ async function probarConexionGemini(apiKey = null) {
     return {
       ok: true,
       tiempoMs: t1 - t0,
+      mensaje: `Conexión exitosa con Google Gemini (${t1 - t0} ms).`,
       respuesta: text.trim(),
       modelo: 'gemini-1.5-flash'
     };
   } catch (err) {
-    return { ok: false, error: err.message || 'Error de red o timeout conectando a Google Gemini.' };
+    return {
+      ok: false,
+      error: err.message || 'Error de red o timeout conectando a Google Gemini.',
+      mensaje: err.message || 'Error de red conectando a Google Gemini.'
+    };
   }
 }
 
@@ -2749,7 +2765,10 @@ Instrucciones de formato y contenido:
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: systemPrompt }]
@@ -2829,7 +2848,10 @@ ESTRUCTURA REQUERIDA DEL INFORME (En formato Markdown profesional con íconos):
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
@@ -8419,7 +8441,7 @@ class ModuloAdmin {
               }">
                 <div class="flex items-center gap-2">
                   <span>${this.geminiTestResultado.ok ? '✅' : '❌'}</span>
-                  <span>${this.geminiTestResultado.mensaje}</span>
+                  <span>${this.geminiTestResultado.mensaje || this.geminiTestResultado.error || 'Respuesta recibida'}</span>
                 </div>
                 <button id="btn-cerrar-resultado-gemini" class="text-slate-400 hover:text-slate-700 text-xs px-2 cursor-pointer">✕</button>
               </div>
@@ -15415,7 +15437,7 @@ class ModuloNutricion {
             }">
               <div class="flex items-center gap-2">
                 <span>${this.geminiFeedback.ok ? '✅' : '⚠️'}</span>
-                <span>${this.geminiFeedback.mensaje}</span>
+                <span>${this.geminiFeedback.mensaje || this.geminiFeedback.error}</span>
               </div>
               <button id="btn-cerrar-feedback-gemini-modal" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
             </div>
