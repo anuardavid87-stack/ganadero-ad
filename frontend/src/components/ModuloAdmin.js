@@ -8,6 +8,15 @@
  *   3. Consultor: Solo consulta de información del ganado (sin permisos de modificación)
  */
 
+import {
+  obtenerGeminiApiKey,
+  guardarGeminiApiKey,
+  eliminarGeminiApiKey,
+  probarConexionGemini,
+  consultarAsistenteZootecnicoGemini,
+  generarInformeHatoGemini
+} from '../core/nutricionIA.js';
+
 export class ModuloAdmin {
   constructor({
     containerId = 'pantalla-admin',
@@ -126,6 +135,16 @@ export class ModuloAdmin {
     this.passwordsVisibles = {};
     this.empresaParaNuevoUsuario = null;
     this.fincaFinanzasSeleccionada = null;
+
+    // Configuración y servicios de Gemini IA
+    this.geminiTestResultado = null;
+    this.geminiProbando = false;
+    this.geminiApiKeyVisible = false;
+    this.asistenteGeminiCargando = false;
+    this.asistenteGeminiHistorial = [];
+    this.informeHatoGemini = null;
+    this.informeHatoCargando = false;
+    this.consultaZootecnicaTexto = '';
   }
 
   init() {
@@ -265,24 +284,27 @@ export class ModuloAdmin {
         </div>
 
         <!-- PESTAÑAS DE NAVEGACIÓN ADMINISTRATIVA -->
-        <div class="grid grid-cols-2 sm:grid-cols-6 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="empresas">
+        <div class="grid grid-cols-2 sm:grid-cols-7 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="empresas">
             <span>🏢</span> Empresas & Fincas
           </button>
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'usuarios' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="usuarios">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'usuarios' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="usuarios">
             <span>👥</span> Usuarios & Accesos
           </button>
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="finanzas">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="finanzas">
             <span>💰</span> Precios & Costos
           </button>
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'backup' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="backup">
-            <span>💾</span> Copia de Seguridad
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
+            <span>✨</span> IA Gemini
           </button>
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'supabase' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="supabase">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'backup' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="backup">
+            <span>💾</span> Copia Seg.
+          </button>
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'supabase' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="supabase">
             <span>☁️</span> Supabase Cloud
           </button>
-          <button class="btn-sub-admin py-3 px-3 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'mantenimiento' ? 'bg-white text-rose-950 shadow-md border border-slate-200 ring-2 ring-rose-400/30' : 'text-rose-700 hover:bg-rose-100/70'} cursor-pointer" data-sec="mantenimiento">
-            <span>🗑️</span> Mantenimiento BD
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'mantenimiento' ? 'bg-white text-rose-950 shadow-md border border-slate-200 ring-2 ring-rose-400/30' : 'text-rose-700 hover:bg-rose-100/70'} cursor-pointer" data-sec="mantenimiento">
+            <span>🗑️</span> Mantenimiento
           </button>
         </div>
 
@@ -313,6 +335,8 @@ export class ModuloAdmin {
       return this.renderSeccionUsuarios(usuarios, empresas, fincas, esSuperAdmin, esAdmin, esConsultor);
     } else if (this.seccion === 'finanzas') {
       return this.renderSeccionFinanzas(fincas, fincaActiva, costos, inversiones, esAdmin, esConsultor);
+    } else if (this.seccion === 'gemini') {
+      return this.renderSeccionGemini(fincas, fincaActiva, esAdmin);
     } else if (this.seccion === 'backup') {
       return this.renderSeccionBackup();
     } else if (this.seccion === 'supabase') {
@@ -1123,6 +1147,301 @@ export class ModuloAdmin {
             </div>
           ` : ''}
         `}
+      </div>
+    `;
+  }
+
+  // ==========================================================================
+  // SECCIÓN: GOOGLE GEMINI IA (CONFIGURACIÓN, ASISTENTE & DIAGNÓSTICO)
+  // ==========================================================================
+  renderSeccionGemini(fincas = [], fincaActiva = null, esAdmin = false) {
+    const keyActual = obtenerGeminiApiKey();
+    const tieneKey = Boolean(keyActual);
+
+    const finca = fincaActiva || (fincas.length > 0 ? fincas[0] : null);
+    const animales = (this.getAnimales ? this.getAnimales() : []).filter(
+      (a) => !finca || a.fincaId === finca.id
+    );
+
+    return `
+      <div class="max-w-4xl mx-auto space-y-6">
+        <!-- HEADER GEMINI IA -->
+        <div class="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 rounded-3xl border border-purple-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-3xl shadow-lg border border-purple-300/40 shrink-0">
+              ✨
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Google Gemini IA Zootécnica</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                  ${tieneKey ? '● CONECTADO' : '○ CLAVE PENDIENTE'}
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  gemini-1.5-flash
+                </span>
+              </div>
+              <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">
+                Potencia tu ganadería con inteligencia artificial multimodal: escaneo fotográfico corporal, asesoría zootécnica veterinaria y diagnósticos automáticos del hato.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="px-4 py-2.5 rounded-2xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 text-xs font-black border border-purple-400/40 transition flex items-center gap-1.5"
+            >
+              <span>🔑</span>
+              <span>Obtener Clave Gratis</span>
+              <span>↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- TARJETA 1: GESTIÓN DE LA API KEY -->
+        <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div>
+              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <span>🔐</span> Clave de API de Google Gemini (Google AI Studio)
+              </h4>
+              <p class="text-xs text-slate-500 mt-0.5">
+                La clave se almacena de forma privada en el almacenamiento local de este dispositivo.
+              </p>
+            </div>
+            ${tieneKey ? `
+              <span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl flex items-center gap-1">
+                ✓ Clave configurada
+              </span>
+            ` : `
+              <span class="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl flex items-center gap-1">
+                ⚠️ Sin configurar
+              </span>
+            `}
+          </div>
+
+          <div class="space-y-3">
+            <label class="block text-xs font-black text-slate-700 uppercase">
+              Google Gemini API Key:
+            </label>
+            <div class="flex flex-col sm:flex-row items-stretch gap-2.5">
+              <div class="relative flex-1">
+                <input
+                  id="input-gemini-api-key"
+                  type="${this.geminiApiKeyVisible ? 'text' : 'password'}"
+                  placeholder="Pega aquí tu clave (ej: AIzaSy...)"
+                  value="${tieneKey ? keyActual : ''}"
+                  class="w-full bg-slate-50 border border-slate-300 text-slate-900 px-4 py-3 pr-10 rounded-2xl text-sm font-mono focus:outline-none focus:border-purple-600 focus:bg-white transition"
+                />
+                <button
+                  type="button"
+                  id="btn-toggle-ver-gemini-key"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1"
+                  title="${this.geminiApiKeyVisible ? 'Ocultar clave' : 'Mostrar clave'}"
+                >
+                  ${this.geminiApiKeyVisible ? '🙈' : '👁️'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                id="btn-guardar-gemini-key"
+                class="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition cursor-pointer shrink-0"
+              >
+                <span>💾</span>
+                <span>Guardar Clave</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-probar-gemini-key"
+                ${this.geminiProbando ? 'disabled' : ''}
+                class="px-5 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shrink-0 ${this.geminiProbando ? 'opacity-50 cursor-wait' : ''}"
+              >
+                <span>${this.geminiProbando ? '⏳' : '⚡'}</span>
+                <span>${this.geminiProbando ? 'Verificando...' : 'Probar Conexión'}</span>
+              </button>
+
+              ${tieneKey ? `
+                <button
+                  type="button"
+                  id="btn-eliminar-gemini-key"
+                  class="px-4 py-3 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
+                  title="Eliminar clave de este dispositivo"
+                >
+                  <span>🗑️</span>
+                  <span>Eliminar</span>
+                </button>
+              ` : ''}
+            </div>
+
+            <!-- RESULTADO DE PRUEBA -->
+            ${this.geminiTestResultado ? `
+              <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${
+                this.geminiTestResultado.ok
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border border-rose-200 text-rose-800'
+              }">
+                <div class="flex items-center gap-2">
+                  <span>${this.geminiTestResultado.ok ? '✅' : '❌'}</span>
+                  <span>${this.geminiTestResultado.mensaje}</span>
+                </div>
+                <button id="btn-cerrar-resultado-gemini" class="text-slate-400 hover:text-slate-700 text-xs px-2 cursor-pointer">✕</button>
+              </div>
+            ` : ''}
+
+            <!-- GUÍA PASO A PASO -->
+            <div class="bg-purple-50/70 border border-purple-100 rounded-2xl p-4 text-xs text-purple-900 space-y-2">
+              <div class="font-black flex items-center gap-1.5 text-purple-950">
+                <span>💡</span> ¿Cómo obtener tu clave gratuita de Google Gemini en 1 minuto?
+              </div>
+              <ol class="list-decimal list-inside space-y-1 text-purple-800/90 leading-relaxed text-[11px] sm:text-xs">
+                <li>Ingresa a <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline font-bold hover:text-purple-950">Google AI Studio</a> con tu cuenta habitual de Google.</li>
+                <li>Presiona el botón <strong>"Create API key"</strong>.</li>
+                <li>Copia la clave generada (inicia con <code>AIzaSy...</code>) y pégala en la casilla de arriba.</li>
+                <li>Haz clic en <strong>"Guardar Clave"</strong> y luego en <strong>"Probar Conexión"</strong>.</li>
+              </ol>
+              <p class="text-[10px] text-purple-700 mt-1 italic">
+                * Google Gemini ofrece cuota gratuita diaria de hasta 1,500 solicitudes sin necesidad de tarjeta de crédito.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TARJETA 2: CONSULTOR & ASISTENTE ZOOTÉCNICO EN VIVO -->
+        <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div>
+              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <span>💬</span> Consultor Zootécnico & Veterinario IA
+              </h4>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Formula preguntas sobre nutrición, sanidad, reproducción o manejo para tu finca activa <strong>(${finca?.nombre || 'General'})</strong>.
+              </p>
+            </div>
+            <span class="text-[11px] font-bold text-slate-400">Contexto: ${animales.length} animales registrados</span>
+          </div>
+
+          <div class="space-y-3">
+            <div class="flex flex-wrap gap-1.5 text-[11px]">
+              <span class="text-slate-400 font-bold self-center">Consultas rápidas:</span>
+              <button type="button" class="btn-chip-consulta-gemini px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-purple-100 hover:text-purple-900 text-slate-700 transition font-medium cursor-pointer" data-q="¿Cuál es la ración balanceada diaria recomendada para vacas de ordeño en trópico bajo?">
+                🥛 Dieta vacas de leche
+              </button>
+              <button type="button" class="btn-chip-consulta-gemini px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-purple-100 hover:text-purple-900 text-slate-700 transition font-medium cursor-pointer" data-q="¿Qué protocolo de sincronización hormonal IATF es más efectivo en novillas cebú?">
+                🧬 Protocolo IATF novillas
+              </button>
+              <button type="button" class="btn-chip-consulta-gemini px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-purple-100 hover:text-purple-900 text-slate-700 transition font-medium cursor-pointer" data-q="¿Cómo formular sal mineralizada casera al 8% de fósforo para ganado de carne?">
+                🧂 Sal mineralizada al 8%
+              </button>
+              <button type="button" class="btn-chip-consulta-gemini px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-purple-100 hover:text-purple-900 text-slate-700 transition font-medium cursor-pointer" data-q="¿Cómo preparar el pelaje y la estructura muscular de un ejemplar para pista de exposición?">
+                🏆 Acondicionamiento para feria
+              </button>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2.5">
+              <textarea
+                id="input-consulta-gemini"
+                rows="2"
+                placeholder="Escribe tu consulta zootécnica (ej: ¿Qué suplemento dar a vacas horras en época seca?)..."
+                class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 p-3.5 rounded-2xl text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:bg-white transition resize-none"
+              >${this.consultaZootecnicaTexto || ''}</textarea>
+
+              <button
+                type="button"
+                id="btn-enviar-consulta-gemini"
+                ${this.asistenteGeminiCargando ? 'disabled' : ''}
+                class="px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-950/20 transition cursor-pointer shrink-0 ${this.asistenteGeminiCargando ? 'opacity-50 cursor-wait' : ''}"
+              >
+                <span>${this.asistenteGeminiCargando ? '⏳' : '🚀'}</span>
+                <span>${this.asistenteGeminiCargando ? 'Consultando...' : 'Consultar'}</span>
+              </button>
+            </div>
+
+            <!-- HISTORIAL DE RESPUESTAS DEL ASISTENTE -->
+            ${this.asistenteGeminiHistorial && this.asistenteGeminiHistorial.length > 0 ? `
+              <div class="space-y-4 pt-2">
+                ${this.asistenteGeminiHistorial.map((item, idx) => `
+                  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <div class="flex items-center gap-2 font-black text-xs text-purple-950">
+                        <span>❓</span>
+                        <span>"${item.pregunta}"</span>
+                      </div>
+                      <span class="text-[10px] text-slate-400 font-mono">${item.hora}</span>
+                    </div>
+                    <div class="prose prose-sm max-w-none text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                      ${item.respuesta}
+                    </div>
+                    <div class="flex justify-end pt-2 border-t border-slate-200/60">
+                      <button type="button" class="btn-copiar-respuesta-gemini text-[11px] font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer" data-idx="${idx}">
+                        <span>📋</span> Copiar Respuesta
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- TARJETA 3: INFORME EJECUTIVO DEL HATO CON IA -->
+        <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div>
+              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <span>📊</span> Diagnóstico Situacional del Hato con Gemini IA
+              </h4>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Genera una auditoría zootécnica integral automática cruzando inventario, pesos, fertilidad y costos de <strong>${finca?.nombre || 'la finca activa'}</strong>.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              id="btn-generar-informe-hato-gemini"
+              ${this.informeHatoCargando ? 'disabled' : ''}
+              class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20 transition cursor-pointer ${this.informeHatoCargando ? 'opacity-50 cursor-wait' : ''}"
+            >
+              <span>${this.informeHatoCargando ? '⏳' : '⚡'}</span>
+              <span>${this.informeHatoCargando ? 'Generando Diagnóstico...' : 'Generar Diagnóstico del Hato'}</span>
+            </button>
+          </div>
+
+          <!-- CONTENIDO DEL INFORME GENERADO -->
+          ${this.informeHatoGemini ? `
+            <div class="bg-emerald-950 text-emerald-100 rounded-3xl p-5 sm:p-7 border border-emerald-500/40 shadow-2xl space-y-4 font-sans">
+              <div class="flex items-center justify-between pb-3 border-b border-emerald-800/80 flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">📋</span>
+                  <span class="font-black text-sm uppercase text-white tracking-wider">Informe Zootécnico Oficial generado por Gemini IA</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="btn-copiar-informe-hato" class="px-3 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <span>📋</span> Copiar
+                  </button>
+                  <button type="button" id="btn-imprimir-informe-hato" class="px-3 py-1.5 rounded-xl bg-white text-emerald-950 hover:bg-emerald-100 text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <span>🖨️</span> Imprimir
+                  </button>
+                </div>
+              </div>
+              <div id="contenedor-texto-informe-hato" class="prose prose-invert prose-emerald max-w-none text-xs sm:text-sm leading-relaxed whitespace-pre-line text-emerald-100/90 font-sans">
+                ${this.informeHatoGemini}
+              </div>
+            </div>
+          ` : `
+            <div class="py-8 text-center text-slate-400 space-y-2 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <span class="text-3xl block">📋</span>
+              <p class="text-xs sm:text-sm font-bold text-slate-600">No se ha generado un informe reciente del hato para esta finca.</p>
+              <p class="text-[11px] text-slate-400 max-w-md mx-auto">
+                Haz clic en el botón superior para que Gemini analice los ${animales.length} animales activos y redacte el diagnóstico veterinario y nutricional.
+              </p>
+            </div>
+          `}
+        </div>
       </div>
     `;
   }
@@ -3445,6 +3764,303 @@ END $$;
       btnResetTotal.addEventListener('click', () => {
         if (this.onResetearSistema) {
           this.onResetearSistema();
+        }
+      });
+    }
+
+    // --- EVENTOS GOOGLE GEMINI IA ---
+    this.attachGeminiEvents();
+  }
+
+  attachGeminiEvents() {
+    if (!this.container) return;
+
+    // Toggle ver/ocultar API Key
+    const btnToggleVer = this.container.querySelector('#btn-toggle-ver-gemini-key');
+    if (btnToggleVer) {
+      btnToggleVer.addEventListener('click', () => {
+        this.geminiApiKeyVisible = !this.geminiApiKeyVisible;
+        const inputKey = this.container.querySelector('#input-gemini-api-key');
+        if (inputKey) {
+          inputKey.type = this.geminiApiKeyVisible ? 'text' : 'password';
+        }
+        btnToggleVer.textContent = this.geminiApiKeyVisible ? '🙈' : '👁️';
+        btnToggleVer.title = this.geminiApiKeyVisible ? 'Ocultar clave' : 'Mostrar clave';
+      });
+    }
+
+    // Guardar API Key
+    const btnGuardarKey = this.container.querySelector('#btn-guardar-gemini-key');
+    if (btnGuardarKey) {
+      btnGuardarKey.addEventListener('click', () => {
+        const inputKey = this.container.querySelector('#input-gemini-api-key');
+        const key = inputKey ? inputKey.value.trim() : '';
+        if (!key) {
+          this.geminiTestResultado = {
+            ok: false,
+            mensaje: 'Por favor ingresa una clave de API válida de Google AI Studio.',
+          };
+          this.render();
+          return;
+        }
+        guardarGeminiApiKey(key);
+        this.geminiTestResultado = {
+          ok: true,
+          mensaje: 'Clave de Google Gemini guardada exitosamente en este dispositivo.',
+        };
+        this.render();
+      });
+    }
+
+    // Probar conexión con Gemini
+    const btnProbarKey = this.container.querySelector('#btn-probar-gemini-key');
+    if (btnProbarKey) {
+      btnProbarKey.addEventListener('click', async () => {
+        const inputKey = this.container.querySelector('#input-gemini-api-key');
+        const key = inputKey ? inputKey.value.trim() : obtenerGeminiApiKey();
+        if (!key) {
+          this.geminiTestResultado = {
+            ok: false,
+            mensaje: 'No hay ninguna clave configurada para probar.',
+          };
+          this.render();
+          return;
+        }
+
+        this.geminiProbando = true;
+        this.geminiTestResultado = null;
+        this.render();
+
+        try {
+          const resultado = await probarConexionGemini(key);
+          this.geminiTestResultado = resultado;
+        } catch (err) {
+          this.geminiTestResultado = {
+            ok: false,
+            mensaje: 'Error de red o conexión: ' + (err.message || err),
+          };
+        } finally {
+          this.geminiProbando = false;
+          this.render();
+        }
+      });
+    }
+
+    // Eliminar clave
+    const btnEliminarKey = this.container.querySelector('#btn-eliminar-gemini-key');
+    if (btnEliminarKey) {
+      btnEliminarKey.addEventListener('click', () => {
+        if (confirm('¿Deseas eliminar la clave de API de Google Gemini de este dispositivo?')) {
+          eliminarGeminiApiKey();
+          this.geminiTestResultado = {
+            ok: true,
+            mensaje: 'Clave de API eliminada del dispositivo.',
+          };
+          this.render();
+        }
+      });
+    }
+
+    // Cerrar alerta resultado
+    const btnCerrarRes = this.container.querySelector('#btn-cerrar-resultado-gemini');
+    if (btnCerrarRes) {
+      btnCerrarRes.addEventListener('click', () => {
+        this.geminiTestResultado = null;
+        this.render();
+      });
+    }
+
+    // Chips de consultas rápidas
+    this.container.querySelectorAll('.btn-chip-consulta-gemini').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
+        const texto = e.currentTarget.getAttribute('data-q') || '';
+        const inputConsulta = this.container.querySelector('#input-consulta-gemini');
+        if (inputConsulta) {
+          inputConsulta.value = texto;
+          this.consultaZootecnicaTexto = texto;
+          inputConsulta.focus();
+        }
+      });
+    });
+
+    // Enviar consulta zootécnica
+    const btnEnviarConsulta = this.container.querySelector('#btn-enviar-consulta-gemini');
+    if (btnEnviarConsulta) {
+      btnEnviarConsulta.addEventListener('click', async () => {
+        const inputConsulta = this.container.querySelector('#input-consulta-gemini');
+        const pregunta = inputConsulta ? inputConsulta.value.trim() : '';
+
+        if (!pregunta) {
+          alert('Por favor redacta una pregunta o consulta zootécnica.');
+          return;
+        }
+
+        const apiKey = obtenerGeminiApiKey();
+        if (!apiKey) {
+          this.geminiTestResultado = {
+            ok: false,
+            mensaje: 'Primero debes guardar y configurar tu clave de Gemini arriba.',
+          };
+          this.render();
+          return;
+        }
+
+        this.asistenteGeminiCargando = true;
+        this.consultaZootecnicaTexto = pregunta;
+        this.render();
+
+        try {
+          const finca = this.getFincaActiva ? this.getFincaActiva() : null;
+          const animales = (this.getAnimales ? this.getAnimales() : []).filter(
+            (a) => !finca || a.fincaId === finca.id
+          );
+
+          const res = await consultarAsistenteZootecnicoGemini({
+            pregunta,
+            finca,
+            animales,
+            apiKey,
+          });
+
+          if (res.ok) {
+            this.asistenteGeminiHistorial.unshift({
+              pregunta,
+              respuesta: res.respuesta,
+              hora: new Date().toLocaleTimeString('es-CO', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            });
+            this.consultaZootecnicaTexto = '';
+          } else {
+            alert('Error en la consulta a Gemini: ' + (res.error || 'Respuesta no válida'));
+          }
+        } catch (err) {
+          alert('Error de conexión con Gemini: ' + (err.message || err));
+        } finally {
+          this.asistenteGeminiCargando = false;
+          this.render();
+        }
+      });
+    }
+
+    // Copiar respuesta del asistente
+    this.container.querySelectorAll('.btn-copiar-respuesta-gemini').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const idx = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
+        const item = this.asistenteGeminiHistorial[idx];
+        if (item && item.respuesta) {
+          try {
+            await navigator.clipboard.writeText(item.respuesta);
+            const orig = e.currentTarget.innerHTML;
+            e.currentTarget.innerHTML = '<span>✅</span> Copiado al portapapeles';
+            setTimeout(() => {
+              if (e.currentTarget) e.currentTarget.innerHTML = orig;
+            }, 2000);
+          } catch (err) {
+            console.error('Error al copiar:', err);
+          }
+        }
+      });
+    });
+
+    // Generar informe de hato
+    const btnGenerarInforme = this.container.querySelector('#btn-generar-informe-hato-gemini');
+    if (btnGenerarInforme) {
+      btnGenerarInforme.addEventListener('click', async () => {
+        const apiKey = obtenerGeminiApiKey();
+        if (!apiKey) {
+          this.geminiTestResultado = {
+            ok: false,
+            mensaje: 'Primero debes guardar y configurar tu clave de Gemini arriba.',
+          };
+          this.render();
+          return;
+        }
+
+        this.informeHatoCargando = true;
+        this.render();
+
+        try {
+          const finca = this.getFincaActiva ? this.getFincaActiva() : null;
+          const animales = (this.getAnimales ? this.getAnimales() : []).filter(
+            (a) => !finca || a.fincaId === finca.id
+          );
+          const costos = this.getCostosFijos ? this.getCostosFijos() : [];
+
+          const res = await generarInformeHatoGemini({
+            finca,
+            animales,
+            costos,
+            apiKey,
+          });
+
+          if (res.ok) {
+            this.informeHatoGemini = res.informe;
+          } else {
+            alert('No se pudo generar el diagnóstico con Gemini: ' + (res.error || 'Error desconocido'));
+          }
+        } catch (err) {
+          alert('Error al contactar a Gemini: ' + (err.message || err));
+        } finally {
+          this.informeHatoCargando = false;
+          this.render();
+        }
+      });
+    }
+
+    // Copiar informe de hato
+    const btnCopiarInforme = this.container.querySelector('#btn-copiar-informe-hato');
+    if (btnCopiarInforme) {
+      btnCopiarInforme.addEventListener('click', async () => {
+        if (!this.informeHatoGemini) return;
+        try {
+          await navigator.clipboard.writeText(this.informeHatoGemini);
+          const orig = btnCopiarInforme.innerHTML;
+          btnCopiarInforme.innerHTML = '<span>✅</span> Copiado';
+          setTimeout(() => {
+            btnCopiarInforme.innerHTML = orig;
+          }, 2000);
+        } catch (err) {
+          console.error('Error al copiar informe:', err);
+        }
+      });
+    }
+
+    // Imprimir informe de hato
+    const btnImprimirInforme = this.container.querySelector('#btn-imprimir-informe-hato');
+    if (btnImprimirInforme) {
+      btnImprimirInforme.addEventListener('click', () => {
+        if (!this.informeHatoGemini) return;
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Diagnóstico Ganadero Gemini IA - ${new Date().toLocaleDateString('es-CO')}</title>
+              <style>
+                body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; padding: 40px; color: #1e293b; }
+                h1, h2, h3, h4 { color: #0f172a; margin-top: 1.5em; }
+                pre, code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+                hr { border: 0; border-top: 1px solid #cbd5e1; margin: 20px 0; }
+                @media print { body { padding: 0; } }
+              </style>
+            </head>
+            <body>
+              <div style="text-align: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 25px;">
+                <h1 style="margin: 0; color: #065f46; font-size: 22px;">DIAGNÓSTICO ZOOTÉCNICO DEL HATO - GOOGLE GEMINI IA</h1>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Fecha de emisión: ${new Date().toLocaleString('es-CO')}</p>
+              </div>
+              <div style="white-space: pre-line; font-size: 14px;">${this.informeHatoGemini.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+        } else {
+          window.print();
         }
       });
     }

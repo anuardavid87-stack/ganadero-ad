@@ -9,7 +9,15 @@
  * - Persistencia y sincronización en tiempo real con Supabase Cloud
  */
 
-import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza } from '../core/nutricionIA.js';
+import {
+  evaluarNutricionAnimal,
+  analizarMorfologiaFotoEfimera,
+  resolverPerfilRaza,
+  obtenerGeminiApiKey,
+  guardarGeminiApiKey,
+  probarConexionGemini,
+  eliminarGeminiApiKey
+} from '../core/nutricionIA.js';
 import { conectarAutosuggestAnimales, buscarCoincidenciasAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class ModuloNutricion {
@@ -44,6 +52,9 @@ export class ModuloNutricion {
     this.tipoFeedback = 'info'; // 'info' | 'exito' | 'error'
     this.filtroEtapa = 'todas';
     this.modoModalEvaluacion = false;
+    this.modalConfigGeminiAbierto = false;
+    this.geminiProbando = false;
+    this.geminiFeedback = null;
   }
 
   init() {
@@ -302,6 +313,17 @@ export class ModuloNutricion {
 
   async procesarFotoEfimera(file) {
     if (!file) return;
+
+    if (!obtenerGeminiApiKey()) {
+      this.modalConfigGeminiAbierto = true;
+      this.geminiFeedback = {
+        ok: false,
+        mensaje: 'Configura tu clave de Google Gemini para habilitar el análisis fotográfico con Visión IA.'
+      };
+      this.render();
+      return;
+    }
+
     this.analisisFotoEnCurso = true;
     this.render();
 
@@ -337,6 +359,108 @@ export class ModuloNutricion {
     }
   }
 
+  renderModalConfigGemini() {
+    const keyActual = obtenerGeminiApiKey();
+    const tieneKey = Boolean(keyActual);
+
+    return `
+      <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+        <div class="bg-slate-900 border border-purple-500/40 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-auto text-white p-5 sm:p-6 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl p-2 rounded-2xl bg-purple-900/60 border border-purple-500/40 text-purple-300">✨</span>
+              <div>
+                <h3 class="font-black text-base text-white">Google Gemini IA (Visión Multimodal)</h3>
+                <p class="text-xs text-purple-300/80">Configuración de API Key para escaneo corporal y nutrición</p>
+              </div>
+            </div>
+            <button type="button" id="btn-cerrar-modal-config-gemini" class="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer">✕</button>
+          </div>
+
+          ${this.geminiFeedback ? `
+            <div class="p-3 rounded-2xl text-xs font-bold flex items-center justify-between ${
+              this.geminiFeedback.ok ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border border-rose-500/50 text-rose-300'
+            }">
+              <div class="flex items-center gap-2">
+                <span>${this.geminiFeedback.ok ? '✅' : '⚠️'}</span>
+                <span>${this.geminiFeedback.mensaje}</span>
+              </div>
+              <button id="btn-cerrar-feedback-gemini-modal" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
+            </div>
+          ` : ''}
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-slate-300 uppercase">Clave de API Google AI Studio:</label>
+              <span class="text-[10px] font-mono uppercase font-black px-2 py-0.5 rounded-full ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                ${tieneKey ? '● Configurada' : '○ Sin Clave'}
+              </span>
+            </div>
+            <input
+              type="password"
+              id="input-modal-gemini-key"
+              placeholder="Pega aquí tu API Key (AIzaSy...)"
+              value="${keyActual || ''}"
+              class="w-full bg-slate-950 border border-slate-700 text-white font-mono px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
+          <div class="bg-purple-950/40 border border-purple-800/50 rounded-2xl p-3.5 text-[11px] text-purple-200/90 space-y-1.5 leading-relaxed">
+            <p class="font-bold text-white flex items-center gap-1.5">
+              <span>🔑</span> ¿Cómo obtener tu clave gratuita?
+            </p>
+            <p>
+              Obtén tu API Key gratis en 
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline text-purple-300 font-bold hover:text-white">Google AI Studio ↗</a>. 
+              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para <code>gemini-1.5-flash</code>.
+            </p>
+          </div>
+
+          <div class="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-probar-modal-gemini"
+                ${this.geminiProbando ? 'disabled' : ''}
+                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700 transition cursor-pointer ${this.geminiProbando ? 'opacity-50 cursor-wait' : ''}"
+              >
+                <span>${this.geminiProbando ? '⏳' : '⚡'}</span>
+                <span>${this.geminiProbando ? 'Probando...' : 'Probar'}</span>
+              </button>
+
+              ${tieneKey ? `
+                <button
+                  type="button"
+                  id="btn-eliminar-modal-gemini"
+                  class="px-3 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800 transition cursor-pointer"
+                >
+                  🗑️ Eliminar
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-cancelar-modal-gemini"
+                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                id="btn-guardar-modal-gemini"
+                class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-lg shadow-purple-900/40 transition cursor-pointer"
+              >
+                💾 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   imprimirPlanNutricional() {
     if (!this.planGenerado) return;
     window.print();
@@ -351,7 +475,11 @@ export class ModuloNutricion {
     }
 
     if (this.modoModalEvaluacion && this.animalSeleccionado) {
-      this.container.innerHTML = this.renderPanelEvaluacion();
+      let evalHtml = this.renderPanelEvaluacion();
+      if (this.modalConfigGeminiAbierto) {
+        evalHtml += this.renderModalConfigGemini();
+      }
+      this.container.innerHTML = evalHtml;
       this.enlazarEventos();
       return;
     }
@@ -374,6 +502,20 @@ export class ModuloNutricion {
             </p>
           </div>
           <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="btn-abrir-config-gemini-nutri bg-slate-800/90 hover:bg-slate-800 border border-purple-500/40 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-left transition cursor-pointer"
+              title="Configurar Google Gemini IA"
+            >
+              <span class="text-xl">✨</span>
+              <div>
+                <div class="text-[9px] text-purple-300 font-black uppercase">Google Gemini IA</div>
+                <div class="text-xs font-black ${obtenerGeminiApiKey() ? 'text-emerald-400' : 'text-amber-400'} flex items-center gap-1">
+                  <span>${obtenerGeminiApiKey() ? '● Conectado' : '○ Sin Clave'}</span>
+                </div>
+              </div>
+            </button>
+
             <div class="bg-slate-800/90 border border-slate-700 px-4 py-2 rounded-2xl flex items-center gap-3">
               <div class="text-right">
                 <div class="text-[10px] text-slate-400 uppercase font-black">Grupo Especial</div>
@@ -531,6 +673,10 @@ export class ModuloNutricion {
       </div>
     `;
 
+    if (this.modalConfigGeminiAbierto) {
+      html += this.renderModalConfigGemini();
+    }
+
     this.container.innerHTML = html;
     this.enlazarEventos();
   }
@@ -569,6 +715,9 @@ export class ModuloNutricion {
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button type="button" class="btn-abrir-config-gemini-nutri px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900 text-purple-200 text-xs font-bold border border-purple-500/40 transition flex items-center gap-1.5 cursor-pointer">
+                <span>✨</span> <span class="hidden sm:inline">IA Gemini</span>
+              </button>
               <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                 <span>🖨️</span> <span class="hidden sm:inline">Imprimir Ficha</span>
               </button>
@@ -694,10 +843,13 @@ export class ModuloNutricion {
               <!-- ZONA DE ESCANEO FOTOGRÁFICO MORFOLÓGICO EFÍMERO -->
               <div class="bg-gradient-to-r from-slate-900 to-slate-900/60 p-3.5 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div class="space-y-0.5">
-                  <div class="flex items-center gap-1.5">
+                  <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="text-base">📸</span>
                     <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico con Visión IA</span>
                     <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">100% EFÍMERO</span>
+                    <button type="button" class="btn-abrir-config-gemini-nutri text-[10px] font-bold text-purple-300 hover:text-purple-200 underline cursor-pointer">
+                      ${obtenerGeminiApiKey() ? '✨ Conectado a Gemini' : '⚠️ Configurar API Key de Gemini'}
+                    </button>
                   </div>
                   <p class="text-[10px] text-slate-400">
                     Sube una foto del ejemplar: la IA analiza contorno dorsal, apófisis y cobertura grasa para estimar BCS y talla en cm. <strong>La foto nunca se guarda en memoria</strong> para no saturar el almacenamiento.
@@ -1030,6 +1182,106 @@ export class ModuloNutricion {
           this.imprimirPlanNutricional();
         });
       }
+    }
+
+    // --- EVENTOS MODAL CONFIG GEMINI ---
+    this.container.querySelectorAll('.btn-abrir-config-gemini-nutri').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.modalConfigGeminiAbierto = true;
+        this.render();
+      });
+    });
+
+    const btnCerrarModalGemini = this.container.querySelector('#btn-cerrar-modal-config-gemini');
+    if (btnCerrarModalGemini) {
+      btnCerrarModalGemini.addEventListener('click', () => {
+        this.modalConfigGeminiAbierto = false;
+        this.render();
+      });
+    }
+
+    const btnCancelarModalGemini = this.container.querySelector('#btn-cancelar-modal-gemini');
+    if (btnCancelarModalGemini) {
+      btnCancelarModalGemini.addEventListener('click', () => {
+        this.modalConfigGeminiAbierto = false;
+        this.render();
+      });
+    }
+
+    const btnCerrarFbGemini = this.container.querySelector('#btn-cerrar-feedback-gemini-modal');
+    if (btnCerrarFbGemini) {
+      btnCerrarFbGemini.addEventListener('click', () => {
+        this.geminiFeedback = null;
+        this.render();
+      });
+    }
+
+    const btnGuardarModalGemini = this.container.querySelector('#btn-guardar-modal-gemini');
+    if (btnGuardarModalGemini) {
+      btnGuardarModalGemini.addEventListener('click', () => {
+        const inputKey = this.container.querySelector('#input-modal-gemini-key');
+        const key = inputKey ? inputKey.value.trim() : '';
+        if (!key) {
+          this.geminiFeedback = {
+            ok: false,
+            mensaje: 'Por favor ingresa una clave de API válida.',
+          };
+          this.render();
+          return;
+        }
+        guardarGeminiApiKey(key);
+        this.geminiFeedback = {
+          ok: true,
+          mensaje: 'Clave de Google Gemini guardada con éxito.',
+        };
+        this.render();
+      });
+    }
+
+    const btnProbarModalGemini = this.container.querySelector('#btn-probar-modal-gemini');
+    if (btnProbarModalGemini) {
+      btnProbarModalGemini.addEventListener('click', async () => {
+        const inputKey = this.container.querySelector('#input-modal-gemini-key');
+        const key = inputKey ? inputKey.value.trim() : obtenerGeminiApiKey();
+        if (!key) {
+          this.geminiFeedback = {
+            ok: false,
+            mensaje: 'No hay clave configurada para probar.',
+          };
+          this.render();
+          return;
+        }
+        this.geminiProbando = true;
+        this.geminiFeedback = null;
+        this.render();
+
+        try {
+          const res = await probarConexionGemini(key);
+          this.geminiFeedback = res;
+        } catch (err) {
+          this.geminiFeedback = {
+            ok: false,
+            mensaje: 'Error probando clave: ' + (err.message || err),
+          };
+        } finally {
+          this.geminiProbando = false;
+          this.render();
+        }
+      });
+    }
+
+    const btnEliminarModalGemini = this.container.querySelector('#btn-eliminar-modal-gemini');
+    if (btnEliminarModalGemini) {
+      btnEliminarModalGemini.addEventListener('click', () => {
+        if (confirm('¿Deseas eliminar la clave de API de Google Gemini de este dispositivo?')) {
+          eliminarGeminiApiKey();
+          this.geminiFeedback = {
+            ok: true,
+            mensaje: 'Clave eliminada del dispositivo.',
+          };
+          this.render();
+        }
+      });
     }
   }
 }

@@ -726,11 +726,11 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
         return resolve(mockResultado);
       }
 
-      let apiKey = localStorage.getItem('gemini_api_key');
-      if (!apiKey) {
+      let apiKey = obtenerGeminiApiKey();
+      if (!apiKey && typeof window !== 'undefined' && typeof window.prompt === 'function') {
         apiKey = window.prompt("Para habilitar el análisis fotográfico avanzado con Gemini IA y recibir recomendaciones nutricionales personalizadas, ingrese su API Key de Google Gemini:");
         if (apiKey) {
-          localStorage.setItem('gemini_api_key', apiKey.trim());
+          guardarGeminiApiKey(apiKey.trim());
         }
       }
 
@@ -891,4 +891,213 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
       reject(e);
     }
   });
+}
+
+// ============================================================================
+// GESTIÓN DE CONFIGURACIÓN Y SERVICIOS AVANZADOS DE GOOGLE GEMINI IA
+// ============================================================================
+
+export function obtenerGeminiApiKey() {
+  if (typeof localStorage === 'undefined') return '';
+  return (localStorage.getItem('gemini_api_key') || '').trim();
+}
+
+export function guardarGeminiApiKey(key) {
+  if (typeof localStorage === 'undefined') return false;
+  const clean = (key || '').trim();
+  if (clean) {
+    localStorage.setItem('gemini_api_key', clean);
+  } else {
+    localStorage.removeItem('gemini_api_key');
+  }
+  return true;
+}
+
+export function eliminarGeminiApiKey() {
+  if (typeof localStorage === 'undefined') return false;
+  localStorage.removeItem('gemini_api_key');
+  return true;
+}
+
+export async function probarConexionGemini(apiKey = null) {
+  const key = (apiKey || obtenerGeminiApiKey()).trim();
+  if (!key) {
+    return { ok: false, error: 'No se ha proporcionado una API Key de Gemini.' };
+  }
+  try {
+    const t0 = Date.now();
+    const prompt = 'Responde exactamente con la frase: "CONEXION_EXITOSA" si recibes este mensaje de prueba desde Ganadero AD.';
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      let errTxt = '';
+      try {
+        const errJson = await response.json();
+        errTxt = errJson?.error?.message || response.statusText;
+      } catch (_) {
+        errTxt = await response.text();
+      }
+      return { ok: false, status: response.status, error: errTxt || `HTTP ${response.status}` };
+    }
+
+    const data = await response.json();
+    const t1 = Date.now();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return {
+      ok: true,
+      tiempoMs: t1 - t0,
+      respuesta: text.trim(),
+      modelo: 'gemini-1.5-flash'
+    };
+  } catch (err) {
+    return { ok: false, error: err.message || 'Error de red o timeout conectando a Google Gemini.' };
+  }
+}
+
+export async function consultarAsistenteZootecnicoGemini({ pregunta, finca = null, animales = [], apiKey = null }) {
+  const key = (apiKey || obtenerGeminiApiKey()).trim();
+  if (!key) {
+    return { ok: false, error: 'Se requiere una API Key de Gemini activa para consultar el Asistente Zootécnico.' };
+  }
+  if (!pregunta || !pregunta.trim()) {
+    return { ok: false, error: 'Por favor ingresa una pregunta o consulta zootécnica.' };
+  }
+
+  try {
+    const totalAnimales = Array.isArray(animales) ? animales.length : 0;
+    const hembras = Array.isArray(animales) ? animales.filter(a => (a.sexo || '').toLowerCase() !== 'macho').length : 0;
+    const machos = totalAnimales - hembras;
+    const preñadas = Array.isArray(animales) ? animales.filter(a => (a.estadoReproductivo || '').toLowerCase().includes('pren') || (a.estadoReproductivo || '').toLowerCase().includes('preñ')).length : 0;
+    const vacias = Array.isArray(animales) ? animales.filter(a => (a.estadoReproductivo || '').toLowerCase().includes('vaci') || (a.estadoReproductivo || '').toLowerCase().includes('vací')).length : 0;
+
+    const contextoFinca = finca ? `
+Contexto de la Ganadería Actual:
+- Predio: "${finca.nombre || 'Predio Ganadero'}" (${finca.ubicacion || 'Colombia'})
+- Área: ${finca.areaHa || 0} Hectáreas
+- Población del Hato: ${totalAnimales} animales (${hembras} hembras, ${machos} machos)
+- Estado reproductivo registrado: ${preñadas} preñadas, ${vacias} vacías
+` : '';
+
+    const systemPrompt = `Eres un Médico Veterinario Zootecnista (MVZ) experto en ganadería tropical, bovinos y búfalos, nutrición de precisión, biotecnología reproductiva (IATF, TE, monta), manejo de praderas y acondicionamiento para ferias de exposición.
+Tu objetivo es dar respuestas prácticas, científicamente fundamentadas, directas y aplicables en campo a ganaderos y administradores.
+${contextoFinca}
+
+Pregunta del usuario:
+"${pregunta.trim()}"
+
+Instrucciones de formato y contenido:
+1. Responde de forma clara y estructurada utilizando formato Markdown (títulos, viñetas, tablas cortas si aplica).
+2. Proporciona dosis o rangos de referencia cuando aplique (gramos de sal mineralizada, % de proteína bruta, raciones, etc.).
+3. Incluye recomendaciones de bioseguridad o advertencias veterinarias cuando sea pertinente.
+4. Mantén un tono profesional, accesible y ganadero.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: systemPrompt }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      return { ok: false, error: err?.error?.message || `Error HTTP ${response.status} en Gemini API` };
+    }
+
+    const data = await response.json();
+    const respuesta = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return { ok: true, respuesta };
+  } catch (err) {
+    return { ok: false, error: err.message || 'Error consultando al Asistente Zootécnico.' };
+  }
+}
+
+export async function generarInformeHatoGemini({ finca = null, animales = [], costos = {}, apiKey = null }) {
+  const key = (apiKey || obtenerGeminiApiKey()).trim();
+  if (!key) {
+    return { ok: false, error: 'Se requiere una API Key de Gemini activa para generar el informe del hato con IA.' };
+  }
+
+  try {
+    const list = Array.isArray(animales) ? animales : [];
+    const activos = list.filter(a => a.estadoVida === 'activo' || a.estado === 'activo');
+
+    const categorias = {};
+    const razas = {};
+    let sumaPesos = 0;
+    let conPeso = 0;
+    let preñadas = 0;
+    let vacias = 0;
+
+    activos.forEach(a => {
+      const cat = a.categoria || 'Sin Categoría';
+      categorias[cat] = (categorias[cat] || 0) + 1;
+
+      const r = a.raza || 'Comercial';
+      razas[r] = (razas[r] || 0) + 1;
+
+      const p = Number(a.ultimoPesoKg || a.peso);
+      if (p > 0) {
+        sumaPesos += p;
+        conPeso++;
+      }
+
+      const estRep = String(a.estadoReproductivo || '').toLowerCase();
+      if (estRep.includes('pren') || estRep.includes('preñ')) preñadas++;
+      else if (estRep.includes('vaci') || estRep.includes('vací')) vacias++;
+    });
+
+    const pesoPromedio = conPeso > 0 ? (sumaPesos / conPeso).toFixed(1) : 'N/D';
+
+    const prompt = `Actúa como Consultor Zootécnico Principal y Auditor Ganadero. Genera un INFORME EJECUTIVO DE SITUACIÓN Y PLAN DE MEJORA para la finca ganadera con los siguientes datos reales:
+
+DATOS DEL PREDIO:
+- Nombre: ${finca?.nombre || 'Predio Ganadero'}
+- Ubicación: ${finca?.ubicacion || 'Colombia / Trópico'}
+- Área: ${finca?.areaHa || 0} Hectáreas
+- Total Animales Activos: ${activos.length} ejemplares
+- Peso Promedio del Hato: ${pesoPromedio} kg
+- Distribución de Razas: ${JSON.stringify(razas)}
+- Distribución por Categorías: ${JSON.stringify(categorias)}
+- Estado Reproductivo: ${preñadas} Preñadas (${activos.length > 0 ? ((preñadas / activos.length) * 100).toFixed(1) : 0}%), ${vacias} Vacías
+- Costos fijos mensuales aproximados: Nómina: $${costos?.nomina || 0}, Insumos: $${costos?.insumos || 0}, Servicios: $${costos?.servicios || 0}
+
+ESTRUCTURA REQUERIDA DEL INFORME (En formato Markdown profesional con íconos):
+1. **DIAGNÓSTICO SITUACIONAL DEL HATO:** Evaluación de la composición racial, carga animal estimada y estructura del inventario.
+2. **EVALUACIÓN REPRODUCTIVA & PRODUCCIÓN:** Análisis de la relación preñadas/vacías y recomendaciones para maximizar tasa de preñez.
+3. **PLAN NUTRICIONAL Y MANEJO DE FORRAJES:** Sugerencias para forrajes, sales mineralizadas y suplementos según época y biotipo.
+4. **PLAN SANITARIO & BIOMÉTRICO PRIORITARIO:** Vacunación, control antiparasitario y pesajes estratégicos.
+5. **CONCLUSIONES & ACCIONES INMEDIATAS PARA EL ADMINISTRADOR:** 3 o 4 pasos concretos a implementar esta semana.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      return { ok: false, error: err?.error?.message || `Error HTTP ${response.status} en Gemini API` };
+    }
+
+    const data = await response.json();
+    const informe = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return { ok: true, informe };
+  } catch (err) {
+    return { ok: false, error: err.message || 'Error generando informe del hato con Gemini.' };
+  }
 }
