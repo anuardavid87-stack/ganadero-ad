@@ -17,7 +17,7 @@ import { ImportadorExcel } from './frontend/src/components/ImportadorExcel.js';
 import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista } from './frontend/src/core/nutricionIA.js';
 import { ModuloNutricion } from './frontend/src/components/ModuloNutricion.js';
 import { ExportadorBackupService } from './frontend/src/core/exportadorBackup.js';
-import { BoviTrackApp } from './frontend/src/app.js';
+import { BoviTrackApp, escapeHTML } from './frontend/src/app.js';
 
 if (typeof globalThis.localStorage === 'undefined') {
   const store = new Map();
@@ -5463,6 +5463,116 @@ test(
   fichaTest.container.innerHTML.includes('En otra finca: Finca El Porvenir') &&
   fichaTest.container.innerHTML.includes('🏡 Finca: Finca El Porvenir'),
   'FichaAnimal: Header visualiza badge destacado "En otra finca" y el nombre del predio donde reside'
+);
+
+// =====================================================================
+// 49. PRUEBAS DE BLINDAJE MULTI-TENANT, ANTI-IDOR Y SEGURIDAD BACKEND
+// =====================================================================
+console.log('\n--- 49. Pruebas de Blindaje Multi-Tenant, Anti-IDOR y Seguridad de Backend ---');
+
+const syncSecurityService = new SupabaseSyncService();
+
+// 49.1: Inyección de cabeceras tenant seguras
+syncSecurityService.setTenantContext({
+  empresaId: 'EMP-01',
+  esSuperAdmin: false,
+  fincasIds: ['FIN-01', 'FIN-02'],
+  token: 'SESION-TOKEN-CRYPT-12345'
+});
+
+const headersTenant = syncSecurityService.obtenerHeaders();
+test(
+  headersTenant['x-empresa-id'] === 'EMP-01' && headersTenant['x-session-token'] === 'SESION-TOKEN-CRYPT-12345',
+  'SupabaseSyncService (Seguridad): Inyecta cabeceras criptográficas x-empresa-id y x-session-token'
+);
+
+// 49.2: Limpieza de cabeceras al cerrar sesión
+syncSecurityService.setTenantContext(null);
+const headersLimpias = syncSecurityService.obtenerHeaders();
+test(
+  !headersLimpias['x-empresa-id'] && !headersLimpias['x-session-token'],
+  'SupabaseSyncService (Seguridad): Remueve credenciales de tenant al cerrar sesión'
+);
+
+// 49.3: Bloqueo de purga total sin privilegios de Super Administrador
+const resPurgaBloqueada = await syncSecurityService.purgarBaseDatosTotalCloud(false);
+test(
+  resPurgaBloqueada.ok === false && String(resPurgaBloqueada.error || '').includes('Super Administrador'),
+  'SupabaseSyncService (Seguridad): Bloquea llamadas destructivas de purga sin autorización de Super Admin'
+);
+
+// 49.4: Bloqueo de reset total sin confirmación de Super Admin
+const resResetBloqueado = await syncSecurityService.limpiarTodoElSistemaCloud(false);
+test(
+  resResetBloqueado.ok === false && String(resResetBloqueado.error || '').includes('Super Administrador'),
+  'SupabaseSyncService (Seguridad): Bloquea reseteo de base de datos total a roles no autorizados'
+);
+
+// 49.5: Sanitización XSS (Cross-Site Scripting)
+const payloadMalicioso = `<script>alert("XSS")</script><img src=x onerror='stealCookies()'> & "injection"`;
+const sanitizado = escapeHTML(payloadMalicioso);
+test(
+  !sanitizado.includes('<script>') &&
+  !sanitizado.includes('<img') &&
+  sanitizado.includes('&lt;script&gt;') &&
+  sanitizado.includes('&lt;img') &&
+  sanitizado.includes('&amp;') &&
+  sanitizado.includes('&quot;') &&
+  sanitizado.includes('&#039;'),
+  'escapeHTML (Seguridad XSS): Sanitiza etiquetas HTML, scripts, comillas y ampersand'
+);
+test(
+  escapeHTML(null) === '' && escapeHTML(undefined) === '',
+  'escapeHTML (Seguridad): Manejo seguro de valores nulos o indefinidos'
+);
+
+// 49.6: Anti-Escalamiento de Privilegios en Sesión (Privilege Escalation Guard)
+const mockAppStateSecurity = {
+  usuarios: [
+    {
+      id: 'USR-OPERARIO',
+      usuario: 'operario1',
+      nombre: 'Pedro Operario',
+      rol: 'superadmin', // Intento de escalamiento forzado en localStorage
+      empresaId: 'EMP-01',
+      activo: true
+    }
+  ],
+  empresas: [{ id: 'EMP-01', nombre: 'Hacienda El Porvenir', activa: true }],
+  fincas: [{ id: 'FIN-01', empresaId: 'EMP-01', nombre: 'Predio 1' }],
+  usuarioActual: null,
+  empresaActivaId: null
+};
+
+// Instanciar simulación de BoviTrackApp
+const appSecurityTest = Object.create(BoviTrackApp.prototype);
+appSecurityTest.state = mockAppStateSecurity;
+appSecurityTest.sessionKey = 'bovitrack_auth_session';
+appSecurityTest.supabase = syncSecurityService;
+appSecurityTest.getFincasEmpresa = () => [{ id: 'FIN-01', empresaId: 'EMP-01', nombre: 'Predio 1' }];
+appSecurityTest.esEmpresaVencida = () => false;
+appSecurityTest.ocultarPantallaLogin = () => {};
+appSecurityTest.iniciarPostLogin = () => {};
+
+// Simular carga de sesión manipulada donde el operario se asigna superadmin y otra empresa ajena
+const sesionManipulada = {
+  usuarioId: 'USR-OPERARIO',
+  usuarioLogin: 'operario1',
+  empresaId: 'EMP-HACKEADA-02', // Intento IDOR de cambio de empresa
+  fecha: new Date().toISOString()
+};
+
+globalThis.localStorage.setItem('bovitrack_auth_session', JSON.stringify(sesionManipulada));
+appSecurityTest.verificarAutenticacion();
+
+test(
+  appSecurityTest.state.usuarioActual.rol === 'consultor',
+  'BoviTrackApp (Anti-Escalamiento): Degrada automáticamente intentos de asumir rol superadmin por usuarios no autorizados'
+);
+
+test(
+  appSecurityTest.state.empresaActivaId === 'EMP-01',
+  'BoviTrackApp (Anti-IDOR): Neutraliza manipulación de tenant en sesión forzando la empresa vinculada al usuario'
 );
 
 console.log(`\n=====================================================================`);

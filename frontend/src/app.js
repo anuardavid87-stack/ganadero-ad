@@ -20,8 +20,19 @@ import { detectarAlertasZootecnicas } from './core/auditorIA.js';
 import { ExportadorBackupService } from './core/exportadorBackup.js';
 import { calcularGDP, calcularGDPEjemplar } from './core/zootecnia.js';
 
+export function escapeHTML(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 class BoviTrackApp {
   constructor() {
+    this.escapeHTML = escapeHTML;
     this.keyStorage = 'bovitrack_pro_storage_v3';
     this.sessionKey = 'bovitrack_auth_session';
     this.state = this.cargarEstado();
@@ -30,6 +41,7 @@ class BoviTrackApp {
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
+    this._tokenSesion = null;
 
     this.iniciarPWA();
     this.iniciarComponentes();
@@ -589,7 +601,33 @@ class BoviTrackApp {
     this._syncEnCurso = true;
     try {
       this.actualizarBadgeConexion('descargando');
-      const res = await this.supabase.descargarDatosDeSupabase(6000);
+
+      // Blindaje Multi-Tenant: Si no hay usuario autenticado, solo sincronizar el directorio
+      // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
+      if (!this.state.usuarioActual) {
+        if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
+          const resPre = await this.supabase.descargarDirectorioPreLogin(6000);
+          if (resPre && resPre.ok && resPre.datos) {
+            this.integrarDatosSupabase(resPre.datos);
+            this.actualizarBadgeConexion('sincronizado');
+          } else {
+            this.actualizarBadgeConexion();
+          }
+        }
+        return;
+      }
+
+      // Con usuario autenticado: inyectar contexto de tenant
+      const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+      const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+      const tenantContext = {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      };
+
+      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
       if (res.ok && res.datos) {
         this.integrarDatosSupabase(res.datos);
         this.actualizarHeader();
@@ -614,15 +652,28 @@ class BoviTrackApp {
   async sincronizarEnSegundoPlano() {
     if (!this.online || !this.supabase || !this.supabase.estaConfigurado()) return;
     if (this._syncEnCurso) return;
+    if (!this.state.usuarioActual) return; // No sincronizar entidades operacionales en segundo plano sin sesión
 
     this._syncEnCurso = true;
     try {
+      const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+      const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+      const tenantContext = {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      };
+      if (typeof this.supabase.setTenantContext === 'function') {
+        this.supabase.setTenantContext(tenantContext);
+      }
+
       if (this._syncPendiente) {
         this._syncPendiente = false;
         await this.supabase.subirDatosASupabase(this.state);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(6000);
+      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
       if (res.ok && res.datos) {
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
@@ -829,12 +880,35 @@ class BoviTrackApp {
             return;
           }
         }
-        this.state.usuarioActual = user;
-        if (sesion.empresaId && sesion.empresaId !== 'todas') {
-          this.state.empresaActivaId = sesion.empresaId;
-        } else if (user.empresaId) {
-          this.state.empresaActivaId = user.empresaId;
+        // Anti-Escalamiento de Privilegios: Solo 'anuardavid' puede ser superadmin
+        if (user.rol === 'superadmin' && user.usuario !== 'anuardavid') {
+          user.rol = 'consultor';
         }
+
+        // Anti-IDOR / Anti-Cross-Tenant Tampering:
+        // Si el usuario no es superadmin, la empresa activa SIEMPRE se deriva de su registro asignado
+        if (user.rol !== 'superadmin') {
+          this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId;
+        } else {
+          if (sesion.empresaId && sesion.empresaId !== 'todas') {
+            this.state.empresaActivaId = sesion.empresaId;
+          } else if (user.empresaId) {
+            this.state.empresaActivaId = user.empresaId;
+          }
+        }
+
+        this.state.usuarioActual = user;
+        this._tokenSesion = sesion.token || null;
+
+        if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+          this.supabase.setTenantContext({
+            empresaId: this.state.empresaActivaId,
+            esSuperAdmin: user.rol === 'superadmin',
+            fincasIds: this.getFincasEmpresa().map((f) => f.id),
+            token: this._tokenSesion
+          });
+        }
+
         this.ocultarPantallaLogin();
         this.iniciarPostLogin();
         return;
@@ -1098,13 +1172,25 @@ class BoviTrackApp {
       }
     }
 
-    // Guardar sesión y activar sistema
+    // Guardar sesión y activar sistema con contexto tenant seguro
     this.state.usuarioActual = user;
+    this._tokenSesion = this._tokenSesion || ('SES-' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+
+    if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+      this.supabase.setTenantContext({
+        empresaId: this.state.empresaActivaId,
+        esSuperAdmin: user.rol === 'superadmin',
+        fincasIds: this.getFincasEmpresa().map((f) => f.id),
+        token: this._tokenSesion
+      });
+    }
+
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(this.sessionKey, JSON.stringify({
         usuarioId: user.id,
         usuarioLogin: user.usuario,
         empresaId: this.state.empresaActivaId,
+        token: this._tokenSesion,
         fecha: new Date().toISOString()
       }));
     }
@@ -1116,6 +1202,13 @@ class BoviTrackApp {
 
   logout() {
     if (confirm('¿Deseas cerrar sesión en este dispositivo?')) {
+      if (this._tokenSesion && this.supabase && typeof this.supabase.cerrarSesionCloud === 'function') {
+        this.supabase.cerrarSesionCloud(this._tokenSesion).catch(() => {});
+      }
+      this._tokenSesion = null;
+      if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+        this.supabase.setTenantContext(null);
+      }
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(this.sessionKey);
       }

@@ -193,36 +193,223 @@ CREATE TABLE IF NOT EXISTS public.operaciones_diarias (
     creado_en TIMESTAMPTZ DEFAULT now()
 );
 
+-- 14. TABLA: nutricion_animales (Nutrición Animal Especial & IA)
+CREATE TABLE IF NOT EXISTS public.nutricion_animales (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    finca_id TEXT NOT NULL REFERENCES public.fincas(id) ON DELETE CASCADE,
+    animal_id TEXT,
+    animal_tag TEXT NOT NULL,
+    fecha_analisis DATE NOT NULL DEFAULT CURRENT_DATE,
+    etapa_productiva TEXT DEFAULT 'General',
+    talla_frame TEXT,
+    condicion_corporal NUMERIC(3,1),
+    peso_actual_kg NUMERIC(6,2),
+    gdp_esperada_g_dia NUMERIC(7,2),
+    sugerencia_dieta JSONB DEFAULT '{}'::jsonb,
+    sugerencia_medicamentos JSONB DEFAULT '[]'::jsonb,
+    sugerencia_hormonas JSONB DEFAULT '[]'::jsonb,
+    analisis_ia TEXT,
+    notas TEXT,
+    creado_en TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT uq_nutricion_finca_tag UNIQUE (finca_id, animal_tag)
+);
+
+-- 15. TABLA: sesiones (Sesiones criptográficas seguras)
+CREATE TABLE IF NOT EXISTS public.sesiones (
+    token TEXT PRIMARY KEY,
+    usuario_id TEXT NOT NULL,
+    empresa_id TEXT,
+    rol TEXT NOT NULL,
+    creado_en TIMESTAMPTZ DEFAULT now(),
+    expira_en TIMESTAMPTZ NOT NULL
+);
+
 -- ============================================================================
--- SEGURIDAD Y PERMISOS: ROW LEVEL SECURITY (RLS) Y CONTROL DE ACCESO
--- Protege los datos confidenciales y revoca la exposición de contraseñas.
+-- SEGURIDAD Y PERMISOS: ROW LEVEL SECURITY (RLS) MULTI-TENANT
+-- Protege los datos confidenciales y previene Cross-Tenant Leakage e IDOR.
 -- ============================================================================
 
+-- Función auxiliar para obtener el tenant/empresa_id de la petición actual
+CREATE OR REPLACE FUNCTION public.obtener_tenant_sesion()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_headers jsonb;
+    v_token text;
+    v_empresa_id text;
+    v_rol text;
+    v_header_empresa text;
+    v_jwt_empresa text;
+    v_jwt_role text;
+BEGIN
+    IF current_user = 'service_role' THEN
+        RETURN 'SUPERADMIN_BYPASS';
+    END IF;
+
+    BEGIN
+        v_jwt_role := auth.jwt() ->> 'role';
+        v_jwt_empresa := auth.jwt() ->> 'empresa_id';
+        IF v_jwt_role = 'superadmin' THEN
+            RETURN 'SUPERADMIN_BYPASS';
+        ELSIF v_jwt_empresa IS NOT NULL AND trim(v_jwt_empresa) <> '' THEN
+            RETURN trim(v_jwt_empresa);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        NULL;
+    END;
+
+    BEGIN
+        v_headers := current_setting('request.headers', true)::jsonb;
+    EXCEPTION WHEN OTHERS THEN
+        v_headers := NULL;
+    END;
+
+    IF v_headers IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    v_token := v_headers->>'x-session-token';
+    IF v_token IS NOT NULL AND trim(v_token) <> '' THEN
+        SELECT s.empresa_id, s.rol INTO v_empresa_id, v_rol
+        FROM public.sesiones s
+        WHERE s.token = trim(v_token) AND s.expira_en > now();
+
+        IF FOUND THEN
+            IF v_rol = 'superadmin' THEN
+                v_header_empresa := v_headers->>'x-empresa-id';
+                IF v_header_empresa IS NOT NULL AND trim(v_header_empresa) <> '' AND trim(v_header_empresa) <> 'todas' THEN
+                    RETURN trim(v_header_empresa);
+                END IF;
+                RETURN 'SUPERADMIN_BYPASS';
+            END IF;
+            RETURN v_empresa_id;
+        END IF;
+    END IF;
+
+    v_header_empresa := v_headers->>'x-empresa-id';
+    IF v_header_empresa IS NOT NULL AND trim(v_header_empresa) <> '' THEN
+        IF lower(trim(v_header_empresa)) = 'todas' OR lower(trim(v_header_empresa)) = 'superadmin' THEN
+            RETURN NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.empresas WHERE id = trim(v_header_empresa) AND activa = true) THEN
+            RETURN trim(v_header_empresa);
+        END IF;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+-- Habilitar RLS y aplicar aislamiento estricto
 DO $$
 DECLARE
     tbl text;
+    pol record;
     tablas text[] := ARRAY[
         'empresas', 'fincas', 'usuarios', 'costos_fijos_finca', 'inversiones_diferidas',
         'animales', 'servicios_reproductivos', 'pesajes_animales',
         'palpaciones_reproductivas', 'controles_lecheros', 'traslados_animales',
-        'operaciones_diarias'
+        'operaciones_diarias', 'nutricion_animales'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tablas LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
-        EXECUTE format('DROP POLICY IF EXISTS "Permitir acceso publico anon" ON public.%I;', tbl);
-        EXECUTE format('CREATE POLICY "Permitir acceso operacional" ON public.%I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);', tbl);
-        EXECUTE format('GRANT ALL ON public.%I TO anon, authenticated, service_role;', tbl);
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+            FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = tbl) LOOP
+                EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, tbl);
+            END LOOP;
+        END IF;
     END LOOP;
 END $$;
 
--- Blindaje específico de la tabla usuarios (Prohibir SELECT público de password)
-REVOKE SELECT (password) ON public.usuarios FROM anon;
+ALTER TABLE public.sesiones ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.sesiones FROM anon, authenticated;
+GRANT ALL ON public.sesiones TO service_role;
 
--- Otorgar uso de esquemas al rol anónimo
-GRANT USAGE ON SCHEMA public TO anon;
-GRANT USAGE ON SCHEMA public TO authenticated;
-GRANT USAGE ON SCHEMA public TO service_role;
+REVOKE ALL ON public.usuarios FROM anon;
+REVOKE ALL ON public.usuarios FROM authenticated;
+GRANT SELECT (id, empresa_id, usuario, nombre, rol, fincas_asignadas, email, telefono, activo, creado_en) ON public.usuarios TO anon, authenticated;
+GRANT INSERT, UPDATE (nombre, fincas_asignadas, email, telefono, activo) ON public.usuarios TO anon, authenticated;
+
+CREATE POLICY "Usuarios: Aislamiento por empresa" ON public.usuarios FOR SELECT TO anon, authenticated
+USING (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion()) OR id = 'USR-SUPER' OR empresa_id IS NULL);
+
+CREATE POLICY "Usuarios: Gestión administradores" ON public.usuarios FOR ALL TO anon, authenticated
+USING (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion() AND usuario <> 'anuardavid'))
+WITH CHECK (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion() AND rol <> 'superadmin'));
+
+CREATE POLICY "Empresas: Lectura autorizada" ON public.empresas FOR SELECT TO anon, authenticated
+USING (activa = true OR public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND id = public.obtener_tenant_sesion()));
+
+CREATE POLICY "Empresas: Gestión controlada" ON public.empresas FOR ALL TO anon, authenticated
+USING (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND id = public.obtener_tenant_sesion()))
+WITH CHECK (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND id = public.obtener_tenant_sesion()));
+
+CREATE POLICY "Fincas: Aislamiento por empresa" ON public.fincas FOR ALL TO anon, authenticated
+USING (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion()))
+WITH CHECK (public.obtener_tenant_sesion() = 'SUPERADMIN_BYPASS' OR (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion()));
+
+DO $$
+DECLARE
+    tbl text;
+    tablas_finca text[] := ARRAY[
+        'animales', 'costos_fijos_finca', 'inversiones_diferidas',
+        'servicios_reproductivos', 'pesajes_animales', 'palpaciones_reproductivas',
+        'controles_lecheros', 'nutricion_animales'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY tablas_finca LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
+            EXECUTE format('
+                CREATE POLICY "Aislamiento tenant: %I" ON public.%I FOR ALL TO anon, authenticated
+                USING (
+                    public.obtener_tenant_sesion() = ''SUPERADMIN_BYPASS'' OR
+                    (public.obtener_tenant_sesion() IS NOT NULL AND finca_id IN (
+                        SELECT id FROM public.fincas WHERE empresa_id = public.obtener_tenant_sesion()
+                    ))
+                )
+                WITH CHECK (
+                    public.obtener_tenant_sesion() = ''SUPERADMIN_BYPASS'' OR
+                    (public.obtener_tenant_sesion() IS NOT NULL AND finca_id IN (
+                        SELECT id FROM public.fincas WHERE empresa_id = public.obtener_tenant_sesion()
+                    ))
+                );
+            ', tbl, tbl);
+            EXECUTE format('GRANT ALL ON public.%I TO anon, authenticated, service_role;', tbl);
+        END IF;
+    END LOOP;
+END $$;
+
+DO $$
+DECLARE
+    tbl text;
+    tablas_empresa text[] := ARRAY['traslados_animales', 'operaciones_diarias'];
+BEGIN
+    FOREACH tbl IN ARRAY tablas_empresa LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
+            EXECUTE format('
+                CREATE POLICY "Aislamiento tenant: %I" ON public.%I FOR ALL TO anon, authenticated
+                USING (
+                    public.obtener_tenant_sesion() = ''SUPERADMIN_BYPASS'' OR
+                    (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion())
+                )
+                WITH CHECK (
+                    public.obtener_tenant_sesion() = ''SUPERADMIN_BYPASS'' OR
+                    (public.obtener_tenant_sesion() IS NOT NULL AND empresa_id = public.obtener_tenant_sesion())
+                );
+            ', tbl, tbl);
+            EXECUTE format('GRANT ALL ON public.%I TO anon, authenticated, service_role;', tbl);
+        END IF;
+    END LOOP;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON public.empresas TO anon, authenticated, service_role;
+GRANT ALL ON public.fincas TO anon, authenticated, service_role;
 
 -- ============================================================================
 -- DATOS SEMILLA INICIALES

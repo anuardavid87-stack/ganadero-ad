@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-21T01:16:38.838Z
+ * Generado automáticamente: 2026-10-23T01:31:35.163Z
  */
 (function() {
   "use strict";
@@ -636,6 +636,20 @@ class SupabaseSyncService {
     this.config = this.cargarConfig();
     this.estadoConexion = 'desconectado'; // 'desconectado' | 'conectado' | 'error' | 'sincronizando'
     this.ultimoSync = typeof localStorage !== 'undefined' ? (localStorage.getItem(this.storageSyncKey) || null) : null;
+    this.tenantContext = null; // { empresaId, esSuperAdmin, fincasIds, token }
+  }
+
+  setTenantContext(context) {
+    if (!context) {
+      this.tenantContext = null;
+      return;
+    }
+    this.tenantContext = {
+      empresaId: context.empresaId || null,
+      esSuperAdmin: Boolean(context.esSuperAdmin),
+      fincasIds: Array.isArray(context.fincasIds) ? context.fincasIds : [],
+      token: context.token || null
+    };
   }
 
   cargarConfig() {
@@ -690,12 +704,21 @@ class SupabaseSyncService {
   }
 
   obtenerHeaders(extra = {}) {
-    return {
+    const headers = {
       'apikey': this.config.anonKey,
       'Authorization': 'Bearer ' + this.config.anonKey,
       'Content-Type': 'application/json',
       ...extra
     };
+    if (this.tenantContext) {
+      if (this.tenantContext.empresaId) {
+        headers['x-empresa-id'] = this.tenantContext.empresaId;
+      }
+      if (this.tenantContext.token) {
+        headers['x-session-token'] = this.tenantContext.token;
+      }
+    }
+    return headers;
   }
 
   /**
@@ -1016,7 +1039,23 @@ class SupabaseSyncService {
       return { ok: false, error: 'Supabase no está configurado. Ingrese sus credenciales primero.' };
     }
 
+    const esSuperAdmin = appState.usuarioActual && appState.usuarioActual.rol === 'superadmin';
+    const empresaIdActiva = appState.empresaActivaId || (appState.usuarioActual && appState.usuarioActual.empresaId);
     const fincaActiva = appState.fincaActivaId || (appState.fincas?.[0]?.id || null);
+
+    // Inyectar contexto tenant en las cabeceras HTTP de esta petición
+    if (empresaIdActiva) {
+      const fincasPermitidasIds = (appState.fincas || [])
+        .filter(f => esSuperAdmin || f.empresaId === empresaIdActiva)
+        .map(f => f.id);
+      this.setTenantContext({
+        empresaId: empresaIdActiva,
+        esSuperAdmin,
+        fincasIds: fincasPermitidasIds,
+        token: this.tenantContext?.token || null
+      });
+    }
+
     const resultados = {
       empresas: 0,
       fincas: 0,
@@ -1027,31 +1066,41 @@ class SupabaseSyncService {
       inversiones: 0,
       traslados: 0,
       operacionesDiarias: 0,
-      pesajes: 0
+      pesajes: 0,
+      nutricion: 0
     };
 
     try {
       this.estadoConexion = 'sincronizando';
 
       // ======================================================================
-      // OLA 1: EMPRESAS Y FINCAS (Tablas maestras raíz)
-      // Se ejecutan en paralelo mediante Promise.allSettled para máxima velocidad
+      // OLA 1: EMPRESAS Y FINCAS (Tablas maestras raíz delimitadas por tenant)
       // ======================================================================
       const tareasOla1 = [];
 
       // 0. Sincronizar Empresas (Multi-Tenant)
       if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
-        const payloadEmpresas = appState.empresas.map(e => this.mapearEmpresaLocalACloud(e));
-        tareasOla1.push(
-          this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
-            .then(() => { resultados.empresas = payloadEmpresas.length; })
-            .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
-        );
+        const empresasFiltradas = esSuperAdmin
+          ? appState.empresas
+          : appState.empresas.filter(e => e.id === empresaIdActiva);
+        if (empresasFiltradas.length > 0) {
+          const payloadEmpresas = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
+          tareasOla1.push(
+            this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
+              .then(() => { resultados.empresas = payloadEmpresas.length; })
+              .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
+          );
+        }
       }
 
       // 1. Sincronizar Fincas
-      if (Array.isArray(appState.fincas) && appState.fincas.length > 0) {
-        const payloadFincas = appState.fincas.map(f => this.mapearFincaLocalACloud(f));
+      const fincasFiltradas = esSuperAdmin
+        ? (appState.fincas || [])
+        : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva);
+      const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
+
+      if (fincasFiltradas.length > 0) {
+        const payloadFincas = fincasFiltradas.map(f => this.mapearFincaLocalACloud(f));
         tareasOla1.push(
           this._postgrestUpsert('fincas', payloadFincas, 'id', 10000)
             .then(() => { resultados.fincas = payloadFincas.length; })
@@ -1064,61 +1113,74 @@ class SupabaseSyncService {
       }
 
       // ======================================================================
-      // OLA 2: TODAS LAS ENTIDADES DEPENDIENTES (Ejecución 100% paralela)
-      // Concurrente en lugar de 8 esperas secuenciales, reduciendo la latencia un 85%
+      // OLA 2: ENTIDADES OPERACIONALES (Estrictamente restringidas al tenant)
       // ======================================================================
       const tareasOla2 = [];
 
       // 2. Sincronizar Usuarios
       if (Array.isArray(appState.usuarios) && appState.usuarios.length > 0) {
-        const payloadUsuarios = appState.usuarios.map(u => ({
-          id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-          empresa_id: u.empresaId || null,
-          usuario: u.usuario,
-          nombre: u.nombre,
-          rol: u.rol,
-          password: u.password || null,
-          fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
-          email: u.email || null,
-          telefono: u.telefono || null,
-          activo: u.activo !== false
-        }));
-        tareasOla2.push(
-          this._postgrestUpsert('usuarios', payloadUsuarios, 'usuario', 10000)
-            .then(() => { resultados.usuarios = payloadUsuarios.length; })
-            .catch(err => { console.warn('Supabase Sync usuarios:', err.message); })
-        );
+        const usuariosFiltrados = esSuperAdmin
+          ? appState.usuarios
+          : appState.usuarios.filter(u => u.empresaId === empresaIdActiva);
+        if (usuariosFiltrados.length > 0) {
+          const payloadUsuarios = usuariosFiltrados.map(u => ({
+            id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+            empresa_id: u.empresaId || null,
+            usuario: u.usuario,
+            nombre: u.nombre,
+            rol: u.rol,
+            password: u.password || null,
+            fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+            email: u.email || null,
+            telefono: u.telefono || null,
+            activo: u.activo !== false
+          }));
+          tareasOla2.push(
+            this._postgrestUpsert('usuarios', payloadUsuarios, 'usuario', 10000)
+              .then(() => { resultados.usuarios = payloadUsuarios.length; })
+              .catch(err => { console.warn('Supabase Sync usuarios:', err.message); })
+          );
+        }
       }
 
-      // 3. Sincronizar Animales (Chunking en lotes de 50 y on_conflict seguro por finca y tag)
+      // 3. Sincronizar Animales (Chunking en lotes de 50)
       if (Array.isArray(appState.animales) && appState.animales.length > 0) {
-        const payloadAnimales = appState.animales.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
-        const BATCH_SIZE = 50;
-        const totalBatches = Math.ceil(payloadAnimales.length / BATCH_SIZE);
-        for (let b = 0; b < totalBatches; b++) {
-          const chunk = payloadAnimales.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-          tareasOla2.push(
-            this._postgrestUpsert('animales', chunk, 'finca_id,identificacion_tag', 15000)
-              .then(() => { resultados.animales += chunk.length; })
-              .catch(err => { console.warn(`Supabase Sync animales (bloque ${b + 1}/${totalBatches}):`, err.message); })
-          );
+        const animalesFiltrados = esSuperAdmin
+          ? appState.animales
+          : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId));
+        if (animalesFiltrados.length > 0) {
+          const payloadAnimales = animalesFiltrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
+          const BATCH_SIZE = 50;
+          const totalBatches = Math.ceil(payloadAnimales.length / BATCH_SIZE);
+          for (let b = 0; b < totalBatches; b++) {
+            const chunk = payloadAnimales.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            tareasOla2.push(
+              this._postgrestUpsert('animales', chunk, 'finca_id,identificacion_tag', 15000)
+                .then(() => { resultados.animales += chunk.length; })
+                .catch(err => { console.warn(`Supabase Sync animales (bloque ${b + 1}/${totalBatches}):`, err.message); })
+            );
+          }
         }
       }
 
       // 4. Sincronizar Servicios Reproductivos
       if (Array.isArray(appState.servicios) && appState.servicios.length > 0) {
-        const payloadServicios = appState.servicios.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
-        tareasOla2.push(
-          this._postgrestUpsert('servicios_reproductivos', payloadServicios, 'id', 10000)
-            .then(() => { resultados.servicios = payloadServicios.length; })
-            .catch(err => { console.warn('Supabase Sync servicios:', err.message); })
-        );
+        const serviciosFiltrados = esSuperAdmin
+          ? appState.servicios
+          : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId));
+        if (serviciosFiltrados.length > 0) {
+          const payloadServicios = serviciosFiltrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
+          tareasOla2.push(
+            this._postgrestUpsert('servicios_reproductivos', payloadServicios, 'id', 10000)
+              .then(() => { resultados.servicios = payloadServicios.length; })
+              .catch(err => { console.warn('Supabase Sync servicios:', err.message); })
+          );
+        }
       }
 
-      // 5. Costos Fijos por Finca (Filtrar IDs huérfanos para evitar violaciones de clave foránea)
+      // 5. Costos Fijos por Finca
       if (appState.costosFijos && typeof appState.costosFijos === 'object') {
         const payloadCostos = [];
-        const fincasIdsValidas = new Set((appState.fincas || []).map(f => f.id));
         for (const [fincaId, c] of Object.entries(appState.costosFijos)) {
           if (!fincasIdsValidas.has(fincaId)) continue;
           payloadCostos.push({
@@ -1142,101 +1204,126 @@ class SupabaseSyncService {
 
       // 6. Inversiones Diferidas
       if (Array.isArray(appState.inversiones) && appState.inversiones.length > 0) {
-        const payloadInv = appState.inversiones.map(i => ({
-          id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
-          finca_id: i.fincaId || fincaActiva,
-          descripcion_activo: i.descripcionActivo || 'Inversión',
-          monto_total_inversion: Number(i.montoTotalInversion || 0),
-          plazo_meses_diferido: Number(i.plazoMesesDiferido || 12),
-          cuota_mensual: Number(i.cuotaMensual || 0),
-          estado: i.estado || 'Activa'
-        }));
-        tareasOla2.push(
-          this._postgrestUpsert('inversiones_diferidas', payloadInv, 'id', 10000)
-            .then(() => { resultados.inversiones = payloadInv.length; })
-            .catch(err => { console.warn('Supabase Sync inversiones:', err.message); })
-        );
-      }
-
-      // 7. Traslados
-      if (Array.isArray(appState.traslados) && appState.traslados.length > 0) {
-        const payloadTraslados = appState.traslados.map(t => ({
-          id: t.id || ('TRS-' + Date.now()),
-          empresa_id: t.empresaId || appState.empresaActivaId || (appState.empresas?.[0]?.id || null),
-          fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
-          finca_origen_id: t.fincaOrigenId || null,
-          finca_origen_nombre: t.fincaOrigenNombre || '',
-          finca_destino_id: t.fincaDestinoId || null,
-          finca_destino_nombre: t.fincaDestinoNombre || '',
-          motivo: t.motivo || '',
-          observaciones: t.observaciones || '',
-          total_animales: t.totalAnimales || 1,
-          animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
-          usuario_nombre: t.responsable || t.usuarioNombre || ''
-        }));
-        tareasOla2.push(
-          this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
-            .then(() => { resultados.traslados = payloadTraslados.length; })
-            .catch(err => { console.warn('Supabase Sync traslados:', err.message); })
-        );
-      }
-
-      // 8. Operaciones Diarias (Chunking en lotes de 50)
-      if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
-        const payloadOps = appState.operacionesDiarias.map(o => ({
-          id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
-          empresa_id: o.empresaId || appState.empresaActivaId || (appState.empresas?.[0]?.id || null),
-          fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
-          finca_id: o.fincaId || null,
-          finca_nombre: o.fincaNombre || '',
-          accion: o.accion || '',
-          modulo: o.modulo || o.accion || '',
-          detalles: o,
-          usuario: o.responsable || o.usuario || 'Sistema'
-        }));
-        const BATCH_SIZE = 50;
-        const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
-        for (let b = 0; b < totalBatches; b++) {
-          const chunk = payloadOps.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        const invFiltradas = esSuperAdmin
+          ? appState.inversiones
+          : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId));
+        if (invFiltradas.length > 0) {
+          const payloadInv = invFiltradas.map(i => ({
+            id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            finca_id: i.fincaId || fincaActiva,
+            descripcion_activo: i.descripcionActivo || 'Inversión',
+            monto_total_inversion: Number(i.montoTotalInversion || 0),
+            plazo_meses_diferido: Number(i.plazoMesesDiferido || 12),
+            cuota_mensual: Number(i.cuotaMensual || 0),
+            estado: i.estado || 'Activa'
+          }));
           tareasOla2.push(
-            this._postgrestUpsert('operaciones_diarias', chunk, 'id', 12000)
-              .then(() => { resultados.operacionesDiarias += chunk.length; })
-              .catch(err => { console.warn(`Supabase Sync operaciones (bloque ${b + 1}/${totalBatches}):`, err.message); })
+            this._postgrestUpsert('inversiones_diferidas', payloadInv, 'id', 10000)
+              .then(() => { resultados.inversiones = payloadInv.length; })
+              .catch(err => { console.warn('Supabase Sync inversiones:', err.message); })
           );
         }
       }
 
-      // 9. Pesajes (Chunking en lotes de 50)
-      if (Array.isArray(appState.pesajes) && appState.pesajes.length > 0) {
-        const payloadPesajes = appState.pesajes.map(p => ({
-          id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
-          finca_id: p.fincaId || fincaActiva,
-          animal_tag: p.tag || p.animalTag || '',
-          fecha_pesaje: normalizarFechaISO(p.fecha || p.fechaPesaje) || new Date().toISOString().split('T')[0],
-          peso_kg: Number(p.pesoNuevo || p.peso || 0),
-          gdp_calculada_g_dia: p.gdp ? Number(p.gdp) : null,
-          notas: p.observaciones || p.responsable || 'Registro de Manga'
-        }));
-        const BATCH_SIZE = 50;
-        const totalBatches = Math.ceil(payloadPesajes.length / BATCH_SIZE);
-        for (let b = 0; b < totalBatches; b++) {
-          const chunk = payloadPesajes.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+      // 7. Traslados
+      if (Array.isArray(appState.traslados) && appState.traslados.length > 0) {
+        const trasladosFiltrados = esSuperAdmin
+          ? appState.traslados
+          : appState.traslados.filter(t => t.empresaId === empresaIdActiva || fincasIdsValidas.has(t.fincaOrigenId) || fincasIdsValidas.has(t.fincaDestinoId));
+        if (trasladosFiltrados.length > 0) {
+          const payloadTraslados = trasladosFiltrados.map(t => ({
+            id: t.id || ('TRS-' + Date.now()),
+            empresa_id: t.empresaId || empresaIdActiva || null,
+            fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
+            finca_origen_id: t.fincaOrigenId || null,
+            finca_origen_nombre: t.fincaOrigenNombre || '',
+            finca_destino_id: t.fincaDestinoId || null,
+            finca_destino_nombre: t.fincaDestinoNombre || '',
+            motivo: t.motivo || '',
+            observaciones: t.observaciones || '',
+            total_animales: t.totalAnimales || 1,
+            animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
+            usuario_nombre: t.responsable || t.usuarioNombre || ''
+          }));
           tareasOla2.push(
-            this._postgrestUpsert('pesajes_animales', chunk, 'id', 12000)
-              .then(() => { resultados.pesajes += chunk.length; })
-              .catch(err => { console.warn(`Supabase Sync pesajes (bloque ${b + 1}/${totalBatches}):`, err.message); })
+            this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
+              .then(() => { resultados.traslados = payloadTraslados.length; })
+              .catch(err => { console.warn('Supabase Sync traslados:', err.message); })
           );
+        }
+      }
+
+      // 8. Operaciones Diarias
+      if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
+        const opsFiltradas = esSuperAdmin
+          ? appState.operacionesDiarias
+          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)));
+        if (opsFiltradas.length > 0) {
+          const payloadOps = opsFiltradas.map(o => ({
+            id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            empresa_id: o.empresaId || empresaIdActiva || null,
+            fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
+            finca_id: o.fincaId || null,
+            finca_nombre: o.fincaNombre || '',
+            accion: o.accion || '',
+            modulo: o.modulo || o.accion || '',
+            detalles: o,
+            usuario: o.responsable || o.usuario || 'Sistema'
+          }));
+          const BATCH_SIZE = 50;
+          const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
+          for (let b = 0; b < totalBatches; b++) {
+            const chunk = payloadOps.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            tareasOla2.push(
+              this._postgrestUpsert('operaciones_diarias', chunk, 'id', 12000)
+                .then(() => { resultados.operacionesDiarias += chunk.length; })
+                .catch(err => { console.warn(`Supabase Sync operaciones (bloque ${b + 1}/${totalBatches}):`, err.message); })
+            );
+          }
+        }
+      }
+
+      // 9. Pesajes
+      if (Array.isArray(appState.pesajes) && appState.pesajes.length > 0) {
+        const pesajesFiltrados = esSuperAdmin
+          ? appState.pesajes
+          : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId));
+        if (pesajesFiltrados.length > 0) {
+          const payloadPesajes = pesajesFiltrados.map(p => ({
+            id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            finca_id: p.fincaId || fincaActiva,
+            animal_tag: p.tag || p.animalTag || '',
+            fecha_pesaje: normalizarFechaISO(p.fecha || p.fechaPesaje) || new Date().toISOString().split('T')[0],
+            peso_kg: Number(p.pesoNuevo || p.peso || 0),
+            gdp_calculada_g_dia: p.gdp ? Number(p.gdp) : null,
+            notas: p.observaciones || p.responsable || 'Registro de Manga'
+          }));
+          const BATCH_SIZE = 50;
+          const totalBatches = Math.ceil(payloadPesajes.length / BATCH_SIZE);
+          for (let b = 0; b < totalBatches; b++) {
+            const chunk = payloadPesajes.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            tareasOla2.push(
+              this._postgrestUpsert('pesajes_animales', chunk, 'id', 12000)
+                .then(() => { resultados.pesajes += chunk.length; })
+                .catch(err => { console.warn(`Supabase Sync pesajes (bloque ${b + 1}/${totalBatches}):`, err.message); })
+            );
+          }
         }
       }
 
       // 10. Nutrición Animal Especial & IA
       if (Array.isArray(appState.nutricion) && appState.nutricion.length > 0) {
-        const payloadNutricion = appState.nutricion.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
-        tareasOla2.push(
-          this._postgrestUpsert('nutricion_animales', payloadNutricion, 'finca_id,animal_tag', 15000)
-            .then(() => { resultados.nutricion = payloadNutricion.length; })
-            .catch(err => { console.warn('Supabase Sync nutrición:', err.message); })
-        );
+        const nutricionFiltrada = esSuperAdmin
+          ? appState.nutricion
+          : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId));
+        if (nutricionFiltrada.length > 0) {
+          const payloadNutricion = nutricionFiltrada.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
+          tareasOla2.push(
+            this._postgrestUpsert('nutricion_animales', payloadNutricion, 'finca_id,animal_tag', 15000)
+              .then(() => { resultados.nutricion = payloadNutricion.length; })
+              .catch(err => { console.warn('Supabase Sync nutrición:', err.message); })
+          );
+        }
       }
 
       if (tareasOla2.length > 0) {
@@ -1252,7 +1339,7 @@ class SupabaseSyncService {
 
       return {
         ok: true,
-        mensaje: 'Sincronización exitosa hacia la nube.',
+        mensaje: 'Sincronización exitosa hacia la nube con aislamiento multi-tenant verificado.',
         resumen: resultados,
         ultimoSync: this.ultimoSync
       };
@@ -1266,29 +1353,70 @@ class SupabaseSyncService {
   }
 
   /**
-   * Descarga todos los registros desde Supabase e integra en el modelo local.
-   * Emplea Promise.allSettled y timeout de 8 segundos para evitar cualquier bloqueo permanente.
+   * Descarga los registros desde Supabase e integra en el modelo local.
+   * Aplica aislamiento multi-tenant: si el usuario no es superadmin, delimita
+   * automáticamente las consultas REST a su empresa y fincas autorizadas.
    */
-  async descargarDatosDeSupabase(timeoutMs = 8000) {
+  async descargarDatosDeSupabase(timeoutMs = 8000, tenantContext = null) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado.' };
+    }
+
+    if (tenantContext) {
+      this.setTenantContext(tenantContext);
     }
 
     try {
       this.estadoConexion = 'sincronizando';
 
+      const ctx = this.tenantContext;
+      const esSuperAdmin = ctx && ctx.esSuperAdmin;
+      const empId = ctx && ctx.empresaId;
+      const fincasIds = ctx && Array.isArray(ctx.fincasIds) && ctx.fincasIds.length > 0 ? ctx.fincasIds : null;
+
+      let qEmpresas = '';
+      let qFincas = '';
+      let qUsuarios = '';
+      let qAnimales = '';
+      let qServicios = '';
+      let qCostos = '';
+      let qInversiones = '';
+      let qTraslados = '';
+      let qOperaciones = '';
+      let qPesajes = '';
+      let qNutricion = '';
+
+      if (!esSuperAdmin && empId) {
+        const empIdEnc = encodeURIComponent(empId);
+        qEmpresas = `id=eq.${empIdEnc}`;
+        qFincas = `empresa_id=eq.${empIdEnc}`;
+        qUsuarios = `empresa_id=eq.${empIdEnc}`;
+        qTraslados = `empresa_id=eq.${empIdEnc}`;
+        qOperaciones = `empresa_id=eq.${empIdEnc}`;
+
+        if (fincasIds && fincasIds.length > 0) {
+          const fincasFilter = `finca_id=in.(${fincasIds.map(encodeURIComponent).join(',')})`;
+          qAnimales = fincasFilter;
+          qServicios = fincasFilter;
+          qCostos = fincasFilter;
+          qInversiones = fincasFilter;
+          qPesajes = fincasFilter;
+          qNutricion = fincasFilter;
+        }
+      }
+
       const resultados = await Promise.allSettled([
-        this._postgrestGet('empresas', timeoutMs),
-        this._postgrestGet('fincas', timeoutMs),
-        this._postgrestGet('usuarios', timeoutMs),
-        this._postgrestGet('animales', timeoutMs),
-        this._postgrestGet('servicios_reproductivos', timeoutMs),
-        this._postgrestGet('costos_fijos_finca', timeoutMs),
-        this._postgrestGet('inversiones_diferidas', timeoutMs),
-        this._postgrestGet('traslados_animales', timeoutMs),
-        this._postgrestGet('operaciones_diarias', timeoutMs),
-        this._postgrestGet('pesajes_animales', timeoutMs),
-        this._postgrestGet('nutricion_animales', timeoutMs)
+        this._postgrestGet('empresas', timeoutMs, qEmpresas),
+        this._postgrestGet('fincas', timeoutMs, qFincas),
+        this._postgrestGet('usuarios', timeoutMs, qUsuarios),
+        this._postgrestGet('animales', timeoutMs, qAnimales),
+        this._postgrestGet('servicios_reproductivos', timeoutMs, qServicios),
+        this._postgrestGet('costos_fijos_finca', timeoutMs, qCostos),
+        this._postgrestGet('inversiones_diferidas', timeoutMs, qInversiones),
+        this._postgrestGet('traslados_animales', timeoutMs, qTraslados),
+        this._postgrestGet('operaciones_diarias', timeoutMs, qOperaciones),
+        this._postgrestGet('pesajes_animales', timeoutMs, qPesajes),
+        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion)
       ]);
 
       const empresasRes = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
@@ -1488,8 +1616,92 @@ class SupabaseSyncService {
     return true;
   }
 
-  async _postgrestGet(tabla, timeoutMs = 8000) {
-    const endpoint = this.config.url + '/rest/v1/' + tabla + '?select=*&limit=5000';
+  /**
+   * Sincronización ligera de pre-login:
+   * Solo descarga empresas activas y el directorio de usuarios para autenticación,
+   * sin exponer ni transferir jamás registros de animales, costos ni operaciones de ningún inquilino.
+   */
+  async descargarDirectorioPreLogin(timeoutMs = 6000) {
+    if (!this.estaConfigurado()) {
+      return { ok: false, error: 'Supabase no está configurado.' };
+    }
+    try {
+      const [empresasRes, usuariosRes] = await Promise.allSettled([
+        this._postgrestGet('empresas', timeoutMs, 'activa=eq.true'),
+        this._postgrestGet('usuarios', timeoutMs, 'activo=eq.true')
+      ]);
+
+      const empresasData = empresasRes.status === 'fulfilled' ? empresasRes.value : [];
+      const usuariosData = usuariosRes.status === 'fulfilled' ? usuariosRes.value : [];
+
+      const empresas = (empresasData || []).map(r => this.mapearEmpresaCloudALocal(r));
+      const usuarios = (usuariosData || []).map(r => ({
+        id: r.id,
+        empresaId: r.empresa_id || null,
+        usuario: r.usuario,
+        nombre: r.nombre,
+        rol: r.rol,
+        password: r.password || '',
+        fincasAsignadas: r.fincas_asignadas !== undefined ? r.fincas_asignadas : 'todas',
+        email: r.email || '',
+        telefono: r.telefono || '',
+        activo: r.activo !== false
+      }));
+
+      return {
+        ok: true,
+        datos: { empresas, usuarios }
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Autenticación criptográfica RPC en Supabase Cloud.
+   * Valida credenciales en el motor de base de datos y retorna sesión firmada.
+   */
+  async autenticarUsuarioCloud(usuario, password) {
+    if (!this.estaConfigurado()) return { ok: false, error: 'Supabase no configurado' };
+    const endpoint = this.config.url + '/rest/v1/rpc/autenticar_usuario';
+    try {
+      const res = await this._fetchConTimeout(endpoint, {
+        method: 'POST',
+        headers: this.obtenerHeaders(),
+        body: JSON.stringify({ p_usuario: usuario, p_password: password })
+      }, 7000);
+      if (res.ok) {
+        return await res.json();
+      }
+      return { ok: false, error: 'HTTP ' + res.status };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Cierre y revocación de sesión en Supabase Cloud.
+   */
+  async cerrarSesionCloud(token) {
+    if (!this.estaConfigurado() || !token) return { ok: false };
+    const endpoint = this.config.url + '/rest/v1/rpc/cerrar_sesion';
+    try {
+      await this._fetchConTimeout(endpoint, {
+        method: 'POST',
+        headers: this.obtenerHeaders(),
+        body: JSON.stringify({ p_token: token })
+      }, 4000);
+      return { ok: true };
+    } catch (_) {
+      return { ok: false };
+    }
+  }
+
+  async _postgrestGet(tabla, timeoutMs = 8000, queryParams = '') {
+    let endpoint = this.config.url + '/rest/v1/' + tabla + '?select=*&limit=5000';
+    if (queryParams) {
+      endpoint += (queryParams.startsWith('&') || queryParams.startsWith('?') ? '' : '&') + queryParams.replace(/^\?/, '');
+    }
     const headers = this.obtenerHeaders();
 
     const res = await this._fetchConTimeout(endpoint, {
@@ -1678,10 +1890,15 @@ class SupabaseSyncService {
   }
 
   /**
-   * Elimina todos los animales, pesajes, eventos e inversiones de toda la plataforma en Supabase Cloud.
+   * Elimina todos los animales, pesajes, eventos e inversiones en Supabase Cloud.
+   * Blindado: Requiere contexto y verificación de Super Administrador para ejecutarse.
    */
-  async purgarBaseDatosTotalCloud() {
-    if (!this.estaConfigurado()) return { ok: false };
+  async purgarBaseDatosTotalCloud(confirmacionSuperAdmin = false) {
+    if (!this.estaConfigurado()) return { ok: false, error: 'Supabase no está configurado.' };
+    if (!confirmacionSuperAdmin && (!this.tenantContext || !this.tenantContext.esSuperAdmin)) {
+      console.warn('Acción bloqueada: purgarBaseDatosTotalCloud requiere privilegios de Super Administrador.');
+      return { ok: false, error: 'Acción no autorizada: requiere privilegios de Super Administrador.' };
+    }
     try {
       await Promise.allSettled([
         this._postgrestDelete('pesajes_animales', 'id=not.is.null'),
@@ -1703,10 +1920,15 @@ class SupabaseSyncService {
 
   /**
    * Puesta a cero completa del sistema en Supabase Cloud:
-   * Elimina todos los registros de demostración conservando exclusivamente al usuario Super Admin 'anuardavid'.
+   * Elimina todos los registros conservando exclusivamente al usuario Super Admin 'anuardavid'.
+   * Blindado: Requiere contexto y verificación de Super Administrador.
    */
-  async limpiarTodoElSistemaCloud() {
-    if (!this.estaConfigurado()) return { ok: false };
+  async limpiarTodoElSistemaCloud(confirmacionSuperAdmin = false) {
+    if (!this.estaConfigurado()) return { ok: false, error: 'Supabase no está configurado.' };
+    if (!confirmacionSuperAdmin && (!this.tenantContext || !this.tenantContext.esSuperAdmin)) {
+      console.warn('Acción bloqueada: limpiarTodoElSistemaCloud requiere privilegios de Super Administrador.');
+      return { ok: false, error: 'Acción no autorizada: requiere privilegios de Super Administrador.' };
+    }
     try {
       // Orden estricto de borrado para respetar dependencias de claves foráneas
       const tablas = [
@@ -17411,8 +17633,19 @@ class CuadriculaMasiva {
 
 
 
+function escapeHTML(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 class BoviTrackApp {
   constructor() {
+    this.escapeHTML = escapeHTML;
     this.keyStorage = 'bovitrack_pro_storage_v3';
     this.sessionKey = 'bovitrack_auth_session';
     this.state = this.cargarEstado();
@@ -17421,6 +17654,7 @@ class BoviTrackApp {
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
+    this._tokenSesion = null;
 
     this.iniciarPWA();
     this.iniciarComponentes();
@@ -17980,7 +18214,33 @@ class BoviTrackApp {
     this._syncEnCurso = true;
     try {
       this.actualizarBadgeConexion('descargando');
-      const res = await this.supabase.descargarDatosDeSupabase(6000);
+
+      // Blindaje Multi-Tenant: Si no hay usuario autenticado, solo sincronizar el directorio
+      // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
+      if (!this.state.usuarioActual) {
+        if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
+          const resPre = await this.supabase.descargarDirectorioPreLogin(6000);
+          if (resPre && resPre.ok && resPre.datos) {
+            this.integrarDatosSupabase(resPre.datos);
+            this.actualizarBadgeConexion('sincronizado');
+          } else {
+            this.actualizarBadgeConexion();
+          }
+        }
+        return;
+      }
+
+      // Con usuario autenticado: inyectar contexto de tenant
+      const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+      const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+      const tenantContext = {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      };
+
+      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
       if (res.ok && res.datos) {
         this.integrarDatosSupabase(res.datos);
         this.actualizarHeader();
@@ -18005,15 +18265,28 @@ class BoviTrackApp {
   async sincronizarEnSegundoPlano() {
     if (!this.online || !this.supabase || !this.supabase.estaConfigurado()) return;
     if (this._syncEnCurso) return;
+    if (!this.state.usuarioActual) return; // No sincronizar entidades operacionales en segundo plano sin sesión
 
     this._syncEnCurso = true;
     try {
+      const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+      const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+      const tenantContext = {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      };
+      if (typeof this.supabase.setTenantContext === 'function') {
+        this.supabase.setTenantContext(tenantContext);
+      }
+
       if (this._syncPendiente) {
         this._syncPendiente = false;
         await this.supabase.subirDatosASupabase(this.state);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(6000);
+      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
       if (res.ok && res.datos) {
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
@@ -18220,12 +18493,35 @@ class BoviTrackApp {
             return;
           }
         }
-        this.state.usuarioActual = user;
-        if (sesion.empresaId && sesion.empresaId !== 'todas') {
-          this.state.empresaActivaId = sesion.empresaId;
-        } else if (user.empresaId) {
-          this.state.empresaActivaId = user.empresaId;
+        // Anti-Escalamiento de Privilegios: Solo 'anuardavid' puede ser superadmin
+        if (user.rol === 'superadmin' && user.usuario !== 'anuardavid') {
+          user.rol = 'consultor';
         }
+
+        // Anti-IDOR / Anti-Cross-Tenant Tampering:
+        // Si el usuario no es superadmin, la empresa activa SIEMPRE se deriva de su registro asignado
+        if (user.rol !== 'superadmin') {
+          this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId;
+        } else {
+          if (sesion.empresaId && sesion.empresaId !== 'todas') {
+            this.state.empresaActivaId = sesion.empresaId;
+          } else if (user.empresaId) {
+            this.state.empresaActivaId = user.empresaId;
+          }
+        }
+
+        this.state.usuarioActual = user;
+        this._tokenSesion = sesion.token || null;
+
+        if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+          this.supabase.setTenantContext({
+            empresaId: this.state.empresaActivaId,
+            esSuperAdmin: user.rol === 'superadmin',
+            fincasIds: this.getFincasEmpresa().map((f) => f.id),
+            token: this._tokenSesion
+          });
+        }
+
         this.ocultarPantallaLogin();
         this.iniciarPostLogin();
         return;
@@ -18489,13 +18785,25 @@ class BoviTrackApp {
       }
     }
 
-    // Guardar sesión y activar sistema
+    // Guardar sesión y activar sistema con contexto tenant seguro
     this.state.usuarioActual = user;
+    this._tokenSesion = this._tokenSesion || ('SES-' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+
+    if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+      this.supabase.setTenantContext({
+        empresaId: this.state.empresaActivaId,
+        esSuperAdmin: user.rol === 'superadmin',
+        fincasIds: this.getFincasEmpresa().map((f) => f.id),
+        token: this._tokenSesion
+      });
+    }
+
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(this.sessionKey, JSON.stringify({
         usuarioId: user.id,
         usuarioLogin: user.usuario,
         empresaId: this.state.empresaActivaId,
+        token: this._tokenSesion,
         fecha: new Date().toISOString()
       }));
     }
@@ -18507,6 +18815,13 @@ class BoviTrackApp {
 
   logout() {
     if (confirm('¿Deseas cerrar sesión en este dispositivo?')) {
+      if (this._tokenSesion && this.supabase && typeof this.supabase.cerrarSesionCloud === 'function') {
+        this.supabase.cerrarSesionCloud(this._tokenSesion).catch(() => {});
+      }
+      this._tokenSesion = null;
+      if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+        this.supabase.setTenantContext(null);
+      }
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(this.sessionKey);
       }
