@@ -7,7 +7,7 @@
  * Incluye búsqueda en vivo, filtros combinados, modal de "+ Nuevo Animal" y apertura de Ficha Técnica.
  */
 
-import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses } from '../core/zootecnia.js';
+import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha } from '../core/zootecnia.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class PestanaAnimales {
@@ -333,7 +333,7 @@ export class PestanaAnimales {
 
         <!-- Nacimiento & Edad -->
         <td class="p-3">
-          <div class="font-bold text-slate-800">${a.fechaNacimiento || '-'}</div>
+          <div class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento)}</div>
           <div class="text-[10px] text-slate-500">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
         </td>
 
@@ -363,7 +363,7 @@ export class PestanaAnimales {
 
         <!-- Último Parto & IEP -->
         <td class="p-3">
-          <div class="font-bold text-slate-800">${fParto || 'Sin partos'}</div>
+          <div class="font-bold text-slate-800">${formatearFecha(fParto, 'Sin partos')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">
             ${fParto ? `IEP: <strong class="text-slate-700">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
           </div>
@@ -492,7 +492,7 @@ export class PestanaAnimales {
               </span>
             `}
             <span class="text-[10px] text-slate-500 block">
-              ${fParto ? `Parto: ${fParto}` : `${edadMeses} m`}
+              ${fParto ? `Parto: ${formatearFecha(fParto)}` : `${edadMeses} m`}
             </span>
           </div>
         </div>

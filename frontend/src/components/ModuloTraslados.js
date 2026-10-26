@@ -5,6 +5,7 @@
  */
 
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
+import { formatearFecha } from '../core/zootecnia.js';
 
 export class ModuloTraslados {
   constructor({
@@ -435,7 +436,7 @@ export class ModuloTraslados {
                   ${traslados.length > 0 ? traslados.map((t) => `
                     <tr class="hover:bg-slate-50 transition">
                       <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
-                        ${t.fecha}
+                        ${formatearFecha(t.fecha)}
                         <span class="block text-[10px] text-slate-400">${t.hora || ''}</span>
                       </td>
                       <td class="p-3">
@@ -671,7 +672,7 @@ export class ModuloTraslados {
           `¿Confirmar el traslado de ${this.animalesSesion.length} animales?\n\n` +
           `• Finca Origen: ${fOrig ? fOrig.nombre : this.fincaOrigenId}\n` +
           `• Finca Destino: ${fDest ? fDest.nombre : this.fincaDestinoId}\n` +
-          `• Fecha: ${fecha}\n` +
+          `• Fecha: ${formatearFecha(fecha)}\n` +
           `• Motivo: ${motivo}\n` +
           `• Lote Destino: ${loteDestino}`
         );

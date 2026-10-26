@@ -4,7 +4,7 @@
  * registrar la medición con auditoría de IA y acumular la sesión de trabajo.
  */
 
-import { calcularGDP, calcularGDPEjemplar } from '../core/zootecnia.js';
+import { calcularGDP, calcularGDPEjemplar, formatearFecha } from '../core/zootecnia.js';
 import { auditarPesajeInput, auditarPalpacionInput, auditarPartoInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
@@ -185,7 +185,7 @@ export class CuadriculaMasiva {
                   <tr class="hover:bg-slate-50">
                     <td class="p-2.5 text-center font-mono text-slate-400">${idx + 1}</td>
                     <td class="p-2.5 font-black font-mono text-slate-900">${reg.tag}</td>
-                    <td class="p-2.5 font-mono text-slate-600 font-bold whitespace-nowrap">${reg.fecha || this.fechaJornada}</td>
+                    <td class="p-2.5 font-mono text-slate-600 font-bold whitespace-nowrap">${formatearFecha(reg.fecha || this.fechaJornada)}</td>
                     <td class="p-2.5">
                       <span class="px-2 py-0.5 rounded text-[10px] font-bold ${reg.especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                         ${reg.especie === 'bufalino' ? '🦬 Bufalino' : '🐂 Vacuno'}
@@ -240,7 +240,7 @@ export class CuadriculaMasiva {
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
             <input type="date" id="form-peso-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none">
-            <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${fechaPrev || 'S/F'})` : (a.fechaNacimiento ? `Nacido: ${a.fechaNacimiento}` : 'Sin pesajes previos')}</span>
+            <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
           </div>
 
           <div>
@@ -893,7 +893,7 @@ export class CuadriculaMasiva {
           }
         });
         this.render();
-        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${fechaActiva}.`);
+        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
       });
     }
 

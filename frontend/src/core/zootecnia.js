@@ -21,14 +21,28 @@ export const PARAMETROS_ESPECIES = {
 };
 
 /**
+ * Convierte cualquier cadena de fecha (YYYY-MM-DD o DD/MM/YYYY) u objeto Date en Date válido.
+ */
+export function parsearFechaObjeto(val) {
+  if (!val) return new Date(NaN);
+  if (val instanceof Date) return val;
+  const s = String(val).trim();
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    return new Date(`${matchDmy[3]}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}`);
+  }
+  return new Date(s);
+}
+
+/**
  * Calcula la Ganancia Diaria de Peso (GDP) en gramos/día.
  */
 export function calcularGDP(pesoFinal, pesoInicial, fechaFinal, fechaInicial) {
   if (!pesoFinal || !pesoInicial || !fechaFinal || !fechaInicial) return null;
   const pf = parseFloat(pesoFinal);
   const pi = parseFloat(pesoInicial);
-  const df = new Date(fechaFinal);
-  const di = new Date(fechaInicial);
+  const df = parsearFechaObjeto(fechaFinal);
+  const di = parsearFechaObjeto(fechaInicial);
 
   const diffMs = df.getTime() - di.getTime();
   const dias = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -55,8 +69,8 @@ export function calcularGDPEjemplar({ animal, pesoActual, fechaPesaje }) {
   if (pPrev > 0 && fPrev && fPrev !== fechaPesaje) {
     const gdp = calcularGDP(pAct, pPrev, fechaPesaje, fPrev);
     if (gdp !== null) {
-      const dPrev = new Date(fPrev);
-      const dPes = new Date(fechaPesaje);
+      const dPrev = parsearFechaObjeto(fPrev);
+      const dPes = parsearFechaObjeto(fechaPesaje);
       const dias = Math.round((dPes.getTime() - dPrev.getTime()) / (1000 * 60 * 60 * 24));
       return { gdp, origen: 'anterior', dias, pesoBase: pPrev, fechaBase: fPrev };
     }
@@ -65,8 +79,8 @@ export function calcularGDPEjemplar({ animal, pesoActual, fechaPesaje }) {
   // 2. Caso B: Si NO tiene pesaje anterior, calcular con fecha de nacimiento
   const fNac = animal?.fechaNacimiento || animal?.fecha_nacimiento;
   if (fNac) {
-    const dNac = new Date(fNac);
-    const dPes = new Date(fechaPesaje);
+    const dNac = parsearFechaObjeto(fNac);
+    const dPes = parsearFechaObjeto(fechaPesaje);
     const diasVida = Math.round((dPes.getTime() - dNac.getTime()) / (1000 * 60 * 60 * 24));
     if (diasVida > 0) {
       const pesoNac = parseFloat(animal?.pesoAlNacer || animal?.pesoNacimiento || animal?.pesoNacimientoKg || animal?.pesoAlNacerKg || animal?.peso_al_nacer || 0);
@@ -87,8 +101,8 @@ export function calcularDiasAbiertos(fechaUltimoParto, estadoRepro, fechaCorte =
   const st = (estadoRepro || '').toLowerCase();
   if (st.includes('preñad') || st.includes('prenad')) return 0;
 
-  const fParto = new Date(fechaUltimoParto);
-  const fRef = new Date(fechaCorte);
+  const fParto = parsearFechaObjeto(fechaUltimoParto);
+  const fRef = parsearFechaObjeto(fechaCorte);
   const dias = Math.floor((fRef.getTime() - fParto.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, dias);
 }
@@ -101,8 +115,8 @@ export function calcularDEL(fechaUltimoParto, categoria, fechaCorte = new Date()
   const cat = (categoria || '').toLowerCase();
   if (!cat.includes('ordeño') && !cat.includes('lactante')) return 0;
 
-  const fParto = new Date(fechaUltimoParto);
-  const fRef = new Date(fechaCorte);
+  const fParto = parsearFechaObjeto(fechaUltimoParto);
+  const fRef = parsearFechaObjeto(fechaCorte);
   const dias = Math.floor((fRef.getTime() - fParto.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, dias);
 }
@@ -124,8 +138,8 @@ export function calcularIEP(diasAbiertos, especie = 'bovino') {
  */
 export function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
   if (!fechaNacimiento) return 0;
-  const fn = new Date(fechaNacimiento);
-  const fc = new Date(fechaCorte);
+  const fn = parsearFechaObjeto(fechaNacimiento);
+  const fc = parsearFechaObjeto(fechaCorte);
   let m = (fc.getFullYear() - fn.getFullYear()) * 12 + (fc.getMonth() - fn.getMonth());
   if (fc.getDate() < fn.getDate()) m--;
   return Math.max(0, m);
@@ -137,6 +151,52 @@ export function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
 export function verificarSecado7Meses(diasGestacion, especie = 'bovino') {
   const conf = PARAMETROS_ESPECIES[especie] || PARAMETROS_ESPECIES.bovino;
   return diasGestacion >= conf.umbralAlertaSecado && diasGestacion < conf.diasGestacionMedia;
+}
+
+/**
+ * Formatea cualquier fecha a formato día/mes/año (DD/MM/YYYY).
+ * Tolera cadenas ISO (YYYY-MM-DD), fechas con barra o guión, timestamps y objetos Date.
+ * Si el valor es nulo, vacío o inválido, retorna el fallback (por defecto '-').
+ */
+export function formatearFecha(val, fallback = '-') {
+  if (!val) return fallback;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return fallback;
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const y = val.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+
+  // Si ya viene en formato DD/MM/YYYY con 2 dígitos
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    const d = matchDmy[1].padStart(2, '0');
+    const m = matchDmy[2].padStart(2, '0');
+    const y = matchDmy[3];
+    return `${d}/${m}/${y}`;
+  }
+
+  // Extraer año, mes, día de cadena ISO (ej: 2026-10-25 o 2026-10-25T14:30:00Z)
+  const matchIso = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (matchIso) {
+    const y = matchIso[1];
+    const m = matchIso[2].padStart(2, '0');
+    const d = matchIso[3].padStart(2, '0');
+    return `${d}/${m}/${y}`;
+  }
+
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    const d = String(dt.getDate()).padStart(2, '0');
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const y = dt.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+
+  return s;
 }
 
 /**

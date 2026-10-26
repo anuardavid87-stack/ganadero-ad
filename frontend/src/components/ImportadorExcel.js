@@ -14,6 +14,7 @@
 
 import { auditarPesajeInput } from '../core/auditorIA.js';
 import { normalizarFechaISO } from '../core/supabaseSync.js';
+import { formatearFecha } from '../core/zootecnia.js';
 
 export class ImportadorExcel {
   constructor({ containerId, onImportConfirmada, getFincas, getFincaActiva, onCambiarFinca }) {
@@ -1160,7 +1161,7 @@ export class ImportadorExcel {
             <span class="text-4xl block mb-2">📊</span>
             <h4 class="font-black text-slate-800 text-sm">Haga clic o arrastre el archivo Excel (.xlsx, .xls) o CSV aquí</h4>
             <p class="text-xs text-slate-500 mt-1">
-              ${tipoTitulos[this.tipoCargue]} • Fecha asignada: <strong class="font-mono text-emerald-800">${this.fechaGlobal}</strong>
+              ${tipoTitulos[this.tipoCargue]} • Fecha asignada: <strong class="font-mono text-emerald-800">${formatearFecha(this.fechaGlobal)}</strong>
             </p>
           </div>
 
@@ -1304,7 +1305,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900 font-mono">${r.tag}</td>
-          <td class="p-2.5 whitespace-nowrap font-mono text-slate-600">${r.fecha}</td>
+          <td class="p-2.5 whitespace-nowrap font-mono text-slate-600">${formatearFecha(r.fecha)}</td>
           <td class="p-2.5">
             <div class="flex flex-wrap gap-1">
               ${(r.laboresDetectadas || []).map((l) => `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">${l}</span>`).join('')}
@@ -1327,7 +1328,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaPesaje}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaPesaje)}</td>
           <td class="p-2.5 font-bold text-emerald-800">${r.pesoActual} kg</td>
           <td class="p-2.5 font-sans">${r.condicionCorporal}</td>
           <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
@@ -1341,7 +1342,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaPalpacion}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaPalpacion)}</td>
           <td class="p-2.5">
             <span class="px-2 py-0.5 rounded font-sans text-[10px] font-bold ${r.resultadoPalpacion === 'Preñada' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">
               ${r.resultadoPalpacion}
@@ -1359,7 +1360,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaLeche}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaLeche)}</td>
           <td class="p-2.5">${r.litrosManana} L</td>
           <td class="p-2.5">${r.litrosTarde} L</td>
           <td class="p-2.5 font-black text-emerald-800">${r.totalLitros} L</td>
@@ -1374,7 +1375,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.madreTag}</td>
-          <td class="p-2.5">${r.fechaParto}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaParto)}</td>
           <td class="p-2.5 font-sans font-bold ${r.sexoCria === 'hembra' ? 'text-pink-700' : 'text-blue-700'}">${r.sexoCria === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</td>
           <td class="p-2.5 font-bold">${r.pesoCria} kg</td>
           <td class="p-2.5 font-bold text-slate-900">${r.tagCria}</td>
@@ -1389,7 +1390,7 @@ export class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaDestete}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaDestete)}</td>
           <td class="p-2.5 font-black text-emerald-800">${r.pesoDestete} kg</td>
           <td class="p-2.5 font-sans">${r.loteDestino}</td>
           <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
@@ -1410,8 +1411,8 @@ export class ImportadorExcel {
         </td>
         <td class="p-2.5 font-sans">${r.nombre} (${r.sexo === 'hembra' ? '♀️' : '♂️'})</td>
         <td class="p-2.5 font-sans text-[11px]">P: ${r.padre} | M: ${r.madre}</td>
-        <td class="p-2.5">${r.fechaNacimiento || '-'}</td>
-        <td class="p-2.5">${r.fechaPesaje || '-'}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaNacimiento)}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaPesaje)}</td>
         <td class="p-2.5 font-bold">${r.pesoActual ? `${r.pesoActual} kg` : '-'}</td>
         <td class="p-2.5 text-right font-bold ${r.gdp < 300 && r.gdp !== null ? 'text-rose-600' : 'text-emerald-700'}">
           ${r.gdp !== null && r.gdp !== undefined ? `${r.gdp > 0 ? '+' : ''}${r.gdp} g/d` : '-'}
@@ -1421,7 +1422,7 @@ export class ImportadorExcel {
             ${r.resultadoPalpacion} ${r.diasGestacion > 0 ? `(${r.diasGestacion}d preñez)` : ''}
           </span>
         </td>
-        <td class="p-2.5">${r.fechaUltimoParto || '-'}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaUltimoParto)}</td>
         <td class="p-2.5 font-sans">
           ${r.errores && r.errores.length > 0 ? `
             <span class="text-rose-600 font-bold text-[10px] block">

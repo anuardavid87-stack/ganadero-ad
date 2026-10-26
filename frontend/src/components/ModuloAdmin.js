@@ -17,6 +17,7 @@ import {
   generarInformeHatoGemini,
   obtenerModeloGeminiActivo
 } from '../core/nutricionIA.js';
+import { formatearFecha } from '../core/zootecnia.js';
 
 export class ModuloAdmin {
   constructor({
@@ -410,7 +411,7 @@ export class ModuloAdmin {
                     </div>
                     <div>
                       ${(() => {
-                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${emp.fechaVencimiento}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-300' };
+                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${formatearFecha(emp.fechaVencimiento)}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-300' };
                         return `
                           <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="text-base font-black tracking-tight">${emp.nombre}</h3>
@@ -1454,7 +1455,7 @@ export class ModuloAdmin {
     const srv = this.getSupabaseService ? this.getSupabaseService() : null;
     const cfg = srv ? srv.config : { url: '', anonKey: '' };
     const estaConectado = srv ? srv.estaConfigurado() : false;
-    const ultimoSync = srv && srv.ultimoSync ? new Date(srv.ultimoSync).toLocaleString('es-CO') : 'Sin sincronizaciones';
+    const ultimoSync = srv && srv.ultimoSync ? `${formatearFecha(srv.ultimoSync)} ${new Date(srv.ultimoSync).toLocaleTimeString('es-CO')}` : 'Sin sincronizaciones';
 
     return `
       <div class="max-w-4xl mx-auto space-y-6">
@@ -2120,7 +2121,7 @@ export class ModuloAdmin {
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">⏱️ Tiempo de Licencia y Vigencia:</label>
                 <span id="label-estado-vencimiento" class="text-[11px] text-purple-700 font-mono font-bold px-2 py-0.5 bg-purple-100 rounded-lg">
-                  ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? '♾️ TIEMPO INDEFINIDO' : `Vence: ${emp.fechaVencimiento || '2027-09-15'}`}
+                  ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? '♾️ TIEMPO INDEFINIDO' : `Vence: ${formatearFecha(emp.fechaVencimiento || '2027-09-15')}`}
                 </span>
               </div>
 
@@ -2904,7 +2905,7 @@ END $$;
                 const dia = String(d.getDate()).padStart(2, '0');
                 inputVenc.value = `${anio}-${mes}-${dia}`;
               }
-              if (lblVenc) lblVenc.textContent = `Vence: ${inputVenc.value}`;
+              if (lblVenc) lblVenc.textContent = `Vence: ${formatearFecha(inputVenc.value)}`;
             }
           }
         });
@@ -2913,7 +2914,7 @@ END $$;
       if (inputVenc) {
         inputVenc.addEventListener('change', (e) => {
           if (lblVenc && e.target.value) {
-            lblVenc.textContent = `Vence: ${e.target.value}`;
+            lblVenc.textContent = `Vence: ${formatearFecha(e.target.value)}`;
           }
         });
       }
@@ -2935,7 +2936,7 @@ END $$;
             const dia = String(base.getDate()).padStart(2, '0');
             const nuevaFecha = `${anio}-${mes}-${dia}`;
             inputVenc.value = nuevaFecha;
-            if (lblVenc) lblVenc.textContent = `Vence: ${nuevaFecha}`;
+            if (lblVenc) lblVenc.textContent = `Vence: ${formatearFecha(nuevaFecha)}`;
             if (checkIndefEdit) {
               checkIndefEdit.checked = false;
               if (contFecha) contFecha.classList.remove('opacity-50', 'pointer-events-none');
@@ -4039,7 +4040,7 @@ END $$;
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Diagnóstico Ganadero Gemini IA - ${new Date().toLocaleDateString('es-CO')}</title>
+              <title>Diagnóstico Ganadero Gemini IA - ${formatearFecha(new Date())}</title>
               <style>
                 body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; padding: 40px; color: #1e293b; }
                 h1, h2, h3, h4 { color: #0f172a; margin-top: 1.5em; }
@@ -4051,7 +4052,7 @@ END $$;
             <body>
               <div style="text-align: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 25px;">
                 <h1 style="margin: 0; color: #065f46; font-size: 22px;">DIAGNÓSTICO ZOOTÉCNICO DEL HATO - GOOGLE GEMINI IA</h1>
-                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Fecha de emisión: ${new Date().toLocaleString('es-CO')}</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Fecha de emisión: ${formatearFecha(new Date())} ${new Date().toLocaleTimeString('es-CO')}</p>
               </div>
               <div style="white-space: pre-line; font-size: 14px;">${this.informeHatoGemini.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
             </body>

@@ -7,7 +7,7 @@
  */
 
 import fs from 'fs';
-import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio } from './frontend/src/core/zootecnia.js';
+import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio, formatearFecha } from './frontend/src/core/zootecnia.js';
 import { auditarPesajeInput, auditarPartoInput, auditarPalpacionInput, auditarServicioInput, detectarAlertasZootecnicas } from './frontend/src/core/auditorIA.js';
 import { consolidarCostosFijos, sumarCuotasInversionesDiferidas, computarRendimientoFinanciero } from './frontend/src/core/finanzas.js';
 import { TablaDinamica } from './frontend/src/components/TablaDinamica.js';
@@ -5020,7 +5020,7 @@ const htmlFichaLola = fichaComponente.container.innerHTML;
 
 test(
   htmlFichaLola.includes('CRIA-LOLA-2026') &&
-  htmlFichaLola.includes('2026-08-15') &&
+  htmlFichaLola.includes('15/08/2026') &&
   htmlFichaLola.includes('Parto gemelar asistido'),
   'FichaAnimal: Renderiza en la tabla de partos la cría y detalles importados por Excel'
 );
@@ -5050,7 +5050,7 @@ fichaVacaSola.mostrar(vacaConFechaUltimoParto, [], [], []);
 const htmlFichaSola = fichaVacaSola.container.innerHTML;
 test(
   htmlFichaSola.includes('Historial de Partos y Crías (1)') &&
-  htmlFichaSola.includes('2026-05-10') &&
+  htmlFichaSola.includes('10/05/2026') &&
   !htmlFichaSola.includes('Este ejemplar no tiene partos o crías registradas'),
   'FichaAnimal: No queda en blanco y genera registro de parto a partir de fechaUltimoParto'
 );
@@ -5080,7 +5080,7 @@ fichaVacaAnon.mostrar(vacaPartoAnonimo, [
 const htmlFichaAnon = fichaVacaAnon.container.innerHTML;
 test(
   htmlFichaAnon.includes('CRIA-ANON-01') &&
-  htmlFichaAnon.includes('2026-07-22') &&
+  htmlFichaAnon.includes('22/07/2026') &&
   htmlFichaAnon.includes('♂️ Macho') &&
   !htmlFichaAnon.includes('Este ejemplar no tiene partos o crías registradas'),
   'FichaAnimal: Acepta partos sintetizados sin requerir coincidencia previa de madreTag y puebla la tabla'
@@ -5107,11 +5107,11 @@ fichaCasoUsuario.render();
 const htmlCasoUsuario = fichaCasoUsuario.container.innerHTML;
 
 test(
-  htmlCasoUsuario.includes('Último Parto: <strong>2025-10-08</strong>') &&
+  htmlCasoUsuario.includes('Último Parto: <strong>08/10/2025</strong>') &&
   htmlCasoUsuario.includes('Historial de Partos y Crías (1)') &&
-  htmlCasoUsuario.includes('2025-10-08') &&
+  htmlCasoUsuario.includes('08/10/2025') &&
   !htmlCasoUsuario.includes('Este ejemplar no tiene partos o crías registradas en su historial'),
-  'FichaAnimal: Último Parto (2025-10-08) queda 100% enlazado y visible en la tabla de Historial de Partos y Crías'
+  'FichaAnimal: Último Parto (08/10/2025) queda 100% enlazado y visible en la tabla de Historial de Partos y Crías'
 );
 
 // ============================================================================
@@ -5573,6 +5573,37 @@ test(
 test(
   appSecurityTest.state.empresaActivaId === 'EMP-01',
   'BoviTrackApp (Anti-IDOR): Neutraliza manipulación de tenant en sesión forzando la empresa vinculada al usuario'
+);
+
+// ============================================================================
+// 50. PRUEBAS DE ESTANDARIZACIÓN DE FECHAS EN FORMATO DÍA/MES/AÑO (DD/MM/YYYY)
+// ============================================================================
+console.log(`\n--- 50. Pruebas de Estandarización de Fechas en Formato Día/Mes/Año (DD/MM/YYYY) ---`);
+
+test(
+  formatearFecha('2026-10-25') === '25/10/2026',
+  'formatearFecha: Convierte correctamente cadena ISO YYYY-MM-DD a DD/MM/YYYY (25/10/2026)'
+);
+
+test(
+  formatearFecha('2025-03-07T14:22:00.000Z') === '07/03/2025',
+  'formatearFecha: Convierte timestamp ISO completo a DD/MM/YYYY con ceros a la izquierda (07/03/2025)'
+);
+
+test(
+  formatearFecha('15/08/2026') === '15/08/2026' && formatearFecha('5/4/2026') === '05/04/2026',
+  'formatearFecha: Preserva y normaliza fechas que ya vienen en formato día/mes/año'
+);
+
+test(
+  formatearFecha(null) === '-' && formatearFecha('', 'Sin registro') === 'Sin registro',
+  'formatearFecha: Maneja valores vacíos o nulos retornando el fallback configurado'
+);
+
+test(
+  calcularGDP(535, 505, '30/08/2026', '31/07/2026') === 1000 &&
+  calcularDiasAbiertos('01/01/2026', 'Vacía', '01/08/2026') === 212,
+  'Motor Zootécnico: Cálculos de GDP y Días Abiertos aceptan tanto DD/MM/YYYY como YYYY-MM-DD'
 );
 
 console.log(`\n=====================================================================`);

@@ -5,6 +5,8 @@
  * Con buscador superior en tiempo real, filtro por fecha o acción, y exportación a Excel (.CSV).
  */
 
+import { formatearFecha } from '../core/zootecnia.js';
+
 export class ModuloIngresosDiarios {
   constructor({
     containerId = 'pantalla-ingresos',
@@ -311,7 +313,7 @@ export class ModuloIngresosDiarios {
                     return `
                       <tr class="hover:bg-slate-50 transition">
                         <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
-                          ${op.fecha || '-'}
+                          ${formatearFecha(op.fecha)}
                           <span class="block text-[10px] text-slate-400">${op.hora || ''}</span>
                         </td>
                         <td class="p-3 whitespace-nowrap">
@@ -415,7 +417,7 @@ export class ModuloIngresosDiarios {
                         <span>${icono}</span> ${nombreAccion}
                       </span>
                       <span class="font-mono text-[10px] text-slate-500 font-bold">
-                        ${op.fecha || ''} ${op.hora || ''}
+                        ${formatearFecha(op.fecha, '')} ${op.hora || ''}
                       </span>
                     </div>
 
@@ -514,7 +516,7 @@ export class ModuloIngresosDiarios {
     const lineas = [cabeceras.join(';')];
     dataset.forEach((op) => {
       const fila = [
-        escapeCsv(op.fecha),
+        escapeCsv(formatearFecha(op.fecha, '')),
         escapeCsv(op.hora || ''),
         escapeCsv(op.accion || op.modulo || 'Actividad'),
         escapeCsv(op.tag || ''),

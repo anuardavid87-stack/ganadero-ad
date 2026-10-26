@@ -7,7 +7,7 @@
  * Incluye proyecciones zootécnicas de chequeo (ecografía/palpación) y parto.
  */
 
-import { calcularProyeccionServicio } from '../core/zootecnia.js';
+import { calcularProyeccionServicio, formatearFecha } from '../core/zootecnia.js';
 import { auditarServicioInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
@@ -428,7 +428,7 @@ export class ModuloReproduccion {
 
                   return `
                     <tr class="hover:bg-slate-50 transition">
-                      <td class="p-3 font-bold font-mono text-slate-800">${s.fecha}</td>
+                      <td class="p-3 font-bold font-mono text-slate-800">${formatearFecha(s.fecha)}</td>
                       <td class="p-3">
                         <span class="font-mono font-black text-slate-900 px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
                           ${s.tag || s.animalTag}
@@ -838,7 +838,7 @@ export class ModuloReproduccion {
         </div>
         <div class="text-right">
           <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
-          <span class="font-mono font-bold text-slate-800">${animal.fechaUltimoParto || 'Primeriza / Sin Partos'}</span>
+          <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
         </div>
       </div>
     `;
@@ -855,9 +855,9 @@ export class ModuloReproduccion {
     const elPalp = document.getElementById('proj-palpacion');
     const elParto = document.getElementById('proj-parto');
 
-    if (elEco && proy) elEco.textContent = proy.fechaEcografiaEstimada;
-    if (elPalp && proy) elPalp.textContent = proy.fechaPalpacionEstimada;
-    if (elParto && proy) elParto.textContent = `${proy.fechaPartoEstimada} (${proy.diasGestacionMedia} d)`;
+    if (elEco && proy) elEco.textContent = formatearFecha(proy.fechaEcografiaEstimada);
+    if (elPalp && proy) elPalp.textContent = formatearFecha(proy.fechaPalpacionEstimada);
+    if (elParto && proy) elParto.textContent = `${formatearFecha(proy.fechaPartoEstimada)} (${proy.diasGestacionMedia} d)`;
   }
 
   validarConIA() {

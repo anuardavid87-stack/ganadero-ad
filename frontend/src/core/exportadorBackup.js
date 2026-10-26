@@ -4,6 +4,8 @@
  * para resguardo total de la información en local sin depender de la nube.
  */
 
+import { formatearFecha } from './zootecnia.js';
+
 export class ExportadorBackupService {
   /**
    * Genera y descarga el archivo Excel (.xlsx) con todas las entidades del sistema
@@ -39,7 +41,7 @@ export class ExportadorBackupService {
       'Dirección': e.direccion || '',
       'Estado': e.activa !== false ? 'Activa' : 'Inactiva',
       'Plan Vigencia': e.planVigencia || '1 Año',
-      'Fecha Vencimiento': e.tiempoIndefinido ? 'Tiempo Indefinido' : (e.fechaVencimiento || ''),
+      'Fecha Vencimiento': e.tiempoIndefinido ? 'Tiempo Indefinido' : formatearFecha(e.fechaVencimiento, ''),
       'Tiempo Indefinido': e.tiempoIndefinido ? 'SÍ' : 'NO'
     }));
     const wsEmpresas = XLSX.utils.json_to_sheet(rowsEmpresas.length ? rowsEmpresas : [{ 'Mensaje': 'Sin empresas registradas' }]);
@@ -71,7 +73,7 @@ export class ExportadorBackupService {
       'Email': u.email || '',
       'Teléfono': u.telefono || '',
       'Estado': u.activo !== false ? 'Activo' : 'Inactivo',
-      'Fecha Creación': u.fechaCreacion || ''
+      'Fecha Creación': formatearFecha(u.fechaCreacion, '')
     }));
     const wsUsuarios = XLSX.utils.json_to_sheet(rowsUsuarios.length ? rowsUsuarios : [{ 'Mensaje': 'Sin usuarios registrados' }]);
     XLSX.utils.book_append_sheet(wb, wsUsuarios, '3. Usuarios y Roles');
@@ -87,15 +89,15 @@ export class ExportadorBackupService {
       'Sexo': a.sexo || '',
       'Categoría Zootécnica': a.categoria || '',
       'Lote': a.lote || 'General',
-      'Fecha Nacimiento': a.fechaNacimiento || '',
+      'Fecha Nacimiento': formatearFecha(a.fechaNacimiento, ''),
       'Arete Padre': a.padreTag || a.padre || '',
       'Arete Madre': a.madreTag || a.madre || '',
       'Estado de Vida': a.estadoVida || 'activo',
       'Estado Reproductivo': a.estadoReproductivo || 'Vacía',
       'Días Gestación': Number(a.diasGestacionActual || 0),
-      'Fecha Último Parto': a.fechaUltimoParto || '',
+      'Fecha Último Parto': formatearFecha(a.fechaUltimoParto, ''),
       'Último Peso (Kg)': a.ultimoPesoKg ? Number(a.ultimoPesoKg) : '',
-      'Fecha Último Pesaje': a.fechaUltimoPesaje || '',
+      'Fecha Último Pesaje': formatearFecha(a.fechaUltimoPesaje, ''),
       'GDP Promedio (g/día)': a.gdpPromedioGDia ? Number(a.gdpPromedioGDia) : '',
       'Producción Leche (L/día)': Number(a.promedioLecheDiariaL || 0),
       'Total Partos Previos': Array.isArray(a.partosPrevios) ? a.partosPrevios.length : 0
@@ -109,7 +111,7 @@ export class ExportadorBackupService {
       'Finca / Predio': mapaFincas.get(p.fincaId) || p.fincaId || '',
       'Arete / Tag': p.tag || p.animalTag || '',
       'Nombre / Alias': p.nombreAlias || '',
-      'Fecha de Pesaje': p.fecha || p.fechaPesaje || '',
+      'Fecha de Pesaje': formatearFecha(p.fecha || p.fechaPesaje, ''),
       'Hora': p.hora || '',
       'Peso (Kg)': Number(p.pesoNuevo !== undefined ? p.pesoNuevo : (p.peso || 0)),
       'GDP Calculada (g/día)': p.gdp !== null && p.gdp !== undefined ? Number(p.gdp) : '',
@@ -127,16 +129,16 @@ export class ExportadorBackupService {
       'Finca / Predio': mapaFincas.get(s.fincaId) || s.fincaId || '',
       'Arete Hembra': s.tag || s.animalTag || '',
       'Tipo de Servicio': s.tipo || '',
-      'Fecha de Servicio': s.fecha || '',
+      'Fecha de Servicio': formatearFecha(s.fecha, ''),
       'Reproductor / Toro / Pajilla': s.reproductor || '',
       'Código de Pajilla': s.codigoPajilla || '',
       'Donadora': s.donadora || '',
       'Técnico / Inseminador': s.tecnico || '',
       'Protocolo IATF/Biotecnología': s.protocolo || '',
       'Resultado Chequeo': s.resultado || 'Pendiente Chequeo',
-      'Fecha Ecografía Estimada': s.fechaEcografiaEstimada || '',
-      'Fecha Palpación Estimada': s.fechaPalpacionEstimada || '',
-      'Fecha Parto Estimada': s.fechaPartoEstimada || '',
+      'Fecha Ecografía Estimada': formatearFecha(s.fechaEcografiaEstimada, ''),
+      'Fecha Palpación Estimada': formatearFecha(s.fechaPalpacionEstimada, ''),
+      'Fecha Parto Estimada': formatearFecha(s.fechaPartoEstimada, ''),
       'Observaciones': s.observaciones || ''
     }));
     const wsServicios = XLSX.utils.json_to_sheet(rowsServicios.length ? rowsServicios : [{ 'Mensaje': 'Sin servicios registrados' }]);
@@ -149,7 +151,7 @@ export class ExportadorBackupService {
         'ID Plan': n.id,
         'Finca / Predio': mapaFincas.get(n.fincaId) || n.fincaId || '',
         'Arete / Tag': n.tag || n.animalTag || '',
-        'Fecha Análisis': n.fechaAnalisis || '',
+        'Fecha Análisis': formatearFecha(n.fechaAnalisis, ''),
         'Etapa Productiva': n.etapaProductiva || 'General',
         'Talla (cm)': n.tallaCm || dieta.tallaCm || '',
         'Frame Score (Alzada)': n.frameScore || dieta.frameScore || '',
@@ -206,7 +208,7 @@ export class ExportadorBackupService {
     // 10. HOJA: Traslados de Animales
     const rowsTraslados = (appState.traslados || []).map(t => ({
       'ID Traslado': t.id,
-      'Fecha': t.fecha || '',
+      'Fecha': formatearFecha(t.fecha, ''),
       'Hora': t.hora || '',
       'Finca Origen': t.fincaOrigenNombre || mapaFincas.get(t.fincaOrigenId) || t.fincaOrigenId || '',
       'Finca Destino': t.fincaDestinoNombre || mapaFincas.get(t.fincaDestinoId) || t.fincaDestinoId || '',
@@ -225,7 +227,7 @@ export class ExportadorBackupService {
     // 11. HOJA: Bitácora de Operaciones Diarias
     const rowsOperaciones = (appState.operacionesDiarias || []).map(o => ({
       'ID Operación': o.id,
-      'Fecha': o.fecha || '',
+      'Fecha': formatearFecha(o.fecha, ''),
       'Hora': o.hora || '',
       'Finca / Predio': o.fincaNombre || mapaFincas.get(o.fincaId) || o.fincaId || '',
       'Módulo / Acción': o.accion || o.modulo || '',

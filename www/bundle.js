@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-23T01:31:35.163Z
+ * Generado automáticamente: 2026-10-26T02:33:50.656Z
  */
 (function() {
   "use strict";
@@ -33,14 +33,28 @@ const PARAMETROS_ESPECIES = {
 };
 
 /**
+ * Convierte cualquier cadena de fecha (YYYY-MM-DD o DD/MM/YYYY) u objeto Date en Date válido.
+ */
+function parsearFechaObjeto(val) {
+  if (!val) return new Date(NaN);
+  if (val instanceof Date) return val;
+  const s = String(val).trim();
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    return new Date(`${matchDmy[3]}-${matchDmy[2].padStart(2, '0')}-${matchDmy[1].padStart(2, '0')}`);
+  }
+  return new Date(s);
+}
+
+/**
  * Calcula la Ganancia Diaria de Peso (GDP) en gramos/día.
  */
 function calcularGDP(pesoFinal, pesoInicial, fechaFinal, fechaInicial) {
   if (!pesoFinal || !pesoInicial || !fechaFinal || !fechaInicial) return null;
   const pf = parseFloat(pesoFinal);
   const pi = parseFloat(pesoInicial);
-  const df = new Date(fechaFinal);
-  const di = new Date(fechaInicial);
+  const df = parsearFechaObjeto(fechaFinal);
+  const di = parsearFechaObjeto(fechaInicial);
 
   const diffMs = df.getTime() - di.getTime();
   const dias = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -67,8 +81,8 @@ function calcularGDPEjemplar({ animal, pesoActual, fechaPesaje }) {
   if (pPrev > 0 && fPrev && fPrev !== fechaPesaje) {
     const gdp = calcularGDP(pAct, pPrev, fechaPesaje, fPrev);
     if (gdp !== null) {
-      const dPrev = new Date(fPrev);
-      const dPes = new Date(fechaPesaje);
+      const dPrev = parsearFechaObjeto(fPrev);
+      const dPes = parsearFechaObjeto(fechaPesaje);
       const dias = Math.round((dPes.getTime() - dPrev.getTime()) / (1000 * 60 * 60 * 24));
       return { gdp, origen: 'anterior', dias, pesoBase: pPrev, fechaBase: fPrev };
     }
@@ -77,8 +91,8 @@ function calcularGDPEjemplar({ animal, pesoActual, fechaPesaje }) {
   // 2. Caso B: Si NO tiene pesaje anterior, calcular con fecha de nacimiento
   const fNac = animal?.fechaNacimiento || animal?.fecha_nacimiento;
   if (fNac) {
-    const dNac = new Date(fNac);
-    const dPes = new Date(fechaPesaje);
+    const dNac = parsearFechaObjeto(fNac);
+    const dPes = parsearFechaObjeto(fechaPesaje);
     const diasVida = Math.round((dPes.getTime() - dNac.getTime()) / (1000 * 60 * 60 * 24));
     if (diasVida > 0) {
       const pesoNac = parseFloat(animal?.pesoAlNacer || animal?.pesoNacimiento || animal?.pesoNacimientoKg || animal?.pesoAlNacerKg || animal?.peso_al_nacer || 0);
@@ -99,8 +113,8 @@ function calcularDiasAbiertos(fechaUltimoParto, estadoRepro, fechaCorte = new Da
   const st = (estadoRepro || '').toLowerCase();
   if (st.includes('preñad') || st.includes('prenad')) return 0;
 
-  const fParto = new Date(fechaUltimoParto);
-  const fRef = new Date(fechaCorte);
+  const fParto = parsearFechaObjeto(fechaUltimoParto);
+  const fRef = parsearFechaObjeto(fechaCorte);
   const dias = Math.floor((fRef.getTime() - fParto.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, dias);
 }
@@ -113,8 +127,8 @@ function calcularDEL(fechaUltimoParto, categoria, fechaCorte = new Date()) {
   const cat = (categoria || '').toLowerCase();
   if (!cat.includes('ordeño') && !cat.includes('lactante')) return 0;
 
-  const fParto = new Date(fechaUltimoParto);
-  const fRef = new Date(fechaCorte);
+  const fParto = parsearFechaObjeto(fechaUltimoParto);
+  const fRef = parsearFechaObjeto(fechaCorte);
   const dias = Math.floor((fRef.getTime() - fParto.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, dias);
 }
@@ -136,8 +150,8 @@ function calcularIEP(diasAbiertos, especie = 'bovino') {
  */
 function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
   if (!fechaNacimiento) return 0;
-  const fn = new Date(fechaNacimiento);
-  const fc = new Date(fechaCorte);
+  const fn = parsearFechaObjeto(fechaNacimiento);
+  const fc = parsearFechaObjeto(fechaCorte);
   let m = (fc.getFullYear() - fn.getFullYear()) * 12 + (fc.getMonth() - fn.getMonth());
   if (fc.getDate() < fn.getDate()) m--;
   return Math.max(0, m);
@@ -149,6 +163,52 @@ function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
 function verificarSecado7Meses(diasGestacion, especie = 'bovino') {
   const conf = PARAMETROS_ESPECIES[especie] || PARAMETROS_ESPECIES.bovino;
   return diasGestacion >= conf.umbralAlertaSecado && diasGestacion < conf.diasGestacionMedia;
+}
+
+/**
+ * Formatea cualquier fecha a formato día/mes/año (DD/MM/YYYY).
+ * Tolera cadenas ISO (YYYY-MM-DD), fechas con barra o guión, timestamps y objetos Date.
+ * Si el valor es nulo, vacío o inválido, retorna el fallback (por defecto '-').
+ */
+function formatearFecha(val, fallback = '-') {
+  if (!val) return fallback;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return fallback;
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const y = val.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+
+  // Si ya viene en formato DD/MM/YYYY con 2 dígitos
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    const d = matchDmy[1].padStart(2, '0');
+    const m = matchDmy[2].padStart(2, '0');
+    const y = matchDmy[3];
+    return `${d}/${m}/${y}`;
+  }
+
+  // Extraer año, mes, día de cadena ISO (ej: 2026-10-25 o 2026-10-25T14:30:00Z)
+  const matchIso = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (matchIso) {
+    const y = matchIso[1];
+    const m = matchIso[2].padStart(2, '0');
+    const d = matchIso[3].padStart(2, '0');
+    return `${d}/${m}/${y}`;
+  }
+
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    const d = String(dt.getDate()).padStart(2, '0');
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const y = dt.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+
+  return s;
 }
 
 /**
@@ -271,7 +331,7 @@ function auditarPartoInput(madre, fechaParto, partosPrevios = []) {
     if (diffDias < 210) {
       anomalias.push({
         tipo: 'error',
-        mensaje: `🚨 Imposibilidad biológica: Intervalo de parto de ${diffDias} días respecto al anterior (${ultimo.fecha}). Una vaca no puede parir dos veces en menos de 7 meses (~210-280 días).`
+        mensaje: `🚨 Imposibilidad biológica: Intervalo de parto de ${diffDias} días respecto al anterior (${formatearFecha(ultimo.fecha)}). Una vaca no puede parir dos veces en menos de 7 meses (~210-280 días).`
       });
     }
   }
@@ -341,7 +401,7 @@ function auditarServicioInput(animal, tipoServicio, fechaServicio, reproductor =
     if (fServ > hoy) {
       anomalias.push({
         tipo: 'error',
-        mensaje: `La fecha del servicio no puede ser futura (${fechaServicio}).`
+        mensaje: `La fecha del servicio no puede ser futura (${formatearFecha(fechaServicio)}).`
       });
     }
   }
@@ -3152,6 +3212,8 @@ ESTRUCTURA REQUERIDA DEL INFORME (En formato Markdown profesional con íconos):
  * para resguardo total de la información en local sin depender de la nube.
  */
 
+
+
 class ExportadorBackupService {
   /**
    * Genera y descarga el archivo Excel (.xlsx) con todas las entidades del sistema
@@ -3187,7 +3249,7 @@ class ExportadorBackupService {
       'Dirección': e.direccion || '',
       'Estado': e.activa !== false ? 'Activa' : 'Inactiva',
       'Plan Vigencia': e.planVigencia || '1 Año',
-      'Fecha Vencimiento': e.tiempoIndefinido ? 'Tiempo Indefinido' : (e.fechaVencimiento || ''),
+      'Fecha Vencimiento': e.tiempoIndefinido ? 'Tiempo Indefinido' : formatearFecha(e.fechaVencimiento, ''),
       'Tiempo Indefinido': e.tiempoIndefinido ? 'SÍ' : 'NO'
     }));
     const wsEmpresas = XLSX.utils.json_to_sheet(rowsEmpresas.length ? rowsEmpresas : [{ 'Mensaje': 'Sin empresas registradas' }]);
@@ -3219,7 +3281,7 @@ class ExportadorBackupService {
       'Email': u.email || '',
       'Teléfono': u.telefono || '',
       'Estado': u.activo !== false ? 'Activo' : 'Inactivo',
-      'Fecha Creación': u.fechaCreacion || ''
+      'Fecha Creación': formatearFecha(u.fechaCreacion, '')
     }));
     const wsUsuarios = XLSX.utils.json_to_sheet(rowsUsuarios.length ? rowsUsuarios : [{ 'Mensaje': 'Sin usuarios registrados' }]);
     XLSX.utils.book_append_sheet(wb, wsUsuarios, '3. Usuarios y Roles');
@@ -3235,15 +3297,15 @@ class ExportadorBackupService {
       'Sexo': a.sexo || '',
       'Categoría Zootécnica': a.categoria || '',
       'Lote': a.lote || 'General',
-      'Fecha Nacimiento': a.fechaNacimiento || '',
+      'Fecha Nacimiento': formatearFecha(a.fechaNacimiento, ''),
       'Arete Padre': a.padreTag || a.padre || '',
       'Arete Madre': a.madreTag || a.madre || '',
       'Estado de Vida': a.estadoVida || 'activo',
       'Estado Reproductivo': a.estadoReproductivo || 'Vacía',
       'Días Gestación': Number(a.diasGestacionActual || 0),
-      'Fecha Último Parto': a.fechaUltimoParto || '',
+      'Fecha Último Parto': formatearFecha(a.fechaUltimoParto, ''),
       'Último Peso (Kg)': a.ultimoPesoKg ? Number(a.ultimoPesoKg) : '',
-      'Fecha Último Pesaje': a.fechaUltimoPesaje || '',
+      'Fecha Último Pesaje': formatearFecha(a.fechaUltimoPesaje, ''),
       'GDP Promedio (g/día)': a.gdpPromedioGDia ? Number(a.gdpPromedioGDia) : '',
       'Producción Leche (L/día)': Number(a.promedioLecheDiariaL || 0),
       'Total Partos Previos': Array.isArray(a.partosPrevios) ? a.partosPrevios.length : 0
@@ -3257,7 +3319,7 @@ class ExportadorBackupService {
       'Finca / Predio': mapaFincas.get(p.fincaId) || p.fincaId || '',
       'Arete / Tag': p.tag || p.animalTag || '',
       'Nombre / Alias': p.nombreAlias || '',
-      'Fecha de Pesaje': p.fecha || p.fechaPesaje || '',
+      'Fecha de Pesaje': formatearFecha(p.fecha || p.fechaPesaje, ''),
       'Hora': p.hora || '',
       'Peso (Kg)': Number(p.pesoNuevo !== undefined ? p.pesoNuevo : (p.peso || 0)),
       'GDP Calculada (g/día)': p.gdp !== null && p.gdp !== undefined ? Number(p.gdp) : '',
@@ -3275,16 +3337,16 @@ class ExportadorBackupService {
       'Finca / Predio': mapaFincas.get(s.fincaId) || s.fincaId || '',
       'Arete Hembra': s.tag || s.animalTag || '',
       'Tipo de Servicio': s.tipo || '',
-      'Fecha de Servicio': s.fecha || '',
+      'Fecha de Servicio': formatearFecha(s.fecha, ''),
       'Reproductor / Toro / Pajilla': s.reproductor || '',
       'Código de Pajilla': s.codigoPajilla || '',
       'Donadora': s.donadora || '',
       'Técnico / Inseminador': s.tecnico || '',
       'Protocolo IATF/Biotecnología': s.protocolo || '',
       'Resultado Chequeo': s.resultado || 'Pendiente Chequeo',
-      'Fecha Ecografía Estimada': s.fechaEcografiaEstimada || '',
-      'Fecha Palpación Estimada': s.fechaPalpacionEstimada || '',
-      'Fecha Parto Estimada': s.fechaPartoEstimada || '',
+      'Fecha Ecografía Estimada': formatearFecha(s.fechaEcografiaEstimada, ''),
+      'Fecha Palpación Estimada': formatearFecha(s.fechaPalpacionEstimada, ''),
+      'Fecha Parto Estimada': formatearFecha(s.fechaPartoEstimada, ''),
       'Observaciones': s.observaciones || ''
     }));
     const wsServicios = XLSX.utils.json_to_sheet(rowsServicios.length ? rowsServicios : [{ 'Mensaje': 'Sin servicios registrados' }]);
@@ -3297,7 +3359,7 @@ class ExportadorBackupService {
         'ID Plan': n.id,
         'Finca / Predio': mapaFincas.get(n.fincaId) || n.fincaId || '',
         'Arete / Tag': n.tag || n.animalTag || '',
-        'Fecha Análisis': n.fechaAnalisis || '',
+        'Fecha Análisis': formatearFecha(n.fechaAnalisis, ''),
         'Etapa Productiva': n.etapaProductiva || 'General',
         'Talla (cm)': n.tallaCm || dieta.tallaCm || '',
         'Frame Score (Alzada)': n.frameScore || dieta.frameScore || '',
@@ -3354,7 +3416,7 @@ class ExportadorBackupService {
     // 10. HOJA: Traslados de Animales
     const rowsTraslados = (appState.traslados || []).map(t => ({
       'ID Traslado': t.id,
-      'Fecha': t.fecha || '',
+      'Fecha': formatearFecha(t.fecha, ''),
       'Hora': t.hora || '',
       'Finca Origen': t.fincaOrigenNombre || mapaFincas.get(t.fincaOrigenId) || t.fincaOrigenId || '',
       'Finca Destino': t.fincaDestinoNombre || mapaFincas.get(t.fincaDestinoId) || t.fincaDestinoId || '',
@@ -3373,7 +3435,7 @@ class ExportadorBackupService {
     // 11. HOJA: Bitácora de Operaciones Diarias
     const rowsOperaciones = (appState.operacionesDiarias || []).map(o => ({
       'ID Operación': o.id,
-      'Fecha': o.fecha || '',
+      'Fecha': formatearFecha(o.fecha, ''),
       'Hora': o.hora || '',
       'Finca / Predio': o.fincaNombre || mapaFincas.get(o.fincaId) || o.fincaId || '',
       'Módulo / Acción': o.accion || o.modulo || '',
@@ -4126,9 +4188,9 @@ class FichaAnimal {
                   </div>
                   <div class="text-xs text-rose-800 font-medium mt-1">
                     ${(a.motivoBaja || '').toLowerCase() === 'venta' ? `
-                      Vendido a: <strong>${a.compradorVenta || 'Comprador no registrado'}</strong> • Valor Venta: <strong>$${(parseFloat(a.valorVenta) || 0).toLocaleString('es-CO')} COP</strong> ${a.pesoVenta ? `• Peso: <strong>${a.pesoVenta} Kg</strong>` : ''} • Fecha: <strong>${a.fechaBaja || '-'}</strong>
+                      Vendido a: <strong>${a.compradorVenta || 'Comprador no registrado'}</strong> • Valor Venta: <strong>$${(parseFloat(a.valorVenta) || 0).toLocaleString('es-CO')} COP</strong> ${a.pesoVenta ? `• Peso: <strong>${a.pesoVenta} Kg</strong>` : ''} • Fecha: <strong>${formatearFecha(a.fechaBaja)}</strong>
                     ` : `
-                      Motivo / Causa de Muerte: <strong>${a.motivoMuerte || 'Causa no especificada'}</strong> • Fecha: <strong>${a.fechaBaja || '-'}</strong>
+                      Motivo / Causa de Muerte: <strong>${a.motivoMuerte || 'Causa no especificada'}</strong> • Fecha: <strong>${formatearFecha(a.fechaBaja)}</strong>
                     `}
                   </div>
                 </div>
@@ -4145,7 +4207,7 @@ class FichaAnimal {
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <span class="block text-slate-400 text-[10px] uppercase font-bold">Fecha Nacimiento</span>
-                  <span class="font-bold text-slate-800">${a.fechaNacimiento || 'No registrada'}</span>
+                  <span class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento, 'No registrada')}</span>
                   <span class="text-[10px] text-slate-500 block">Edad: ${edadMeses} meses (${edadAnios} años)</span>
                 </div>
                 <div>
@@ -4203,7 +4265,7 @@ class FichaAnimal {
                     ${fParto ? `Proyección: ${iep.meses} Meses entre partos` : 'Sin partos previos'}
                   </span>
                   <div class="mt-2 text-[10px] text-slate-400">
-                    Último Parto: <strong>${fParto || 'No registra'}</strong>
+                    Último Parto: <strong>${formatearFecha(fParto, 'No registra')}</strong>
                   </div>
                 </div>
 
@@ -4247,7 +4309,7 @@ class FichaAnimal {
                     <tbody class="divide-y divide-slate-100">
                       ${partosRegistrados.map((p) => `
                         <tr class="hover:bg-slate-50">
-                          <td class="p-2.5 font-bold">${p.fechaParto || p.fecha}</td>
+                          <td class="p-2.5 font-bold">${formatearFecha(p.fechaParto || p.fecha)}</td>
                           <td class="p-2.5 font-mono font-black text-emerald-800">${p.tagCria || p.tagCriaGenerado || p.criaId || 'Cría Registrada'}</td>
                           <td class="p-2.5">${(p.sexoCria || '').toLowerCase().includes('hembra') ? '♀️ Hembra' : '♂️ Macho'}</td>
                           <td class="p-2.5 text-right font-mono font-bold">${p.pesoAlNacerKg || p.pesoCria || p.pesoNacimientoKg || 32} kg</td>
@@ -4306,7 +4368,7 @@ class FichaAnimal {
 
                           return `
                             <tr class="hover:bg-slate-50">
-                              <td class="p-2.5 font-bold font-mono text-slate-800">${s.fecha}</td>
+                              <td class="p-2.5 font-bold font-mono text-slate-800">${formatearFecha(s.fecha)}</td>
                               <td class="p-2.5">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeTipo}">
                                   ${nomTipo}
@@ -4347,7 +4409,7 @@ class FichaAnimal {
 
               <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-3">
                 <div class="flex justify-between items-center text-xs text-slate-700">
-                  <span>Último Pesaje Registrado: <strong>${a.fechaUltimoPesaje || a.ultimoPesajeFecha || 'Reciente'}</strong></span>
+                  <span>Último Pesaje Registrado: <strong>${formatearFecha(a.fechaUltimoPesaje || a.ultimoPesajeFecha, 'Reciente')}</strong></span>
                   <span class="font-mono font-black text-base text-emerald-800">${a.ultimoPesoKg || a.pesoActual || 0} kg</span>
                 </div>
                 <div class="mt-2 text-[11px] text-slate-500">
@@ -4373,7 +4435,7 @@ class FichaAnimal {
                         const pNum = ps.pesoNuevo || ps.peso || 0;
                         return `
                           <tr class="hover:bg-slate-50">
-                            <td class="p-2.5 font-bold font-mono text-slate-800">${ps.fecha || '-'}</td>
+                            <td class="p-2.5 font-bold font-mono text-slate-800">${formatearFecha(ps.fecha)}</td>
                             <td class="p-2.5 text-right font-mono font-black text-emerald-800">${pNum} kg</td>
                             <td class="p-2.5 text-right font-mono font-bold ${ps.gdp ? (Number(ps.gdp) >= 0 ? 'text-emerald-700' : 'text-rose-700') : 'text-slate-400'}">
                               ${ps.gdp ? `${ps.gdp > 0 ? '+' : ''}${ps.gdp} g/d` : '-'}
@@ -4437,7 +4499,7 @@ class FichaAnimal {
 
                         return `
                           <tr class="hover:bg-slate-50">
-                            <td class="p-2.5 font-bold font-mono text-slate-800 whitespace-nowrap">${ev.fecha || '-'}</td>
+                            <td class="p-2.5 font-bold font-mono text-slate-800 whitespace-nowrap">${formatearFecha(ev.fecha)}</td>
                             <td class="p-2.5 whitespace-nowrap">
                               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeTipo}">
                                 ${tituloTipo}
@@ -5017,7 +5079,7 @@ class TablaDinamica {
           icono: '📅',
           valorNumerico: fParto ? iep.dias : 0,
           valorTexto: fParto ? `${iep.dias} días (${iep.meses} m)` : 'Primeriza / Sin parto',
-          subtexto: fParto ? `Último: ${fParto}` : 'Sin partos previos',
+          subtexto: fParto ? `Último: ${formatearFecha(fParto)}` : 'Sin partos previos',
           colorBadge: fParto && iep.dias > 450 ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-blue-100 text-blue-900 border-blue-300'
         };
 
@@ -5903,6 +5965,7 @@ class DashboardGrafico {
  * Incluye selector de tipo de cargue, campo de fecha de jornada superior,
  * descarga dinámica de plantillas y auditoría biológica con IA.
  */
+
 
 
 
@@ -7052,7 +7115,7 @@ class ImportadorExcel {
             <span class="text-4xl block mb-2">📊</span>
             <h4 class="font-black text-slate-800 text-sm">Haga clic o arrastre el archivo Excel (.xlsx, .xls) o CSV aquí</h4>
             <p class="text-xs text-slate-500 mt-1">
-              ${tipoTitulos[this.tipoCargue]} • Fecha asignada: <strong class="font-mono text-emerald-800">${this.fechaGlobal}</strong>
+              ${tipoTitulos[this.tipoCargue]} • Fecha asignada: <strong class="font-mono text-emerald-800">${formatearFecha(this.fechaGlobal)}</strong>
             </p>
           </div>
 
@@ -7196,7 +7259,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900 font-mono">${r.tag}</td>
-          <td class="p-2.5 whitespace-nowrap font-mono text-slate-600">${r.fecha}</td>
+          <td class="p-2.5 whitespace-nowrap font-mono text-slate-600">${formatearFecha(r.fecha)}</td>
           <td class="p-2.5">
             <div class="flex flex-wrap gap-1">
               ${(r.laboresDetectadas || []).map((l) => `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">${l}</span>`).join('')}
@@ -7219,7 +7282,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaPesaje}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaPesaje)}</td>
           <td class="p-2.5 font-bold text-emerald-800">${r.pesoActual} kg</td>
           <td class="p-2.5 font-sans">${r.condicionCorporal}</td>
           <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
@@ -7233,7 +7296,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaPalpacion}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaPalpacion)}</td>
           <td class="p-2.5">
             <span class="px-2 py-0.5 rounded font-sans text-[10px] font-bold ${r.resultadoPalpacion === 'Preñada' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">
               ${r.resultadoPalpacion}
@@ -7251,7 +7314,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaLeche}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaLeche)}</td>
           <td class="p-2.5">${r.litrosManana} L</td>
           <td class="p-2.5">${r.litrosTarde} L</td>
           <td class="p-2.5 font-black text-emerald-800">${r.totalLitros} L</td>
@@ -7266,7 +7329,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.madreTag}</td>
-          <td class="p-2.5">${r.fechaParto}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaParto)}</td>
           <td class="p-2.5 font-sans font-bold ${r.sexoCria === 'hembra' ? 'text-pink-700' : 'text-blue-700'}">${r.sexoCria === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</td>
           <td class="p-2.5 font-bold">${r.pesoCria} kg</td>
           <td class="p-2.5 font-bold text-slate-900">${r.tagCria}</td>
@@ -7281,7 +7344,7 @@ class ImportadorExcel {
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
           <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
-          <td class="p-2.5">${r.fechaDestete}</td>
+          <td class="p-2.5">${formatearFecha(r.fechaDestete)}</td>
           <td class="p-2.5 font-black text-emerald-800">${r.pesoDestete} kg</td>
           <td class="p-2.5 font-sans">${r.loteDestino}</td>
           <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
@@ -7302,8 +7365,8 @@ class ImportadorExcel {
         </td>
         <td class="p-2.5 font-sans">${r.nombre} (${r.sexo === 'hembra' ? '♀️' : '♂️'})</td>
         <td class="p-2.5 font-sans text-[11px]">P: ${r.padre} | M: ${r.madre}</td>
-        <td class="p-2.5">${r.fechaNacimiento || '-'}</td>
-        <td class="p-2.5">${r.fechaPesaje || '-'}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaNacimiento)}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaPesaje)}</td>
         <td class="p-2.5 font-bold">${r.pesoActual ? `${r.pesoActual} kg` : '-'}</td>
         <td class="p-2.5 text-right font-bold ${r.gdp < 300 && r.gdp !== null ? 'text-rose-600' : 'text-emerald-700'}">
           ${r.gdp !== null && r.gdp !== undefined ? `${r.gdp > 0 ? '+' : ''}${r.gdp} g/d` : '-'}
@@ -7313,7 +7376,7 @@ class ImportadorExcel {
             ${r.resultadoPalpacion} ${r.diasGestacion > 0 ? `(${r.diasGestacion}d preñez)` : ''}
           </span>
         </td>
-        <td class="p-2.5">${r.fechaUltimoParto || '-'}</td>
+        <td class="p-2.5">${formatearFecha(r.fechaUltimoParto)}</td>
         <td class="p-2.5 font-sans">
           ${r.errores && r.errores.length > 0 ? `
             <span class="text-rose-600 font-bold text-[10px] block">
@@ -7438,6 +7501,7 @@ class ImportadorExcel {
  *   2. Encargado: Ingreso y gestión de datos de campo del ganado (báscula, palpaciones, partos, servicios)
  *   3. Consultor: Solo consulta de información del ganado (sin permisos de modificación)
  */
+
 
 
 
@@ -7833,7 +7897,7 @@ class ModuloAdmin {
                     </div>
                     <div>
                       ${(() => {
-                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${emp.fechaVencimiento}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-300' };
+                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${formatearFecha(emp.fechaVencimiento)}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-300' };
                         return `
                           <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="text-base font-black tracking-tight">${emp.nombre}</h3>
@@ -8877,7 +8941,7 @@ class ModuloAdmin {
     const srv = this.getSupabaseService ? this.getSupabaseService() : null;
     const cfg = srv ? srv.config : { url: '', anonKey: '' };
     const estaConectado = srv ? srv.estaConfigurado() : false;
-    const ultimoSync = srv && srv.ultimoSync ? new Date(srv.ultimoSync).toLocaleString('es-CO') : 'Sin sincronizaciones';
+    const ultimoSync = srv && srv.ultimoSync ? `${formatearFecha(srv.ultimoSync)} ${new Date(srv.ultimoSync).toLocaleTimeString('es-CO')}` : 'Sin sincronizaciones';
 
     return `
       <div class="max-w-4xl mx-auto space-y-6">
@@ -9543,7 +9607,7 @@ class ModuloAdmin {
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">⏱️ Tiempo de Licencia y Vigencia:</label>
                 <span id="label-estado-vencimiento" class="text-[11px] text-purple-700 font-mono font-bold px-2 py-0.5 bg-purple-100 rounded-lg">
-                  ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? '♾️ TIEMPO INDEFINIDO' : `Vence: ${emp.fechaVencimiento || '2027-09-15'}`}
+                  ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? '♾️ TIEMPO INDEFINIDO' : `Vence: ${formatearFecha(emp.fechaVencimiento || '2027-09-15')}`}
                 </span>
               </div>
 
@@ -10327,7 +10391,7 @@ END $$;
                 const dia = String(d.getDate()).padStart(2, '0');
                 inputVenc.value = `${anio}-${mes}-${dia}`;
               }
-              if (lblVenc) lblVenc.textContent = `Vence: ${inputVenc.value}`;
+              if (lblVenc) lblVenc.textContent = `Vence: ${formatearFecha(inputVenc.value)}`;
             }
           }
         });
@@ -10336,7 +10400,7 @@ END $$;
       if (inputVenc) {
         inputVenc.addEventListener('change', (e) => {
           if (lblVenc && e.target.value) {
-            lblVenc.textContent = `Vence: ${e.target.value}`;
+            lblVenc.textContent = `Vence: ${formatearFecha(e.target.value)}`;
           }
         });
       }
@@ -10358,7 +10422,7 @@ END $$;
             const dia = String(base.getDate()).padStart(2, '0');
             const nuevaFecha = `${anio}-${mes}-${dia}`;
             inputVenc.value = nuevaFecha;
-            if (lblVenc) lblVenc.textContent = `Vence: ${nuevaFecha}`;
+            if (lblVenc) lblVenc.textContent = `Vence: ${formatearFecha(nuevaFecha)}`;
             if (checkIndefEdit) {
               checkIndefEdit.checked = false;
               if (contFecha) contFecha.classList.remove('opacity-50', 'pointer-events-none');
@@ -11462,7 +11526,7 @@ END $$;
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Diagnóstico Ganadero Gemini IA - ${new Date().toLocaleDateString('es-CO')}</title>
+              <title>Diagnóstico Ganadero Gemini IA - ${formatearFecha(new Date())}</title>
               <style>
                 body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; padding: 40px; color: #1e293b; }
                 h1, h2, h3, h4 { color: #0f172a; margin-top: 1.5em; }
@@ -11474,7 +11538,7 @@ END $$;
             <body>
               <div style="text-align: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 25px;">
                 <h1 style="margin: 0; color: #065f46; font-size: 22px;">DIAGNÓSTICO ZOOTÉCNICO DEL HATO - GOOGLE GEMINI IA</h1>
-                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Fecha de emisión: ${new Date().toLocaleString('es-CO')}</p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Fecha de emisión: ${formatearFecha(new Date())} ${new Date().toLocaleTimeString('es-CO')}</p>
               </div>
               <div style="white-space: pre-line; font-size: 14px;">${this.informeHatoGemini.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
             </body>
@@ -11950,7 +12014,7 @@ class ModuloReproduccion {
 
                   return `
                     <tr class="hover:bg-slate-50 transition">
-                      <td class="p-3 font-bold font-mono text-slate-800">${s.fecha}</td>
+                      <td class="p-3 font-bold font-mono text-slate-800">${formatearFecha(s.fecha)}</td>
                       <td class="p-3">
                         <span class="font-mono font-black text-slate-900 px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
                           ${s.tag || s.animalTag}
@@ -12360,7 +12424,7 @@ class ModuloReproduccion {
         </div>
         <div class="text-right">
           <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
-          <span class="font-mono font-bold text-slate-800">${animal.fechaUltimoParto || 'Primeriza / Sin Partos'}</span>
+          <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
         </div>
       </div>
     `;
@@ -12377,9 +12441,9 @@ class ModuloReproduccion {
     const elPalp = document.getElementById('proj-palpacion');
     const elParto = document.getElementById('proj-parto');
 
-    if (elEco && proy) elEco.textContent = proy.fechaEcografiaEstimada;
-    if (elPalp && proy) elPalp.textContent = proy.fechaPalpacionEstimada;
-    if (elParto && proy) elParto.textContent = `${proy.fechaPartoEstimada} (${proy.diasGestacionMedia} d)`;
+    if (elEco && proy) elEco.textContent = formatearFecha(proy.fechaEcografiaEstimada);
+    if (elPalp && proy) elPalp.textContent = formatearFecha(proy.fechaPalpacionEstimada);
+    if (elParto && proy) elParto.textContent = `${formatearFecha(proy.fechaPartoEstimada)} (${proy.diasGestacionMedia} d)`;
   }
 
   validarConIA() {
@@ -12837,7 +12901,7 @@ class PestanaAnimales {
 
         <!-- Nacimiento & Edad -->
         <td class="p-3">
-          <div class="font-bold text-slate-800">${a.fechaNacimiento || '-'}</div>
+          <div class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento)}</div>
           <div class="text-[10px] text-slate-500">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
         </td>
 
@@ -12867,7 +12931,7 @@ class PestanaAnimales {
 
         <!-- Último Parto & IEP -->
         <td class="p-3">
-          <div class="font-bold text-slate-800">${fParto || 'Sin partos'}</div>
+          <div class="font-bold text-slate-800">${formatearFecha(fParto, 'Sin partos')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">
             ${fParto ? `IEP: <strong class="text-slate-700">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
           </div>
@@ -12996,7 +13060,7 @@ class PestanaAnimales {
               </span>
             `}
             <span class="text-[10px] text-slate-500 block">
-              ${fParto ? `Parto: ${fParto}` : `${edadMeses} m`}
+              ${fParto ? `Parto: ${formatearFecha(fParto)}` : `${edadMeses} m`}
             </span>
           </div>
         </div>
@@ -13943,6 +14007,7 @@ class PestanaAnimales {
 
 
 
+
 class ModuloTraslados {
   constructor({
     containerId = 'pantalla-traslados',
@@ -14372,7 +14437,7 @@ class ModuloTraslados {
                   ${traslados.length > 0 ? traslados.map((t) => `
                     <tr class="hover:bg-slate-50 transition">
                       <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
-                        ${t.fecha}
+                        ${formatearFecha(t.fecha)}
                         <span class="block text-[10px] text-slate-400">${t.hora || ''}</span>
                       </td>
                       <td class="p-3">
@@ -14608,7 +14673,7 @@ class ModuloTraslados {
           `¿Confirmar el traslado de ${this.animalesSesion.length} animales?\n\n` +
           `• Finca Origen: ${fOrig ? fOrig.nombre : this.fincaOrigenId}\n` +
           `• Finca Destino: ${fDest ? fDest.nombre : this.fincaDestinoId}\n` +
-          `• Fecha: ${fecha}\n` +
+          `• Fecha: ${formatearFecha(fecha)}\n` +
           `• Motivo: ${motivo}\n` +
           `• Lote Destino: ${loteDestino}`
         );
@@ -14658,6 +14723,8 @@ class ModuloTraslados {
  * pesajes, destetes, partos, traslados entre fincas, palpaciones, servicios reproductivos, etc.
  * Con buscador superior en tiempo real, filtro por fecha o acción, y exportación a Excel (.CSV).
  */
+
+
 
 class ModuloIngresosDiarios {
   constructor({
@@ -14965,7 +15032,7 @@ class ModuloIngresosDiarios {
                     return `
                       <tr class="hover:bg-slate-50 transition">
                         <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
-                          ${op.fecha || '-'}
+                          ${formatearFecha(op.fecha)}
                           <span class="block text-[10px] text-slate-400">${op.hora || ''}</span>
                         </td>
                         <td class="p-3 whitespace-nowrap">
@@ -15069,7 +15136,7 @@ class ModuloIngresosDiarios {
                         <span>${icono}</span> ${nombreAccion}
                       </span>
                       <span class="font-mono text-[10px] text-slate-500 font-bold">
-                        ${op.fecha || ''} ${op.hora || ''}
+                        ${formatearFecha(op.fecha, '')} ${op.hora || ''}
                       </span>
                     </div>
 
@@ -15168,7 +15235,7 @@ class ModuloIngresosDiarios {
     const lineas = [cabeceras.join(';')];
     dataset.forEach((op) => {
       const fila = [
-        escapeCsv(op.fecha),
+        escapeCsv(formatearFecha(op.fecha, '')),
         escapeCsv(op.hora || ''),
         escapeCsv(op.accion || op.modulo || 'Actividad'),
         escapeCsv(op.tag || ''),
@@ -16801,7 +16868,7 @@ class CuadriculaMasiva {
                   <tr class="hover:bg-slate-50">
                     <td class="p-2.5 text-center font-mono text-slate-400">${idx + 1}</td>
                     <td class="p-2.5 font-black font-mono text-slate-900">${reg.tag}</td>
-                    <td class="p-2.5 font-mono text-slate-600 font-bold whitespace-nowrap">${reg.fecha || this.fechaJornada}</td>
+                    <td class="p-2.5 font-mono text-slate-600 font-bold whitespace-nowrap">${formatearFecha(reg.fecha || this.fechaJornada)}</td>
                     <td class="p-2.5">
                       <span class="px-2 py-0.5 rounded text-[10px] font-bold ${reg.especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                         ${reg.especie === 'bufalino' ? '🦬 Bufalino' : '🐂 Vacuno'}
@@ -16856,7 +16923,7 @@ class CuadriculaMasiva {
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
             <input type="date" id="form-peso-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none">
-            <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${fechaPrev || 'S/F'})` : (a.fechaNacimiento ? `Nacido: ${a.fechaNacimiento}` : 'Sin pesajes previos')}</span>
+            <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
           </div>
 
           <div>
@@ -17509,7 +17576,7 @@ class CuadriculaMasiva {
           }
         });
         this.render();
-        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${fechaActiva}.`);
+        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
       });
     }
 
@@ -18764,7 +18831,7 @@ class BoviTrackApp {
         // Validar si la suscripción / tiempo de uso de la empresa ha vencido
         if (this.esEmpresaVencida(empresaIngresada)) {
           const fVenc = empresaIngresada.fechaVencimiento || 'plazo expirado';
-          mostrarError(`⛔ ACCESO BLOQUEADO: El tiempo de uso de Ganadero AD para la empresa "${empresaIngresada.nombre}" ha vencido (${fVenc}). Comuníquese con el Super Administrador para renovar o ampliar el servicio.`);
+          mostrarError(`⛔ ACCESO BLOQUEADO: El tiempo de uso de Ganadero AD para la empresa "${empresaIngresada.nombre}" ha vencido (${formatearFecha(fVenc, 'plazo expirado')}). Comuníquese con el Super Administrador para renovar o ampliar el servicio.`);
           return;
         }
 
@@ -19438,7 +19505,7 @@ class BoviTrackApp {
     if (diffDias < 0) {
       return {
         estado: 'vencida',
-        texto: `⛔ Vencida hace ${Math.abs(diffDias)} días (${fVenc})`,
+        texto: `⛔ Vencida hace ${Math.abs(diffDias)} días (${formatearFecha(fVenc)})`,
         clase: 'bg-rose-500/25 text-rose-300 border border-rose-500/50',
         dias: diffDias,
         esVencida: true
@@ -19446,7 +19513,7 @@ class BoviTrackApp {
     } else if (diffDias === 0) {
       return {
         estado: 'vence_hoy',
-        texto: `⚠️ Vence Hoy (${fVenc})`,
+        texto: `⚠️ Vence Hoy (${formatearFecha(fVenc)})`,
         clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
         dias: 0,
         esVencida: false
@@ -19454,7 +19521,7 @@ class BoviTrackApp {
     } else if (diffDias <= 7) {
       return {
         estado: 'por_vencer',
-        texto: `⚠️ Vence en ${diffDias} días (${fVenc})`,
+        texto: `⚠️ Vence en ${diffDias} días (${formatearFecha(fVenc)})`,
         clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
         dias: diffDias,
         esVencida: false
@@ -19462,7 +19529,7 @@ class BoviTrackApp {
     } else {
       return {
         estado: 'activa',
-        texto: `🟢 Activa (${diffDias} días • Vence: ${fVenc})`,
+        texto: `🟢 Activa (${diffDias} días • Vence: ${formatearFecha(fVenc)})`,
         clase: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
         dias: diffDias,
         esVencida: false
@@ -19517,7 +19584,7 @@ class BoviTrackApp {
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compAdmin) this.compAdmin.render();
-    alert(`✓ Licencia de "${emp.nombre}" ampliada con éxito por ${mInt} mes(es).\nNueva fecha de vencimiento: ${emp.fechaVencimiento}`);
+    alert(`✓ Licencia de "${emp.nombre}" ampliada con éxito por ${mInt} mes(es).\nNueva fecha de vencimiento: ${formatearFecha(emp.fechaVencimiento)}`);
   }
 
   cambiarEstadoAccesoEmpresa(empresaId, nuevoEstado) {

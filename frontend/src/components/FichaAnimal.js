@@ -4,7 +4,7 @@
  * historial de partos, crías nacidas, pesajes previos, GDP e IEP.
  */
 
-import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses } from '../core/zootecnia.js';
+import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha } from '../core/zootecnia.js';
 
 export class FichaAnimal {
   constructor({ containerId = 'modal-ficha-animal', onCerrar, onEditar, onEliminar, onTrasladar, onExtraer, onReactivar, getRol }) {
@@ -213,9 +213,9 @@ export class FichaAnimal {
                   </div>
                   <div class="text-xs text-rose-800 font-medium mt-1">
                     ${(a.motivoBaja || '').toLowerCase() === 'venta' ? `
-                      Vendido a: <strong>${a.compradorVenta || 'Comprador no registrado'}</strong> • Valor Venta: <strong>$${(parseFloat(a.valorVenta) || 0).toLocaleString('es-CO')} COP</strong> ${a.pesoVenta ? `• Peso: <strong>${a.pesoVenta} Kg</strong>` : ''} • Fecha: <strong>${a.fechaBaja || '-'}</strong>
+                      Vendido a: <strong>${a.compradorVenta || 'Comprador no registrado'}</strong> • Valor Venta: <strong>$${(parseFloat(a.valorVenta) || 0).toLocaleString('es-CO')} COP</strong> ${a.pesoVenta ? `• Peso: <strong>${a.pesoVenta} Kg</strong>` : ''} • Fecha: <strong>${formatearFecha(a.fechaBaja)}</strong>
                     ` : `
-                      Motivo / Causa de Muerte: <strong>${a.motivoMuerte || 'Causa no especificada'}</strong> • Fecha: <strong>${a.fechaBaja || '-'}</strong>
+                      Motivo / Causa de Muerte: <strong>${a.motivoMuerte || 'Causa no especificada'}</strong> • Fecha: <strong>${formatearFecha(a.fechaBaja)}</strong>
                     `}
                   </div>
                 </div>
@@ -232,7 +232,7 @@ export class FichaAnimal {
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <span class="block text-slate-400 text-[10px] uppercase font-bold">Fecha Nacimiento</span>
-                  <span class="font-bold text-slate-800">${a.fechaNacimiento || 'No registrada'}</span>
+                  <span class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento, 'No registrada')}</span>
                   <span class="text-[10px] text-slate-500 block">Edad: ${edadMeses} meses (${edadAnios} años)</span>
                 </div>
                 <div>
@@ -290,7 +290,7 @@ export class FichaAnimal {
                     ${fParto ? `Proyección: ${iep.meses} Meses entre partos` : 'Sin partos previos'}
                   </span>
                   <div class="mt-2 text-[10px] text-slate-400">
-                    Último Parto: <strong>${fParto || 'No registra'}</strong>
+                    Último Parto: <strong>${formatearFecha(fParto, 'No registra')}</strong>
                   </div>
                 </div>
 
@@ -334,7 +334,7 @@ export class FichaAnimal {
                     <tbody class="divide-y divide-slate-100">
                       ${partosRegistrados.map((p) => `
                         <tr class="hover:bg-slate-50">
-                          <td class="p-2.5 font-bold">${p.fechaParto || p.fecha}</td>
+                          <td class="p-2.5 font-bold">${formatearFecha(p.fechaParto || p.fecha)}</td>
                           <td class="p-2.5 font-mono font-black text-emerald-800">${p.tagCria || p.tagCriaGenerado || p.criaId || 'Cría Registrada'}</td>
                           <td class="p-2.5">${(p.sexoCria || '').toLowerCase().includes('hembra') ? '♀️ Hembra' : '♂️ Macho'}</td>
                           <td class="p-2.5 text-right font-mono font-bold">${p.pesoAlNacerKg || p.pesoCria || p.pesoNacimientoKg || 32} kg</td>
@@ -393,7 +393,7 @@ export class FichaAnimal {
 
                           return `
                             <tr class="hover:bg-slate-50">
-                              <td class="p-2.5 font-bold font-mono text-slate-800">${s.fecha}</td>
+                              <td class="p-2.5 font-bold font-mono text-slate-800">${formatearFecha(s.fecha)}</td>
                               <td class="p-2.5">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeTipo}">
                                   ${nomTipo}
@@ -434,7 +434,7 @@ export class FichaAnimal {
 
               <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-3">
                 <div class="flex justify-between items-center text-xs text-slate-700">
-                  <span>Último Pesaje Registrado: <strong>${a.fechaUltimoPesaje || a.ultimoPesajeFecha || 'Reciente'}</strong></span>
+                  <span>Último Pesaje Registrado: <strong>${formatearFecha(a.fechaUltimoPesaje || a.ultimoPesajeFecha, 'Reciente')}</strong></span>
                   <span class="font-mono font-black text-base text-emerald-800">${a.ultimoPesoKg || a.pesoActual || 0} kg</span>
                 </div>
                 <div class="mt-2 text-[11px] text-slate-500">
@@ -460,7 +460,7 @@ export class FichaAnimal {
                         const pNum = ps.pesoNuevo || ps.peso || 0;
                         return `
                           <tr class="hover:bg-slate-50">
-                            <td class="p-2.5 font-bold font-mono text-slate-800">${ps.fecha || '-'}</td>
+                            <td class="p-2.5 font-bold font-mono text-slate-800">${formatearFecha(ps.fecha)}</td>
                             <td class="p-2.5 text-right font-mono font-black text-emerald-800">${pNum} kg</td>
                             <td class="p-2.5 text-right font-mono font-bold ${ps.gdp ? (Number(ps.gdp) >= 0 ? 'text-emerald-700' : 'text-rose-700') : 'text-slate-400'}">
                               ${ps.gdp ? `${ps.gdp > 0 ? '+' : ''}${ps.gdp} g/d` : '-'}
@@ -524,7 +524,7 @@ export class FichaAnimal {
 
                         return `
                           <tr class="hover:bg-slate-50">
-                            <td class="p-2.5 font-bold font-mono text-slate-800 whitespace-nowrap">${ev.fecha || '-'}</td>
+                            <td class="p-2.5 font-bold font-mono text-slate-800 whitespace-nowrap">${formatearFecha(ev.fecha)}</td>
                             <td class="p-2.5 whitespace-nowrap">
                               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeTipo}">
                                 ${tituloTipo}

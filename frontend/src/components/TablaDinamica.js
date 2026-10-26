@@ -5,7 +5,7 @@
  * (GDP, Leche, Días Abiertos, Peso Corporal, Días de Preñez o IEP) para referencia y análisis comparativo.
  */
 
-import { calcularDiasAbiertos, calcularDEL, calcularIEP } from '../core/zootecnia.js';
+import { calcularDiasAbiertos, calcularDEL, calcularIEP, formatearFecha } from '../core/zootecnia.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class TablaDinamica {
@@ -97,7 +97,7 @@ export class TablaDinamica {
           icono: '📅',
           valorNumerico: fParto ? iep.dias : 0,
           valorTexto: fParto ? `${iep.dias} días (${iep.meses} m)` : 'Primeriza / Sin parto',
-          subtexto: fParto ? `Último: ${fParto}` : 'Sin partos previos',
+          subtexto: fParto ? `Último: ${formatearFecha(fParto)}` : 'Sin partos previos',
           colorBadge: fParto && iep.dias > 450 ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-blue-100 text-blue-900 border-blue-300'
         };
 

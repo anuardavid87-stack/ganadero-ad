@@ -3,7 +3,7 @@
  * Validador estricto de anomalías biológicas en tiempo real y escáner de animales improductivos.
  */
 
-import { calcularGDP, calcularDiasAbiertos, calcularEdadMeses, verificarSecado7Meses } from './zootecnia.js';
+import { calcularGDP, calcularDiasAbiertos, calcularEdadMeses, verificarSecado7Meses, formatearFecha } from './zootecnia.js';
 
 // ----------------------------------------------------------------------------
 // 1. IA DE VALIDACIÓN EN TIEMPO REAL (BLOQUEO DE IMPOSIBILIDADES BIOLÓGICAS)
@@ -79,7 +79,7 @@ export function auditarPartoInput(madre, fechaParto, partosPrevios = []) {
     if (diffDias < 210) {
       anomalias.push({
         tipo: 'error',
-        mensaje: `🚨 Imposibilidad biológica: Intervalo de parto de ${diffDias} días respecto al anterior (${ultimo.fecha}). Una vaca no puede parir dos veces en menos de 7 meses (~210-280 días).`
+        mensaje: `🚨 Imposibilidad biológica: Intervalo de parto de ${diffDias} días respecto al anterior (${formatearFecha(ultimo.fecha)}). Una vaca no puede parir dos veces en menos de 7 meses (~210-280 días).`
       });
     }
   }
@@ -149,7 +149,7 @@ export function auditarServicioInput(animal, tipoServicio, fechaServicio, reprod
     if (fServ > hoy) {
       anomalias.push({
         tipo: 'error',
-        mensaje: `La fecha del servicio no puede ser futura (${fechaServicio}).`
+        mensaje: `La fecha del servicio no puede ser futura (${formatearFecha(fechaServicio)}).`
       });
     }
   }

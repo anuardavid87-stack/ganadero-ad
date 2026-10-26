@@ -18,7 +18,7 @@ import { ModuloNutricion } from './components/ModuloNutricion.js';
 import { SupabaseSyncService } from './core/supabaseSync.js';
 import { detectarAlertasZootecnicas } from './core/auditorIA.js';
 import { ExportadorBackupService } from './core/exportadorBackup.js';
-import { calcularGDP, calcularGDPEjemplar } from './core/zootecnia.js';
+import { calcularGDP, calcularGDPEjemplar, formatearFecha } from './core/zootecnia.js';
 
 export function escapeHTML(str) {
   if (str === null || str === undefined) return '';
@@ -1151,7 +1151,7 @@ class BoviTrackApp {
         // Validar si la suscripción / tiempo de uso de la empresa ha vencido
         if (this.esEmpresaVencida(empresaIngresada)) {
           const fVenc = empresaIngresada.fechaVencimiento || 'plazo expirado';
-          mostrarError(`⛔ ACCESO BLOQUEADO: El tiempo de uso de Ganadero AD para la empresa "${empresaIngresada.nombre}" ha vencido (${fVenc}). Comuníquese con el Super Administrador para renovar o ampliar el servicio.`);
+          mostrarError(`⛔ ACCESO BLOQUEADO: El tiempo de uso de Ganadero AD para la empresa "${empresaIngresada.nombre}" ha vencido (${formatearFecha(fVenc, 'plazo expirado')}). Comuníquese con el Super Administrador para renovar o ampliar el servicio.`);
           return;
         }
 
@@ -1825,7 +1825,7 @@ class BoviTrackApp {
     if (diffDias < 0) {
       return {
         estado: 'vencida',
-        texto: `⛔ Vencida hace ${Math.abs(diffDias)} días (${fVenc})`,
+        texto: `⛔ Vencida hace ${Math.abs(diffDias)} días (${formatearFecha(fVenc)})`,
         clase: 'bg-rose-500/25 text-rose-300 border border-rose-500/50',
         dias: diffDias,
         esVencida: true
@@ -1833,7 +1833,7 @@ class BoviTrackApp {
     } else if (diffDias === 0) {
       return {
         estado: 'vence_hoy',
-        texto: `⚠️ Vence Hoy (${fVenc})`,
+        texto: `⚠️ Vence Hoy (${formatearFecha(fVenc)})`,
         clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
         dias: 0,
         esVencida: false
@@ -1841,7 +1841,7 @@ class BoviTrackApp {
     } else if (diffDias <= 7) {
       return {
         estado: 'por_vencer',
-        texto: `⚠️ Vence en ${diffDias} días (${fVenc})`,
+        texto: `⚠️ Vence en ${diffDias} días (${formatearFecha(fVenc)})`,
         clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
         dias: diffDias,
         esVencida: false
@@ -1849,7 +1849,7 @@ class BoviTrackApp {
     } else {
       return {
         estado: 'activa',
-        texto: `🟢 Activa (${diffDias} días • Vence: ${fVenc})`,
+        texto: `🟢 Activa (${diffDias} días • Vence: ${formatearFecha(fVenc)})`,
         clase: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
         dias: diffDias,
         esVencida: false
@@ -1904,7 +1904,7 @@ class BoviTrackApp {
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compAdmin) this.compAdmin.render();
-    alert(`✓ Licencia de "${emp.nombre}" ampliada con éxito por ${mInt} mes(es).\nNueva fecha de vencimiento: ${emp.fechaVencimiento}`);
+    alert(`✓ Licencia de "${emp.nombre}" ampliada con éxito por ${mInt} mes(es).\nNueva fecha de vencimiento: ${formatearFecha(emp.fechaVencimiento)}`);
   }
 
   cambiarEstadoAccesoEmpresa(empresaId, nuevoEstado) {
