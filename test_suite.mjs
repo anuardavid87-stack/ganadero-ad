@@ -5780,6 +5780,111 @@ test(
   'Rescate Multi-Tenant: Restaura FIN-PUEBLITO, Vesubio y WATERLOO removiéndolas de _fincasEliminadas y asegurando empresaId = EMP-01'
 );
 
+// ============================================================================
+// 53. PRUEBAS DE SEPARACIÓN DE FINCAS EN EMPRESAS NUEVAS Y SINCRONIZACIÓN MÓVIL PAGINADA
+// ============================================================================
+console.log(`\n--- 53. Pruebas de Separación de Fincas en Empresas Nuevas y Sincronización Móvil Paginada ---`);
+
+// 53.1: mapearFincaLocalACloud y mapearFincaCloudALocal preservan empresaId mediante etiqueta [TENANT:...] y evitan FK 23503
+const syncMultiEmp = new SupabaseSyncService();
+const fincaEnNuevaEmpresa = {
+  id: 'FIN-VACUNO-01',
+  empresaId: 'EMP-1793154262914',
+  codigo: 'FIN-777',
+  nombre: 'Hacienda La Esperanza',
+  ubicacion: 'Montería / Córdoba',
+  areaHa: 320,
+  precioLecheLitro: 2800,
+  precioCarneKgPie: 9200
+};
+
+const rowCloudFinca = syncMultiEmp.mapearFincaLocalACloud(fincaEnNuevaEmpresa);
+test(
+  rowCloudFinca.empresa_id === null &&
+  rowCloudFinca.ubicacion === '[TENANT:EMP-1793154262914]Montería / Córdoba',
+  'mapearFincaLocalACloud: Evita violación FK 23503 (empresa_id = null para empresas nuevas) e inyecta [TENANT:...] en ubicacion'
+);
+
+const fincaReconstruida = syncMultiEmp.mapearFincaCloudALocal(rowCloudFinca);
+test(
+  fincaReconstruida.empresaId === 'EMP-1793154262914' &&
+  fincaReconstruida.ubicacion === 'Montería / Córdoba' &&
+  fincaReconstruida.nombre === 'Hacienda La Esperanza',
+  'mapearFincaCloudALocal: Reconstruye de forma exacta empresaId y ubicacion limpia desde la etiqueta [TENANT:...]'
+);
+
+// 53.2: crearFinca en una empresa nueva asigna la finca exclusivamente a la nueva empresa y nunca la mueve a la empresa anterior
+appEmpTest.setEmpresaActiva('EMP-NUEVA-2026');
+const fincaCreadaNuevaEmp = appEmpTest.crearFinca({
+  id: 'FIN-EDEN-01',
+  empresaId: 'EMP-NUEVA-2026',
+  codigo: 'EDN-01',
+  nombre: 'Predio El Edén Central',
+  ubicacion: 'Sincelejo / Sucre',
+  areaHa: 185,
+  precioLecheLitro: 2600,
+  precioCarneKgPie: 9100
+});
+
+test(
+  fincaCreadaNuevaEmp.empresaId === 'EMP-NUEVA-2026' &&
+  appEmpTest.state.empresaActivaId === 'EMP-NUEVA-2026' &&
+  appEmpTest.state.fincaActivaId === 'FIN-EDEN-01' &&
+  appEmpTest.getFincasEmpresa().length === 1 &&
+  appEmpTest.getFincasEmpresa()[0].id === 'FIN-EDEN-01',
+  'crearFinca: Registra la finca en la empresa nueva activa sin mezclarla con la empresa anterior'
+);
+
+// Simular que la nube devuelve la finca aún con empresaId: 'EMP-01' o null antes de actualizar el directorio
+appEmpTest.integrarDatosSupabase({
+  empresas: [
+    { id: 'EMP-01', nombre: 'La Vaca', nit: '1044392241', activa: true },
+    { id: 'EMP-NUEVA-2026', nombre: 'Ganadería El Edén S.A.S.', nit: '901.555.888-2', activa: true }
+  ],
+  fincas: [
+    { id: 'FIN-PUEBLITO', empresaId: 'EMP-01', codigo: 'FIN-01', nombre: 'El Pueblito' },
+    { id: 'FIN-BRISAS', empresaId: 'EMP-01', codigo: 'FIN-02', nombre: 'Las Brisas' },
+    { id: 'FIN-EDEN-01', empresaId: 'EMP-01', codigo: 'EDN-01', nombre: 'Predio El Edén Central', areaHa: 185 }
+  ]
+});
+
+const fincaEdenPostSync = appEmpTest.state.fincas.find(f => f.id === 'FIN-EDEN-01');
+test(
+  fincaEdenPostSync &&
+  fincaEdenPostSync.empresaId === 'EMP-NUEVA-2026' &&
+  appEmpTest.getFincasEmpresa().length === 1 &&
+  appEmpTest.getFincasEmpresa()[0].id === 'FIN-EDEN-01',
+  'integrarDatosSupabase: Bloquea la reasignación accidental de una finca de empresa nueva hacia la empresa anterior (EMP-01)'
+);
+
+// 53.3: Paginación automática en _postgrestGet descarga más de 1,000 registros (ej. 2,150 animales en 3 páginas)
+let paginasSolicitadas = 0;
+const syncPaginado = new SupabaseSyncService();
+syncPaginado._fetchConTimeout = async (url) => {
+  paginasSolicitadas++;
+  const matchOffset = url.match(/offset=(\d+)/);
+  const offset = matchOffset ? parseInt(matchOffset[1], 10) : 0;
+  let cantidad = 0;
+  if (offset === 0) cantidad = 1000;
+  else if (offset === 1000) cantidad = 1000;
+  else if (offset === 2000) cantidad = 150;
+  const filas = Array.from({ length: cantidad }, (_, i) => ({ id: `ROW-${offset + i + 1}` }));
+  return {
+    ok: true,
+    json: async () => filas
+  };
+};
+
+const totalFilasDescargadas = await syncPaginado._postgrestGet('animales', 8000, '');
+test(
+  paginasSolicitadas === 3 &&
+  Array.isArray(totalFilasDescargadas) &&
+  totalFilasDescargadas.length === 2150 &&
+  totalFilasDescargadas[0].id === 'ROW-1' &&
+  totalFilasDescargadas[2149].id === 'ROW-2150',
+  '_postgrestGet (Paginación Automática): Supera el límite de 1,000 filas de PostgREST descargando los 2,150 registros completos para la app móvil'
+);
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

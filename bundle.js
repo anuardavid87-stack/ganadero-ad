@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-28T03:41:58.953Z
+ * Generado automáticamente: 2026-10-28T16:55:14.765Z
  */
 (function() {
   "use strict";
@@ -979,12 +979,17 @@ class SupabaseSyncService {
   }
 
   mapearFincaLocalACloud(f) {
+    const cleanUbic = String(f.ubicacion || '').replace(/^\[TENANT:[^\]]+\]/, '');
+    const empId = f.empresaId || null;
+    const ubicacionCloud = (empId && empId !== 'EMP-01')
+      ? `[TENANT:${empId}]${cleanUbic}`
+      : cleanUbic;
     return {
       id: f.id,
-      empresa_id: f.empresaId || null,
+      empresa_id: empId === 'EMP-01' ? 'EMP-01' : null,
       codigo: f.codigo,
       nombre: f.nombre,
-      ubicacion: f.ubicacion || '',
+      ubicacion: ubicacionCloud,
       area_ha: Number(f.areaHa || 0),
       precio_leche_litro: Number(f.precioLecheLitro || 2450),
       precio_carne_kg_pie: Number(f.precioCarneKgPie || 8900)
@@ -992,12 +997,19 @@ class SupabaseSyncService {
   }
 
   mapearFincaCloudALocal(row) {
+    let rawUbicacion = String(row.ubicacion || '');
+    let tenantFromUbic = null;
+    const matchTenant = rawUbicacion.match(/^\[TENANT:([^\]]+)\]([\s\S]*)$/);
+    if (matchTenant) {
+      tenantFromUbic = matchTenant[1].trim();
+      rawUbicacion = matchTenant[2];
+    }
     return {
       id: row.id,
-      empresaId: row.empresa_id || null,
+      empresaId: tenantFromUbic || row.empresa_id || null,
       codigo: row.codigo,
       nombre: row.nombre,
-      ubicacion: row.ubicacion || '',
+      ubicacion: rawUbicacion,
       areaHa: Number(row.area_ha || 0),
       precioLecheLitro: Number(row.precio_leche_litro || 2450),
       precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900)
@@ -1152,38 +1164,38 @@ class SupabaseSyncService {
           );
         }
 
-        if (esSuperAdmin) {
-          const fincasEmpresaMap = {};
-          (appState.fincas || []).forEach(f => {
-            if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
-          });
-          const usuariosEmpresaMap = {};
-          (appState.usuarios || []).forEach(u => {
-            if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
-          });
-          const registroDirectorio = [{
-            id: 'SYS_DIRECTORIO_EMPRESAS',
-            empresa_id: null,
-            fecha: new Date().toISOString().split('T')[0],
-            finca_id: null,
-            finca_nombre: 'SISTEMA',
-            accion: 'SYS_DIRECTORIO_EMPRESAS',
-            modulo: 'sistema_empresas',
-            detalles: {
-              _esSistemaDirectorio: true,
-              empresas: appState.empresas,
-              empresasEliminadas: appState._empresasEliminadas || [],
-              fincasEmpresaMap,
-              usuariosEmpresaMap
-            },
-            usuario: 'Sistema'
-          }];
-          tareasOla1.push(
-            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
-              .catch(() => {})
-          );
-        }
+        const fincasEmpresaMap = {};
+        (appState.fincas || []).forEach(f => {
+          if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+        });
+        const usuariosEmpresaMap = {};
+        (appState.usuarios || []).forEach(u => {
+          if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+        });
+        const registroDirectorio = [{
+          id: 'SYS_DIRECTORIO_EMPRESAS',
+          empresa_id: null,
+          fecha: new Date().toISOString().split('T')[0],
+          finca_id: null,
+          finca_nombre: 'SISTEMA',
+          accion: 'SYS_DIRECTORIO_EMPRESAS',
+          modulo: 'sistema_empresas',
+          detalles: {
+            _esSistemaDirectorio: true,
+            empresas: appState.empresas,
+            empresasEliminadas: appState._empresasEliminadas || [],
+            fincasEliminadas: appState._fincasEliminadas || [],
+            usuariosEliminados: appState._usuariosEliminados || [],
+            fincasEmpresaMap,
+            usuariosEmpresaMap
+          },
+          usuario: 'Sistema'
+        }];
+        tareasOla1.push(
+          this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+            .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+            .catch(() => {})
+        );
       }
 
       // 1. Sincronizar Fincas
@@ -1235,7 +1247,7 @@ class SupabaseSyncService {
         if (usuariosFiltrados.length > 0) {
           const payloadUsuarios = usuariosFiltrados.map(u => ({
             id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-            empresa_id: u.empresaId || null,
+            empresa_id: u.empresaId === 'EMP-01' ? 'EMP-01' : null,
             usuario: u.usuario,
             nombre: u.nombre,
             rol: u.rol,
@@ -1344,20 +1356,23 @@ class SupabaseSyncService {
           ? appState.traslados
           : appState.traslados.filter(t => t.empresaId === empresaIdActiva || fincasIdsValidas.has(t.fincaOrigenId) || fincasIdsValidas.has(t.fincaDestinoId));
         if (trasladosFiltrados.length > 0) {
-          const payloadTraslados = trasladosFiltrados.map(t => ({
-            id: t.id || ('TRS-' + Date.now()),
-            empresa_id: t.empresaId || empresaIdActiva || null,
-            fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
-            finca_origen_id: t.fincaOrigenId || null,
-            finca_origen_nombre: t.fincaOrigenNombre || '',
-            finca_destino_id: t.fincaDestinoId || null,
-            finca_destino_nombre: t.fincaDestinoNombre || '',
-            motivo: t.motivo || '',
-            observaciones: t.observaciones || '',
-            total_animales: t.totalAnimales || 1,
-            animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
-            usuario_nombre: t.responsable || t.usuarioNombre || ''
-          }));
+          const payloadTraslados = trasladosFiltrados.map(t => {
+            const empRef = t.empresaId || empresaIdActiva || null;
+            return {
+              id: t.id || ('TRS-' + Date.now()),
+              empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+              fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
+              finca_origen_id: t.fincaOrigenId || null,
+              finca_origen_nombre: t.fincaOrigenNombre || '',
+              finca_destino_id: t.fincaDestinoId || null,
+              finca_destino_nombre: t.fincaDestinoNombre || '',
+              motivo: t.motivo || '',
+              observaciones: t.observaciones || '',
+              total_animales: t.totalAnimales || 1,
+              animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
+              usuario_nombre: t.responsable || t.usuarioNombre || ''
+            };
+          });
           tareasOla2.push(
             this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
               .then(() => { resultados.traslados = payloadTraslados.length; })
@@ -1373,17 +1388,20 @@ class SupabaseSyncService {
           : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
         ).filter(o => o && (!o.fincaId || todasFincasIdsLocal.has(o.fincaId)));
         if (opsFiltradas.length > 0) {
-          const payloadOps = opsFiltradas.map(o => ({
-            id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
-            empresa_id: o.empresaId || empresaIdActiva || null,
-            fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
-            finca_id: o.fincaId || null,
-            finca_nombre: o.fincaNombre || '',
-            accion: o.accion || '',
-            modulo: o.modulo || o.accion || '',
-            detalles: o,
-            usuario: o.responsable || o.usuario || 'Sistema'
-          }));
+          const payloadOps = opsFiltradas.map(o => {
+            const empRef = o.empresaId || empresaIdActiva || null;
+            return {
+              id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+              empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+              fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
+              finca_id: o.fincaId || null,
+              finca_nombre: o.fincaNombre || '',
+              accion: o.accion || '',
+              modulo: o.modulo || o.accion || '',
+              detalles: o,
+              usuario: o.responsable || o.usuario || 'Sistema'
+            };
+          });
           const BATCH_SIZE = 50;
           const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
           for (let b = 0; b < totalBatches; b++) {
@@ -1473,7 +1491,7 @@ class SupabaseSyncService {
    * Aplica aislamiento multi-tenant: si el usuario no es superadmin, delimita
    * automáticamente las consultas REST a su empresa y fincas autorizadas.
    */
-  async descargarDatosDeSupabase(timeoutMs = 8000, tenantContext = null) {
+  async descargarDatosDeSupabase(timeoutMs = 10000, tenantContext = null) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
@@ -1504,11 +1522,13 @@ class SupabaseSyncService {
 
       if (!esSuperAdmin && empId) {
         const empIdEnc = encodeURIComponent(empId);
-        qEmpresas = `id=eq.${empIdEnc}`;
-        qFincas = `empresa_id=eq.${empIdEnc}`;
-        qUsuarios = `empresa_id=eq.${empIdEnc}`;
-        qTraslados = `empresa_id=eq.${empIdEnc}`;
-        qOperaciones = `empresa_id=eq.${empIdEnc}`;
+        if (empId === 'EMP-01') {
+          qEmpresas = `id=eq.${empIdEnc}`;
+          qFincas = `empresa_id=eq.${empIdEnc}`;
+          qUsuarios = `empresa_id=eq.${empIdEnc}`;
+          qTraslados = `empresa_id=eq.${empIdEnc}`;
+          qOperaciones = `empresa_id=eq.${empIdEnc}`;
+        }
 
         if (fincasIds && fincasIds.length > 0) {
           const fincasFilter = `finca_id=in.(${fincasIds.map(encodeURIComponent).join(',')})`;
@@ -1532,7 +1552,8 @@ class SupabaseSyncService {
         this._postgrestGet('traslados_animales', timeoutMs, qTraslados),
         this._postgrestGet('operaciones_diarias', timeoutMs, qOperaciones),
         this._postgrestGet('pesajes_animales', timeoutMs, qPesajes),
-        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion)
+        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion),
+        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
       const empresasRes = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
@@ -1546,10 +1567,11 @@ class SupabaseSyncService {
       const operacionesRes = resultados[8].status === 'fulfilled' ? resultados[8].value : [];
       const pesajesRes = resultados[9].status === 'fulfilled' ? resultados[9].value : [];
       const nutricionRes = resultados[10].status === 'fulfilled' ? resultados[10].value : [];
+      const dirExplicitoRes = resultados[11] && resultados[11].status === 'fulfilled' ? resultados[11].value : [];
 
       const empresas = (empresasRes || []).map(r => this.mapearEmpresaCloudALocal(r));
-      const fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
-      const usuarios = (usuariosRes || []).map(r => ({
+      let fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
+      let usuarios = (usuariosRes || []).map(r => ({
         id: r.id,
         empresaId: r.empresa_id || null,
         usuario: r.usuario,
@@ -1562,11 +1584,17 @@ class SupabaseSyncService {
         activo: r.activo !== false
       }));
 
-      // Integrar directorio espejo de empresas si existe en operaciones_diarias
-      const regDir = (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      let empresasEliminadasCloud = [];
+      let fincasEliminadasCloud = [];
+
+      // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
+      const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
+        (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
-        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
+        fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
+        const eliminadasSet = new Set(empresasEliminadasCloud);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
             if (!eDir || !eDir.id || eliminadasSet.has(eDir.id)) return;
@@ -1581,7 +1609,11 @@ class SupabaseSyncService {
         }
         if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
           fincas.forEach(f => {
-            f.empresaId = det.fincasEmpresaMap[f.id] || f.empresaId || 'EMP-01';
+            if (det.fincasEmpresaMap[f.id]) {
+              f.empresaId = det.fincasEmpresaMap[f.id];
+            } else if (!f.empresaId) {
+              f.empresaId = 'EMP-01';
+            }
           });
         } else {
           fincas.forEach(f => {
@@ -1595,7 +1627,17 @@ class SupabaseSyncService {
             }
           });
         }
+      } else {
+        fincas.forEach(f => {
+          if (!f.empresaId) f.empresaId = 'EMP-01';
+        });
       }
+
+      if (!esSuperAdmin && empId) {
+        fincas = fincas.filter(f => f.empresaId === empId);
+        usuarios = usuarios.filter(u => u.rol === 'superadmin' || u.empresaId === empId);
+      }
+
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
 
@@ -1704,7 +1746,9 @@ class SupabaseSyncService {
           traslados,
           operacionesDiarias,
           pesajes,
-          nutricion
+          nutricion,
+          empresasEliminadas: empresasEliminadasCloud,
+          fincasEliminadas: fincasEliminadasCloud
         },
         ultimoSync: this.ultimoSync
       };
@@ -1877,22 +1921,46 @@ class SupabaseSyncService {
   }
 
   async _postgrestGet(tabla, timeoutMs = 8000, queryParams = '') {
-    let endpoint = this.config.url + '/rest/v1/' + tabla + '?select=*&limit=5000';
-    if (queryParams) {
-      endpoint += (queryParams.startsWith('&') || queryParams.startsWith('?') ? '' : '&') + queryParams.replace(/^\?/, '');
-    }
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 10;
+    const cleanParams = queryParams ? queryParams.replace(/^\?/, '').replace(/^&/, '') : '';
+    const tieneLimitExplicito = /(?:^|&)limit=\d+/i.test(cleanParams) || /(?:^|&)id=eq\./i.test(cleanParams);
     const headers = this.obtenerHeaders();
 
-    const res = await this._fetchConTimeout(endpoint, {
-      method: 'GET',
-      headers: headers
-    }, timeoutMs);
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+    if (tieneLimitExplicito) {
+      let endpoint = `${this.config.url}/rest/v1/${tabla}?select=*`;
+      if (!/(?:^|&)limit=\d+/i.test(cleanParams)) {
+        endpoint += `&limit=${PAGE_SIZE}`;
+      }
+      if (cleanParams) {
+        endpoint += `&${cleanParams}`;
+      }
+      const res = await this._fetchConTimeout(endpoint, { method: 'GET', headers }, timeoutMs);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+      }
+      return await res.json();
     }
-    return await res.json();
+
+    const acumulado = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      let endpoint = `${this.config.url}/rest/v1/${tabla}?select=*&limit=${PAGE_SIZE}&offset=${offset}`;
+      if (cleanParams) {
+        endpoint += `&${cleanParams}`;
+      }
+      const res = await this._fetchConTimeout(endpoint, { method: 'GET', headers }, timeoutMs);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+      }
+      const lote = await res.json();
+      if (!Array.isArray(lote) || lote.length === 0) break;
+      acumulado.push(...lote);
+      if (lote.length < PAGE_SIZE) break;
+    }
+    return acumulado;
   }
 
   async _postgrestDelete(tabla, queryParam = '', timeoutMs = 8000) {
@@ -8334,9 +8402,16 @@ class ModuloAdmin {
                       🔒 <strong>Aislamiento Multi-Tenant Activo:</strong> Las fincas y el hato de esta empresa están ocultos y protegidos mientras trabajas en otra empresa.
                     </span>
                   </div>
-                  <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 shrink-0 cursor-pointer" data-id="${emp.id}">
-                    <span>🎯</span> Seleccionar Empresa para Gestionar sus Fincas
-                  </button>
+                  <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    ${!esConsultor ? `
+                      <button class="btn-crear-finca-empresa px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}">
+                        <span>➕</span> Nueva Finca en ${emp.nombre}
+                      </button>
+                    ` : ''}
+                    <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer" data-id="${emp.id}">
+                      <span>🎯</span> Seleccionar Empresa
+                    </button>
+                  </div>
                 </div>
                 `}
               </div>
@@ -9524,7 +9599,7 @@ class ModuloAdmin {
   // ==========================================================================
 
   renderModalCrearFinca(empresas = []) {
-    const empId = this.empresaParaNuevaFinca;
+    const empId = this.empresaParaNuevaFinca || this.getEmpresaActivaId() || (empresas[0]?.id || '');
     const emp = (empresas || []).find((e) => e.id === empId);
 
     return `
@@ -9542,7 +9617,12 @@ class ModuloAdmin {
           </div>
 
           <form id="form-crear-finca" class="p-5 space-y-3.5 text-xs">
-            <input type="hidden" id="finca-empresa-id" value="${empId || ''}">
+            <div class="p-3 rounded-2xl bg-purple-50 border border-purple-200">
+              <label class="block font-black text-purple-950 mb-1">🏢 Empresa Propietaria del Predio *:</label>
+              <select id="finca-empresa-id" required class="w-full px-3 py-2 rounded-xl border border-purple-300 bg-white outline-none font-black text-purple-900 focus:border-purple-600">
+                ${(empresas || []).map((e) => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>🏢 ${e.nombre} (NIT: ${e.nit || 'S/N'})</option>`).join('')}
+              </select>
+            </div>
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Nombre del Predio o Finca *:</label>
@@ -10364,6 +10444,9 @@ END $$;
       btn.addEventListener('click', (e) => {
         const empId = e.currentTarget.getAttribute('data-empresa-id');
         this.empresaParaNuevaFinca = empId;
+        if (empId && this.onSeleccionarEmpresa) {
+          this.onSeleccionarEmpresa(empId);
+        }
         this.modalCrearFincaAbierto = true;
         this.render();
       });
@@ -10389,7 +10472,7 @@ END $$;
     if (formCrearFinca) {
       formCrearFinca.addEventListener('submit', (e) => {
         e.preventDefault();
-        const empId = document.getElementById('finca-empresa-id')?.value;
+        const empId = document.getElementById('finca-empresa-id')?.value || this.empresaParaNuevaFinca || this.getEmpresaActivaId();
         const nombre = document.getElementById('finca-nombre')?.value.trim();
         const codigo = document.getElementById('finca-codigo')?.value.trim();
         const area = parseFloat(document.getElementById('finca-area')?.value);
@@ -18327,11 +18410,36 @@ class BoviTrackApp {
     let huboCambios = false;
 
     if (!this.state._rescateMultiTenant20261028) {
-      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-PUEBLITO', 'PUE-01']);
+      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-1793204645231', 'FIN-171', 'FIN-PUEBLITO', 'PUE-01']);
       if (Array.isArray(this.state._fincasEliminadas)) {
         this.state._fincasEliminadas = this.state._fincasEliminadas.filter((id) => !idsRescatar.has(id));
       }
       this.state._rescateMultiTenant20261028 = true;
+    }
+
+    if (Array.isArray(datos.empresasEliminadas) && datos.empresasEliminadas.length > 0) {
+      if (!Array.isArray(this.state._empresasEliminadas)) this.state._empresasEliminadas = [];
+      const setEmpElim = new Set(this.state._empresasEliminadas);
+      datos.empresasEliminadas.forEach((id) => {
+        if (id && !setEmpElim.has(id)) {
+          this.state._empresasEliminadas.push(id);
+          setEmpElim.add(id);
+        }
+      });
+    }
+
+    if (Array.isArray(datos.fincasEliminadas) && datos.fincasEliminadas.length > 0) {
+      if (!Array.isArray(this.state._fincasEliminadas)) this.state._fincasEliminadas = [];
+      const setFinElim = new Set(this.state._fincasEliminadas);
+      const fincasModLoc = this.state._fincasModificadasLocalmente || {};
+      const ahoraElim = Date.now();
+      datos.fincasEliminadas.forEach((id) => {
+        const modReciente = fincasModLoc[id] && (ahoraElim - (fincasModLoc[id].timestamp || 0) < 120000);
+        if (id && !setFinElim.has(id) && !modReciente) {
+          this.state._fincasEliminadas.push(id);
+          setFinElim.add(id);
+        }
+      });
     }
 
     // 1. EMPRESAS: Comparación semántica y fusión inteligente preservando empresas creadas localmente
@@ -18394,7 +18502,7 @@ class BoviTrackApp {
       }
     }
 
-    // 2. FINCAS: Comparación semántica preservando lotes locales, precios y fincas creadas localmente
+    // 2. FINCAS: Comparación semántica preservando lotes locales, precios y empresaId de fincas creadas localmente
     if (Array.isArray(datos.fincas)) {
       const eliminadasFincas = new Set(this.state._fincasEliminadas || []);
       const eliminadasEmp = new Set(this.state._empresasEliminadas || []);
@@ -18409,16 +18517,20 @@ class BoviTrackApp {
 
       const fincasLocalesMap = new Map((this.state.fincas || []).map((f) => [f.id, f]));
       const preciosModLoc = this.state._preciosModificadosLocalmente || {};
+      const fincasModLoc = this.state._fincasModificadasLocalmente || {};
       const ahora = Date.now();
 
       const nuevasFincas = fincasValidasCloud.map((fCloud) => {
         const local = fincasLocalesMap.get(fCloud.id);
         const modLocal = preciosModLoc[fCloud.id];
         const protegerPrecios = modLocal && (ahora - (modLocal.timestamp || 0) < 60000);
+        const modFinca = fincasModLoc[fCloud.id];
+        const empresaProtegida = (modFinca && modFinca.empresaId) ||
+          (local && local.empresaId && local.empresaId !== 'EMP-01' && (!fCloud.empresaId || fCloud.empresaId === 'EMP-01') ? local.empresaId : null);
 
         return {
           ...fCloud,
-          empresaId: fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
+          empresaId: empresaProtegida || fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
           precioLecheLitro: (protegerPrecios && local && local.precioLecheLitro !== undefined)
             ? local.precioLecheLitro
             : fCloud.precioLecheLitro,
@@ -18659,6 +18771,9 @@ class BoviTrackApp {
         localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
       }
       this.actualizarHeader();
+      if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+        this.compCuadricula.cargarFilasDesdeInventario();
+      }
 
       // Si el usuario está escribiendo activamente en un campo de texto, evitar interrumpirlo
       const usuarioEscribiendo = typeof document !== 'undefined' && document.activeElement &&
@@ -18686,7 +18801,7 @@ class BoviTrackApp {
       // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
       if (!this.state.usuarioActual) {
         if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
-          const resPre = await this.supabase.descargarDirectorioPreLogin(6000);
+          const resPre = await this.supabase.descargarDirectorioPreLogin(8000);
           if (resPre && resPre.ok && resPre.datos) {
             this.integrarDatosSupabase(resPre.datos);
             this.actualizarBadgeConexion('sincronizado');
@@ -18707,7 +18822,7 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
       if (res.ok && res.datos) {
         this.integrarDatosSupabase(res.datos);
         this.actualizarHeader();
@@ -18748,17 +18863,17 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      if (this._syncPendiente) {
-        this._syncPendiente = false;
-        await this.supabase.subirDatosASupabase(this.state);
-      }
-
-      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
       if (res.ok && res.datos) {
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
           this.actualizarBadgeConexion('sincronizado');
         }
+      }
+
+      if (this._syncPendiente) {
+        this._syncPendiente = false;
+        await this.supabase.subirDatosASupabase(this.state);
       }
     } catch (err) {
       console.warn('Error en heartbeat sync con Supabase:', err);
@@ -19641,30 +19756,7 @@ class BoviTrackApp {
         this.compAdmin.render();
         this.compDashboard.render();
       },
-      onCrearFinca: (finca) => {
-        if (!finca.empresaId) {
-          finca.empresaId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' ? this.state.empresaActivaId : null) || this.state.usuarioActual?.empresaId || (this.state.empresas?.[0]?.id || null);
-        }
-        if (!finca.id) {
-          finca.id = `FIN-${Date.now()}`;
-        }
-        if (!this.state.costosFijos[finca.id]) {
-          this.state.costosFijos[finca.id] = {
-            nomina: 0,
-            insumos: 0,
-            herbicidas: 0,
-            maquinaria: 0,
-            servicios: 0,
-            otros: 0
-          };
-        }
-        this.state.fincas.push(finca);
-        this.state.fincaActivaId = finca.id;
-        this.guardarEstado();
-        this.actualizarHeader();
-        this.refrescarVistas();
-        this.compAdmin.render();
-      },
+      onCrearFinca: (finca) => this.crearFinca(finca),
       onEliminarFinca: (fincaId) => this.eliminarFinca(fincaId),
       onPurgarFinca: (fincaId) => this.purgarFinca(fincaId),
       onPurgarEmpresa: (empresaId) => this.purgarEmpresa(empresaId),
@@ -20277,6 +20369,75 @@ class BoviTrackApp {
     }
     const empId = this.state.usuarioActual.empresaId;
     return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+  }
+
+  crearFinca(finca) {
+    if (!this.state.fincas) this.state.fincas = [];
+    if (!this.state.costosFijos) this.state.costosFijos = {};
+
+    const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual?.empresaId || (this.state.empresas?.[0]?.id || null));
+
+    if (!finca.empresaId) {
+      finca.empresaId = empActiva;
+    }
+    if (!finca.id) {
+      finca.id = `FIN-${Date.now()}`;
+    }
+    if (!finca.codigo) {
+      finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
+    }
+
+    if (Array.isArray(this.state._fincasEliminadas)) {
+      this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
+        (id) => id !== finca.id && id !== finca.codigo
+      );
+    }
+
+    if (!this.state._fincasModificadasLocalmente) {
+      this.state._fincasModificadasLocalmente = {};
+    }
+    this.state._fincasModificadasLocalmente[finca.id] = {
+      timestamp: Date.now(),
+      empresaId: finca.empresaId
+    };
+
+    if (!this.state.costosFijos[finca.id]) {
+      this.state.costosFijos[finca.id] = {
+        nomina: 0,
+        insumos: 0,
+        herbicidas: 0,
+        maquinaria: 0,
+        servicios: 0,
+        otros: 0
+      };
+    }
+
+    const idxExistente = this.state.fincas.findIndex((f) => f.id === finca.id);
+    if (idxExistente !== -1) {
+      this.state.fincas[idxExistente] = { ...this.state.fincas[idxExistente], ...finca };
+    } else {
+      this.state.fincas.push(finca);
+    }
+
+    if (finca.empresaId) {
+      this.state.empresaActivaId = finca.empresaId;
+    }
+    this.state.fincaActivaId = finca.id;
+
+    this.guardarEstado();
+    this.actualizarHeader();
+    if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+      this.compCuadricula.cargarFilasDesdeInventario();
+    }
+    if (typeof this.refrescarVistas === 'function') {
+      this.refrescarVistas();
+    }
+    if (this.compAdmin && typeof this.compAdmin.render === 'function') {
+      this.compAdmin.render();
+    }
+    return finca;
   }
 
   setFincaActiva(fincaId) {

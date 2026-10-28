@@ -677,9 +677,16 @@ export class ModuloAdmin {
                       🔒 <strong>Aislamiento Multi-Tenant Activo:</strong> Las fincas y el hato de esta empresa están ocultos y protegidos mientras trabajas en otra empresa.
                     </span>
                   </div>
-                  <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 shrink-0 cursor-pointer" data-id="${emp.id}">
-                    <span>🎯</span> Seleccionar Empresa para Gestionar sus Fincas
-                  </button>
+                  <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    ${!esConsultor ? `
+                      <button class="btn-crear-finca-empresa px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}">
+                        <span>➕</span> Nueva Finca en ${emp.nombre}
+                      </button>
+                    ` : ''}
+                    <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 cursor-pointer" data-id="${emp.id}">
+                      <span>🎯</span> Seleccionar Empresa
+                    </button>
+                  </div>
                 </div>
                 `}
               </div>
@@ -1867,7 +1874,7 @@ export class ModuloAdmin {
   // ==========================================================================
 
   renderModalCrearFinca(empresas = []) {
-    const empId = this.empresaParaNuevaFinca;
+    const empId = this.empresaParaNuevaFinca || this.getEmpresaActivaId() || (empresas[0]?.id || '');
     const emp = (empresas || []).find((e) => e.id === empId);
 
     return `
@@ -1885,7 +1892,12 @@ export class ModuloAdmin {
           </div>
 
           <form id="form-crear-finca" class="p-5 space-y-3.5 text-xs">
-            <input type="hidden" id="finca-empresa-id" value="${empId || ''}">
+            <div class="p-3 rounded-2xl bg-purple-50 border border-purple-200">
+              <label class="block font-black text-purple-950 mb-1">🏢 Empresa Propietaria del Predio *:</label>
+              <select id="finca-empresa-id" required class="w-full px-3 py-2 rounded-xl border border-purple-300 bg-white outline-none font-black text-purple-900 focus:border-purple-600">
+                ${(empresas || []).map((e) => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>🏢 ${e.nombre} (NIT: ${e.nit || 'S/N'})</option>`).join('')}
+              </select>
+            </div>
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Nombre del Predio o Finca *:</label>
@@ -2707,6 +2719,9 @@ END $$;
       btn.addEventListener('click', (e) => {
         const empId = e.currentTarget.getAttribute('data-empresa-id');
         this.empresaParaNuevaFinca = empId;
+        if (empId && this.onSeleccionarEmpresa) {
+          this.onSeleccionarEmpresa(empId);
+        }
         this.modalCrearFincaAbierto = true;
         this.render();
       });
@@ -2732,7 +2747,7 @@ END $$;
     if (formCrearFinca) {
       formCrearFinca.addEventListener('submit', (e) => {
         e.preventDefault();
-        const empId = document.getElementById('finca-empresa-id')?.value;
+        const empId = document.getElementById('finca-empresa-id')?.value || this.empresaParaNuevaFinca || this.getEmpresaActivaId();
         const nombre = document.getElementById('finca-nombre')?.value.trim();
         const codigo = document.getElementById('finca-codigo')?.value.trim();
         const area = parseFloat(document.getElementById('finca-area')?.value);

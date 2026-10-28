@@ -352,12 +352,17 @@ export class SupabaseSyncService {
   }
 
   mapearFincaLocalACloud(f) {
+    const cleanUbic = String(f.ubicacion || '').replace(/^\[TENANT:[^\]]+\]/, '');
+    const empId = f.empresaId || null;
+    const ubicacionCloud = (empId && empId !== 'EMP-01')
+      ? `[TENANT:${empId}]${cleanUbic}`
+      : cleanUbic;
     return {
       id: f.id,
-      empresa_id: f.empresaId || null,
+      empresa_id: empId === 'EMP-01' ? 'EMP-01' : null,
       codigo: f.codigo,
       nombre: f.nombre,
-      ubicacion: f.ubicacion || '',
+      ubicacion: ubicacionCloud,
       area_ha: Number(f.areaHa || 0),
       precio_leche_litro: Number(f.precioLecheLitro || 2450),
       precio_carne_kg_pie: Number(f.precioCarneKgPie || 8900)
@@ -365,12 +370,19 @@ export class SupabaseSyncService {
   }
 
   mapearFincaCloudALocal(row) {
+    let rawUbicacion = String(row.ubicacion || '');
+    let tenantFromUbic = null;
+    const matchTenant = rawUbicacion.match(/^\[TENANT:([^\]]+)\]([\s\S]*)$/);
+    if (matchTenant) {
+      tenantFromUbic = matchTenant[1].trim();
+      rawUbicacion = matchTenant[2];
+    }
     return {
       id: row.id,
-      empresaId: row.empresa_id || null,
+      empresaId: tenantFromUbic || row.empresa_id || null,
       codigo: row.codigo,
       nombre: row.nombre,
-      ubicacion: row.ubicacion || '',
+      ubicacion: rawUbicacion,
       areaHa: Number(row.area_ha || 0),
       precioLecheLitro: Number(row.precio_leche_litro || 2450),
       precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900)
@@ -525,38 +537,38 @@ export class SupabaseSyncService {
           );
         }
 
-        if (esSuperAdmin) {
-          const fincasEmpresaMap = {};
-          (appState.fincas || []).forEach(f => {
-            if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
-          });
-          const usuariosEmpresaMap = {};
-          (appState.usuarios || []).forEach(u => {
-            if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
-          });
-          const registroDirectorio = [{
-            id: 'SYS_DIRECTORIO_EMPRESAS',
-            empresa_id: null,
-            fecha: new Date().toISOString().split('T')[0],
-            finca_id: null,
-            finca_nombre: 'SISTEMA',
-            accion: 'SYS_DIRECTORIO_EMPRESAS',
-            modulo: 'sistema_empresas',
-            detalles: {
-              _esSistemaDirectorio: true,
-              empresas: appState.empresas,
-              empresasEliminadas: appState._empresasEliminadas || [],
-              fincasEmpresaMap,
-              usuariosEmpresaMap
-            },
-            usuario: 'Sistema'
-          }];
-          tareasOla1.push(
-            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
-              .catch(() => {})
-          );
-        }
+        const fincasEmpresaMap = {};
+        (appState.fincas || []).forEach(f => {
+          if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+        });
+        const usuariosEmpresaMap = {};
+        (appState.usuarios || []).forEach(u => {
+          if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+        });
+        const registroDirectorio = [{
+          id: 'SYS_DIRECTORIO_EMPRESAS',
+          empresa_id: null,
+          fecha: new Date().toISOString().split('T')[0],
+          finca_id: null,
+          finca_nombre: 'SISTEMA',
+          accion: 'SYS_DIRECTORIO_EMPRESAS',
+          modulo: 'sistema_empresas',
+          detalles: {
+            _esSistemaDirectorio: true,
+            empresas: appState.empresas,
+            empresasEliminadas: appState._empresasEliminadas || [],
+            fincasEliminadas: appState._fincasEliminadas || [],
+            usuariosEliminados: appState._usuariosEliminados || [],
+            fincasEmpresaMap,
+            usuariosEmpresaMap
+          },
+          usuario: 'Sistema'
+        }];
+        tareasOla1.push(
+          this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+            .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+            .catch(() => {})
+        );
       }
 
       // 1. Sincronizar Fincas
@@ -608,7 +620,7 @@ export class SupabaseSyncService {
         if (usuariosFiltrados.length > 0) {
           const payloadUsuarios = usuariosFiltrados.map(u => ({
             id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-            empresa_id: u.empresaId || null,
+            empresa_id: u.empresaId === 'EMP-01' ? 'EMP-01' : null,
             usuario: u.usuario,
             nombre: u.nombre,
             rol: u.rol,
@@ -717,20 +729,23 @@ export class SupabaseSyncService {
           ? appState.traslados
           : appState.traslados.filter(t => t.empresaId === empresaIdActiva || fincasIdsValidas.has(t.fincaOrigenId) || fincasIdsValidas.has(t.fincaDestinoId));
         if (trasladosFiltrados.length > 0) {
-          const payloadTraslados = trasladosFiltrados.map(t => ({
-            id: t.id || ('TRS-' + Date.now()),
-            empresa_id: t.empresaId || empresaIdActiva || null,
-            fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
-            finca_origen_id: t.fincaOrigenId || null,
-            finca_origen_nombre: t.fincaOrigenNombre || '',
-            finca_destino_id: t.fincaDestinoId || null,
-            finca_destino_nombre: t.fincaDestinoNombre || '',
-            motivo: t.motivo || '',
-            observaciones: t.observaciones || '',
-            total_animales: t.totalAnimales || 1,
-            animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
-            usuario_nombre: t.responsable || t.usuarioNombre || ''
-          }));
+          const payloadTraslados = trasladosFiltrados.map(t => {
+            const empRef = t.empresaId || empresaIdActiva || null;
+            return {
+              id: t.id || ('TRS-' + Date.now()),
+              empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+              fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
+              finca_origen_id: t.fincaOrigenId || null,
+              finca_origen_nombre: t.fincaOrigenNombre || '',
+              finca_destino_id: t.fincaDestinoId || null,
+              finca_destino_nombre: t.fincaDestinoNombre || '',
+              motivo: t.motivo || '',
+              observaciones: t.observaciones || '',
+              total_animales: t.totalAnimales || 1,
+              animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
+              usuario_nombre: t.responsable || t.usuarioNombre || ''
+            };
+          });
           tareasOla2.push(
             this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
               .then(() => { resultados.traslados = payloadTraslados.length; })
@@ -746,17 +761,20 @@ export class SupabaseSyncService {
           : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
         ).filter(o => o && (!o.fincaId || todasFincasIdsLocal.has(o.fincaId)));
         if (opsFiltradas.length > 0) {
-          const payloadOps = opsFiltradas.map(o => ({
-            id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
-            empresa_id: o.empresaId || empresaIdActiva || null,
-            fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
-            finca_id: o.fincaId || null,
-            finca_nombre: o.fincaNombre || '',
-            accion: o.accion || '',
-            modulo: o.modulo || o.accion || '',
-            detalles: o,
-            usuario: o.responsable || o.usuario || 'Sistema'
-          }));
+          const payloadOps = opsFiltradas.map(o => {
+            const empRef = o.empresaId || empresaIdActiva || null;
+            return {
+              id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+              empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+              fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
+              finca_id: o.fincaId || null,
+              finca_nombre: o.fincaNombre || '',
+              accion: o.accion || '',
+              modulo: o.modulo || o.accion || '',
+              detalles: o,
+              usuario: o.responsable || o.usuario || 'Sistema'
+            };
+          });
           const BATCH_SIZE = 50;
           const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
           for (let b = 0; b < totalBatches; b++) {
@@ -846,7 +864,7 @@ export class SupabaseSyncService {
    * Aplica aislamiento multi-tenant: si el usuario no es superadmin, delimita
    * automáticamente las consultas REST a su empresa y fincas autorizadas.
    */
-  async descargarDatosDeSupabase(timeoutMs = 8000, tenantContext = null) {
+  async descargarDatosDeSupabase(timeoutMs = 10000, tenantContext = null) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
@@ -877,11 +895,13 @@ export class SupabaseSyncService {
 
       if (!esSuperAdmin && empId) {
         const empIdEnc = encodeURIComponent(empId);
-        qEmpresas = `id=eq.${empIdEnc}`;
-        qFincas = `empresa_id=eq.${empIdEnc}`;
-        qUsuarios = `empresa_id=eq.${empIdEnc}`;
-        qTraslados = `empresa_id=eq.${empIdEnc}`;
-        qOperaciones = `empresa_id=eq.${empIdEnc}`;
+        if (empId === 'EMP-01') {
+          qEmpresas = `id=eq.${empIdEnc}`;
+          qFincas = `empresa_id=eq.${empIdEnc}`;
+          qUsuarios = `empresa_id=eq.${empIdEnc}`;
+          qTraslados = `empresa_id=eq.${empIdEnc}`;
+          qOperaciones = `empresa_id=eq.${empIdEnc}`;
+        }
 
         if (fincasIds && fincasIds.length > 0) {
           const fincasFilter = `finca_id=in.(${fincasIds.map(encodeURIComponent).join(',')})`;
@@ -905,7 +925,8 @@ export class SupabaseSyncService {
         this._postgrestGet('traslados_animales', timeoutMs, qTraslados),
         this._postgrestGet('operaciones_diarias', timeoutMs, qOperaciones),
         this._postgrestGet('pesajes_animales', timeoutMs, qPesajes),
-        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion)
+        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion),
+        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
       const empresasRes = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
@@ -919,10 +940,11 @@ export class SupabaseSyncService {
       const operacionesRes = resultados[8].status === 'fulfilled' ? resultados[8].value : [];
       const pesajesRes = resultados[9].status === 'fulfilled' ? resultados[9].value : [];
       const nutricionRes = resultados[10].status === 'fulfilled' ? resultados[10].value : [];
+      const dirExplicitoRes = resultados[11] && resultados[11].status === 'fulfilled' ? resultados[11].value : [];
 
       const empresas = (empresasRes || []).map(r => this.mapearEmpresaCloudALocal(r));
-      const fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
-      const usuarios = (usuariosRes || []).map(r => ({
+      let fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
+      let usuarios = (usuariosRes || []).map(r => ({
         id: r.id,
         empresaId: r.empresa_id || null,
         usuario: r.usuario,
@@ -935,11 +957,17 @@ export class SupabaseSyncService {
         activo: r.activo !== false
       }));
 
-      // Integrar directorio espejo de empresas si existe en operaciones_diarias
-      const regDir = (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      let empresasEliminadasCloud = [];
+      let fincasEliminadasCloud = [];
+
+      // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
+      const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
+        (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
-        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
+        fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
+        const eliminadasSet = new Set(empresasEliminadasCloud);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
             if (!eDir || !eDir.id || eliminadasSet.has(eDir.id)) return;
@@ -954,7 +982,11 @@ export class SupabaseSyncService {
         }
         if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
           fincas.forEach(f => {
-            f.empresaId = det.fincasEmpresaMap[f.id] || f.empresaId || 'EMP-01';
+            if (det.fincasEmpresaMap[f.id]) {
+              f.empresaId = det.fincasEmpresaMap[f.id];
+            } else if (!f.empresaId) {
+              f.empresaId = 'EMP-01';
+            }
           });
         } else {
           fincas.forEach(f => {
@@ -968,7 +1000,17 @@ export class SupabaseSyncService {
             }
           });
         }
+      } else {
+        fincas.forEach(f => {
+          if (!f.empresaId) f.empresaId = 'EMP-01';
+        });
       }
+
+      if (!esSuperAdmin && empId) {
+        fincas = fincas.filter(f => f.empresaId === empId);
+        usuarios = usuarios.filter(u => u.rol === 'superadmin' || u.empresaId === empId);
+      }
+
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
 
@@ -1077,7 +1119,9 @@ export class SupabaseSyncService {
           traslados,
           operacionesDiarias,
           pesajes,
-          nutricion
+          nutricion,
+          empresasEliminadas: empresasEliminadasCloud,
+          fincasEliminadas: fincasEliminadasCloud
         },
         ultimoSync: this.ultimoSync
       };
@@ -1250,22 +1294,46 @@ export class SupabaseSyncService {
   }
 
   async _postgrestGet(tabla, timeoutMs = 8000, queryParams = '') {
-    let endpoint = this.config.url + '/rest/v1/' + tabla + '?select=*&limit=5000';
-    if (queryParams) {
-      endpoint += (queryParams.startsWith('&') || queryParams.startsWith('?') ? '' : '&') + queryParams.replace(/^\?/, '');
-    }
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 10;
+    const cleanParams = queryParams ? queryParams.replace(/^\?/, '').replace(/^&/, '') : '';
+    const tieneLimitExplicito = /(?:^|&)limit=\d+/i.test(cleanParams) || /(?:^|&)id=eq\./i.test(cleanParams);
     const headers = this.obtenerHeaders();
 
-    const res = await this._fetchConTimeout(endpoint, {
-      method: 'GET',
-      headers: headers
-    }, timeoutMs);
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+    if (tieneLimitExplicito) {
+      let endpoint = `${this.config.url}/rest/v1/${tabla}?select=*`;
+      if (!/(?:^|&)limit=\d+/i.test(cleanParams)) {
+        endpoint += `&limit=${PAGE_SIZE}`;
+      }
+      if (cleanParams) {
+        endpoint += `&${cleanParams}`;
+      }
+      const res = await this._fetchConTimeout(endpoint, { method: 'GET', headers }, timeoutMs);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+      }
+      return await res.json();
     }
-    return await res.json();
+
+    const acumulado = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      let endpoint = `${this.config.url}/rest/v1/${tabla}?select=*&limit=${PAGE_SIZE}&offset=${offset}`;
+      if (cleanParams) {
+        endpoint += `&${cleanParams}`;
+      }
+      const res = await this._fetchConTimeout(endpoint, { method: 'GET', headers }, timeoutMs);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error('Consulta [' + tabla + '] HTTP ' + res.status + ': ' + errorText);
+      }
+      const lote = await res.json();
+      if (!Array.isArray(lote) || lote.length === 0) break;
+      acumulado.push(...lote);
+      if (lote.length < PAGE_SIZE) break;
+    }
+    return acumulado;
   }
 
   async _postgrestDelete(tabla, queryParam = '', timeoutMs = 8000) {

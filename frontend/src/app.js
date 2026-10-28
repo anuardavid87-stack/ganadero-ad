@@ -331,11 +331,36 @@ class BoviTrackApp {
     let huboCambios = false;
 
     if (!this.state._rescateMultiTenant20261028) {
-      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-PUEBLITO', 'PUE-01']);
+      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-1793204645231', 'FIN-171', 'FIN-PUEBLITO', 'PUE-01']);
       if (Array.isArray(this.state._fincasEliminadas)) {
         this.state._fincasEliminadas = this.state._fincasEliminadas.filter((id) => !idsRescatar.has(id));
       }
       this.state._rescateMultiTenant20261028 = true;
+    }
+
+    if (Array.isArray(datos.empresasEliminadas) && datos.empresasEliminadas.length > 0) {
+      if (!Array.isArray(this.state._empresasEliminadas)) this.state._empresasEliminadas = [];
+      const setEmpElim = new Set(this.state._empresasEliminadas);
+      datos.empresasEliminadas.forEach((id) => {
+        if (id && !setEmpElim.has(id)) {
+          this.state._empresasEliminadas.push(id);
+          setEmpElim.add(id);
+        }
+      });
+    }
+
+    if (Array.isArray(datos.fincasEliminadas) && datos.fincasEliminadas.length > 0) {
+      if (!Array.isArray(this.state._fincasEliminadas)) this.state._fincasEliminadas = [];
+      const setFinElim = new Set(this.state._fincasEliminadas);
+      const fincasModLoc = this.state._fincasModificadasLocalmente || {};
+      const ahoraElim = Date.now();
+      datos.fincasEliminadas.forEach((id) => {
+        const modReciente = fincasModLoc[id] && (ahoraElim - (fincasModLoc[id].timestamp || 0) < 120000);
+        if (id && !setFinElim.has(id) && !modReciente) {
+          this.state._fincasEliminadas.push(id);
+          setFinElim.add(id);
+        }
+      });
     }
 
     // 1. EMPRESAS: Comparación semántica y fusión inteligente preservando empresas creadas localmente
@@ -398,7 +423,7 @@ class BoviTrackApp {
       }
     }
 
-    // 2. FINCAS: Comparación semántica preservando lotes locales, precios y fincas creadas localmente
+    // 2. FINCAS: Comparación semántica preservando lotes locales, precios y empresaId de fincas creadas localmente
     if (Array.isArray(datos.fincas)) {
       const eliminadasFincas = new Set(this.state._fincasEliminadas || []);
       const eliminadasEmp = new Set(this.state._empresasEliminadas || []);
@@ -413,16 +438,20 @@ class BoviTrackApp {
 
       const fincasLocalesMap = new Map((this.state.fincas || []).map((f) => [f.id, f]));
       const preciosModLoc = this.state._preciosModificadosLocalmente || {};
+      const fincasModLoc = this.state._fincasModificadasLocalmente || {};
       const ahora = Date.now();
 
       const nuevasFincas = fincasValidasCloud.map((fCloud) => {
         const local = fincasLocalesMap.get(fCloud.id);
         const modLocal = preciosModLoc[fCloud.id];
         const protegerPrecios = modLocal && (ahora - (modLocal.timestamp || 0) < 60000);
+        const modFinca = fincasModLoc[fCloud.id];
+        const empresaProtegida = (modFinca && modFinca.empresaId) ||
+          (local && local.empresaId && local.empresaId !== 'EMP-01' && (!fCloud.empresaId || fCloud.empresaId === 'EMP-01') ? local.empresaId : null);
 
         return {
           ...fCloud,
-          empresaId: fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
+          empresaId: empresaProtegida || fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
           precioLecheLitro: (protegerPrecios && local && local.precioLecheLitro !== undefined)
             ? local.precioLecheLitro
             : fCloud.precioLecheLitro,
@@ -663,6 +692,9 @@ class BoviTrackApp {
         localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
       }
       this.actualizarHeader();
+      if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+        this.compCuadricula.cargarFilasDesdeInventario();
+      }
 
       // Si el usuario está escribiendo activamente en un campo de texto, evitar interrumpirlo
       const usuarioEscribiendo = typeof document !== 'undefined' && document.activeElement &&
@@ -690,7 +722,7 @@ class BoviTrackApp {
       // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
       if (!this.state.usuarioActual) {
         if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
-          const resPre = await this.supabase.descargarDirectorioPreLogin(6000);
+          const resPre = await this.supabase.descargarDirectorioPreLogin(8000);
           if (resPre && resPre.ok && resPre.datos) {
             this.integrarDatosSupabase(resPre.datos);
             this.actualizarBadgeConexion('sincronizado');
@@ -711,7 +743,7 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
       if (res.ok && res.datos) {
         this.integrarDatosSupabase(res.datos);
         this.actualizarHeader();
@@ -752,17 +784,17 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      if (this._syncPendiente) {
-        this._syncPendiente = false;
-        await this.supabase.subirDatosASupabase(this.state);
-      }
-
-      const res = await this.supabase.descargarDatosDeSupabase(6000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
       if (res.ok && res.datos) {
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
           this.actualizarBadgeConexion('sincronizado');
         }
+      }
+
+      if (this._syncPendiente) {
+        this._syncPendiente = false;
+        await this.supabase.subirDatosASupabase(this.state);
       }
     } catch (err) {
       console.warn('Error en heartbeat sync con Supabase:', err);
@@ -1645,30 +1677,7 @@ class BoviTrackApp {
         this.compAdmin.render();
         this.compDashboard.render();
       },
-      onCrearFinca: (finca) => {
-        if (!finca.empresaId) {
-          finca.empresaId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' ? this.state.empresaActivaId : null) || this.state.usuarioActual?.empresaId || (this.state.empresas?.[0]?.id || null);
-        }
-        if (!finca.id) {
-          finca.id = `FIN-${Date.now()}`;
-        }
-        if (!this.state.costosFijos[finca.id]) {
-          this.state.costosFijos[finca.id] = {
-            nomina: 0,
-            insumos: 0,
-            herbicidas: 0,
-            maquinaria: 0,
-            servicios: 0,
-            otros: 0
-          };
-        }
-        this.state.fincas.push(finca);
-        this.state.fincaActivaId = finca.id;
-        this.guardarEstado();
-        this.actualizarHeader();
-        this.refrescarVistas();
-        this.compAdmin.render();
-      },
+      onCrearFinca: (finca) => this.crearFinca(finca),
       onEliminarFinca: (fincaId) => this.eliminarFinca(fincaId),
       onPurgarFinca: (fincaId) => this.purgarFinca(fincaId),
       onPurgarEmpresa: (empresaId) => this.purgarEmpresa(empresaId),
@@ -2281,6 +2290,75 @@ class BoviTrackApp {
     }
     const empId = this.state.usuarioActual.empresaId;
     return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+  }
+
+  crearFinca(finca) {
+    if (!this.state.fincas) this.state.fincas = [];
+    if (!this.state.costosFijos) this.state.costosFijos = {};
+
+    const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual?.empresaId || (this.state.empresas?.[0]?.id || null));
+
+    if (!finca.empresaId) {
+      finca.empresaId = empActiva;
+    }
+    if (!finca.id) {
+      finca.id = `FIN-${Date.now()}`;
+    }
+    if (!finca.codigo) {
+      finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
+    }
+
+    if (Array.isArray(this.state._fincasEliminadas)) {
+      this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
+        (id) => id !== finca.id && id !== finca.codigo
+      );
+    }
+
+    if (!this.state._fincasModificadasLocalmente) {
+      this.state._fincasModificadasLocalmente = {};
+    }
+    this.state._fincasModificadasLocalmente[finca.id] = {
+      timestamp: Date.now(),
+      empresaId: finca.empresaId
+    };
+
+    if (!this.state.costosFijos[finca.id]) {
+      this.state.costosFijos[finca.id] = {
+        nomina: 0,
+        insumos: 0,
+        herbicidas: 0,
+        maquinaria: 0,
+        servicios: 0,
+        otros: 0
+      };
+    }
+
+    const idxExistente = this.state.fincas.findIndex((f) => f.id === finca.id);
+    if (idxExistente !== -1) {
+      this.state.fincas[idxExistente] = { ...this.state.fincas[idxExistente], ...finca };
+    } else {
+      this.state.fincas.push(finca);
+    }
+
+    if (finca.empresaId) {
+      this.state.empresaActivaId = finca.empresaId;
+    }
+    this.state.fincaActivaId = finca.id;
+
+    this.guardarEstado();
+    this.actualizarHeader();
+    if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+      this.compCuadricula.cargarFilasDesdeInventario();
+    }
+    if (typeof this.refrescarVistas === 'function') {
+      this.refrescarVistas();
+    }
+    if (this.compAdmin && typeof this.compAdmin.render === 'function') {
+      this.compAdmin.render();
+    }
+    return finca;
   }
 
   setFincaActiva(fincaId) {
