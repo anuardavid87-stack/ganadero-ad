@@ -149,6 +149,8 @@ export function conectarAutosuggestAnimales({
   onSeleccionar,
   onTrasladarAFinca,
   onReactivarAnimal,
+  onVerFicha = null,
+  modoConsulta = false,
   theme = 'emerald', // 'emerald' | 'purple' | 'indigo' | 'amber'
   maxResultados = 8,
   textoVacio = 'Sin coincidencias con esos números o letras'
@@ -266,10 +268,19 @@ export function conectarAutosuggestAnimales({
       let mensajeAccion = '';
       if (esEnOtraFinca) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}</span>`;
-        mensajeAccion = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
+        if (modoConsulta) {
+          mensajeAccion = `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">🔍 Clic para ver ficha (sin trasladar)</span>`;
+        } else {
+          mensajeAccion = (typeof onVerFicha === 'function'
+            ? `<button type="button" class="btn-autosuggest-ver-ficha text-[9px] font-black text-slate-800 bg-white hover:bg-slate-100 px-2 py-0.5 rounded border border-slate-300 shadow-xs flex items-center gap-1 cursor-pointer mb-0.5" data-index="${idx}" title="Ver ficha técnica sin trasladar el animal">🔍 Ver Ficha (Sin trasladar)</button>`
+            : '') +
+            `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
+        }
       } else if (esExtraido) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">🚪 Extraído (${a.motivoBaja || a._motivoExtraido || 'Baja'})</span>`;
-        mensajeAccion = `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
+        mensajeAccion = modoConsulta
+          ? `<span class="text-[9px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">🔍 Clic para ver ficha</span>`
+          : `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
       html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
@@ -304,8 +315,31 @@ export function conectarAutosuggestAnimales({
     dropMenu.innerHTML = html;
     dropMenu.classList.remove('hidden');
 
+    dropMenu.querySelectorAll('.btn-autosuggest-ver-ficha').forEach((btnFicha) => {
+      btnFicha.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const index = parseInt(btnFicha.getAttribute('data-index'), 10);
+        const seleccionado = coincidenciasActuales[index];
+        if (seleccionado) {
+          const tag = seleccionado.identificacionTag || seleccionado.numero || '';
+          el.value = tag;
+          dropMenu.classList.add('hidden');
+          coincidenciasActuales = [];
+          indiceActivo = -1;
+          if (typeof onVerFicha === 'function') {
+            onVerFicha(seleccionado.id);
+          }
+          if (typeof onSeleccionar === 'function') {
+            onSeleccionar(seleccionado);
+          }
+        }
+      });
+    });
+
     dropMenu.querySelectorAll('.item-sugerencia-animal').forEach((item) => {
       item.addEventListener('mousedown', (e) => {
+        if (e.target && e.target.closest && e.target.closest('.btn-autosuggest-ver-ficha')) return;
         e.preventDefault();
         const index = parseInt(item.getAttribute('data-index'), 10);
         const seleccionado = coincidenciasActuales[index];
@@ -332,19 +366,24 @@ export function conectarAutosuggestAnimales({
     if (!animal) return;
     const tag = animal.identificacionTag || animal.numero || '';
 
-    // Si el animal está en otra finca de la misma empresa
-    if (animal._estaEnOtraFinca) {
-      const confirmacion = confirm(`El animal "${tag}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
-      if (confirmacion && typeof onTrasladarAFinca === 'function') {
-        onTrasladarAFinca(animal);
+    // En modo consulta (ej. Inventario General, Tablas Dinámicas), abrir la ficha directamente sin trasladar
+    if (!modoConsulta) {
+      // Si el animal está en otra finca de la misma empresa y estamos en un módulo de ingreso de datos
+      if (animal._estaEnOtraFinca) {
+        const confirmacion = confirm(`El animal "${tag}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\nPara registrar pesaje o ingresar datos es necesario trasladarlo a la finca en la que estás trabajando.\n¿Deseas trasladarlo inmediatamente?\n(Presiona Cancelar si solo deseas consultar su ficha sin trasladarlo)`);
+        if (confirmacion && typeof onTrasladarAFinca === 'function') {
+          onTrasladarAFinca(animal);
+        } else if (!confirmacion && typeof onVerFicha === 'function') {
+          onVerFicha(animal.id);
+        }
       }
-    }
-    // Si el animal está extraído (baja por venta o muerte)
-    else if (animal._estaExtraido || animal.estadoVida === 'inactivo' || animal.estado === 'inactivo' || animal.motivoBaja) {
-      const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
-      const confirmacion = confirm(`El animal "${tag}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
-      if (confirmacion && typeof onReactivarAnimal === 'function') {
-        onReactivarAnimal(animal);
+      // Si el animal está extraído (baja por venta o muerte)
+      else if (animal._estaExtraido || animal.estadoVida === 'inactivo' || animal.estado === 'inactivo' || animal.motivoBaja) {
+        const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
+        const confirmacion = confirm(`El animal "${tag}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+        if (confirmacion && typeof onReactivarAnimal === 'function') {
+          onReactivarAnimal(animal);
+        }
       }
     }
 
@@ -423,4 +462,3 @@ export function conectarAutosuggestAnimales({
   el._autosuggestBound = controlador;
   return controlador;
 }
-

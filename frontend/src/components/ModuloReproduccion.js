@@ -12,7 +12,7 @@ import { auditarServicioInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class ModuloReproduccion {
-  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.getAnimales = getAnimales;
     this.getAnimalesBusqueda = getAnimalesBusqueda;
@@ -22,6 +22,7 @@ export class ModuloReproduccion {
     this.onEliminarServicio = onEliminarServicio;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
+    this.onVerFicha = onVerFicha;
 
     this.subvistaActiva = 'formulario'; // 'formulario' | 'historial' | 'kpis'
     this.tipoServicioSeleccionado = 'inseminacion_artificial';
@@ -634,6 +635,9 @@ export class ModuloReproduccion {
         onReactivarAnimal: (animal) => {
           if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
         },
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTagManual.value = tag;
@@ -828,20 +832,60 @@ export class ModuloReproduccion {
     const tag = animal.identificacionTag || animal.numero;
     const st = animal.estadoReproductivo || 'Vacía';
     const especie = animal.especie === 'bufalino' ? 'Bufalino 🦬' : 'Vacuno 🐂';
+    const esOtraFinca = Boolean(animal._estaEnOtraFinca);
 
     card.classList.remove('hidden');
     card.innerHTML = `
-      <div class="flex items-center justify-between">
-        <div>
-          <span class="font-black text-indigo-900 text-sm">Hembra Seleccionada: ${tag} (${animal.nombreAlias || 'Sin Nombre'})</span>
-          <p class="text-[11px] text-indigo-700 mt-0.5">${especie} • Raza: ${animal.raza} • Lote: ${animal.lote} • Estado Reproductivo: <strong>${st}</strong></p>
+      <div class="space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-black text-indigo-900 text-sm">Hembra Seleccionada: ${tag} (${animal.nombreAlias || 'Sin Nombre'})</span>
+              ${esOtraFinca ? `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                  🏡 En otra finca: ${animal._fincaNombre || 'Otra Finca'}
+                </span>
+              ` : ''}
+            </div>
+            <p class="text-[11px] text-indigo-700 mt-0.5">${especie} • Raza: ${animal.raza} • Lote: ${animal.lote} • Estado Reproductivo: <strong>${st}</strong></p>
+          </div>
+          <div class="flex items-center gap-2">
+            ${this.onVerFicha ? `
+              <button type="button" id="btn-repro-ver-ficha-hembra" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
+                <span>🔍</span> Ver Ficha
+              </button>
+            ` : ''}
+            <div class="text-right">
+              <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
+              <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
+            </div>
+          </div>
         </div>
-        <div class="text-right">
-          <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
-          <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
-        </div>
+        ${esOtraFinca ? `
+          <div class="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+            <span>⚠️ Puedes consultar la ficha de esta hembra sin trasladarla, pero para registrar un servicio reproductivo debes trasladarla primero a esta finca.</span>
+            ${this.onTrasladarAFinca ? `
+              <button type="button" id="btn-repro-trasladar-hembra" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
+                <span>🚚</span> Trasladar a esta Finca
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
       </div>
     `;
+
+    const btnFichaHembra = document.getElementById('btn-repro-ver-ficha-hembra');
+    if (btnFichaHembra && this.onVerFicha) {
+      btnFichaHembra.addEventListener('click', () => this.onVerFicha(animal.id));
+    }
+
+    const btnTrasladarHembra = document.getElementById('btn-repro-trasladar-hembra');
+    if (btnTrasladarHembra && this.onTrasladarAFinca) {
+      btnTrasladarHembra.addEventListener('click', () => {
+        this.onTrasladarAFinca(animal);
+        this.actualizarCardAntecedentes(animal);
+      });
+    }
   }
 
   actualizarProyeccionesEnVivo() {
@@ -902,6 +946,20 @@ export class ModuloReproduccion {
     if (!tag) {
       alert('Debes seleccionar o digitar el arete de la hembra.');
       return;
+    }
+
+    if (!this.animalSeleccionado && tag) {
+      const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+      this.animalSeleccionado = base.find((a) => (a.identificacionTag || a.numero || '').toUpperCase() === tag.toUpperCase()) || null;
+    }
+
+    if (this.animalSeleccionado && this.animalSeleccionado._estaEnOtraFinca) {
+      const confirmar = confirm(`La hembra "${tag}" se encuentra registrada en la finca "${this.animalSeleccionado._fincaNombre || 'otra finca'}".\n\nPara registrar este servicio reproductivo es necesario trasladarla primero a la finca activa.\n¿Deseas trasladarla ahora mismo y guardar el servicio?`);
+      if (confirmar && typeof this.onTrasladarAFinca === 'function') {
+        this.onTrasladarAFinca(this.animalSeleccionado);
+      } else {
+        return;
+      }
     }
 
     const fecha = document.getElementById('input-fecha-servicio')?.value;

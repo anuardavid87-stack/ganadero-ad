@@ -9,7 +9,7 @@ import { auditarPesajeInput, auditarPalpacionInput, auditarPartoInput } from '..
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, getAnimales, getLotes, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal }) {
+  constructor({ containerId, onGuardarRegistros, getAnimales, getLotes, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.onGuardarRegistros = onGuardarRegistros;
     this.getAnimales = getAnimales;
@@ -17,6 +17,7 @@ export class CuadriculaMasiva {
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
     this.onExtraerAnimal = onExtraerAnimal;
+    this.onVerFicha = onVerFicha;
     this.moduloActivo = 'pesajes'; // 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destetes' | 'extracciones'
     this.loteFiltro = 'todos';
     this.animalSeleccionado = null;
@@ -470,30 +471,64 @@ export class CuadriculaMasiva {
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
-            ${this.onExtraerAnimal ? `
-              <button id="btn-manga-extraer-animal" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Extraer animal por venta o muerte">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${this.onVerFicha ? `
+              <button type="button" id="btn-manga-ver-ficha" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Ver Ficha Técnica del Animal">
+                <span>🔍</span> Ver Ficha
+              </button>
+            ` : ''}
+            ${(!a._estaEnOtraFinca && this.onExtraerAnimal) ? `
+              <button type="button" id="btn-manga-extraer-animal" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Extraer animal por venta o muerte">
                 <span>🚪</span> Extraer Animal
               </button>
             ` : ''}
-            <button id="btn-cerrar-animal-manga" class="text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
+            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
               ✕ Cancelar
             </button>
           </div>
         </div>
 
-        <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
-        ${inputsModulo}
+        ${a._estaEnOtraFinca ? `
+          <!-- BLOQUEO DE INGRESO DE DATOS PARA ANIMALES EN OTRA FINCA (CONSULTA PERMITIDA SIN TRASLADAR) -->
+          <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-3 text-xs text-amber-950">
+            <div class="flex items-start gap-2.5">
+              <span class="text-xl">🏡</span>
+              <div>
+                <div class="font-black text-sm text-amber-950">
+                  Ejemplar registrado en otra finca (${a._fincaNombre || 'Otra Finca'})
+                </div>
+                <p class="mt-0.5 text-amber-900">
+                  Puedes <strong>consultar su ficha técnica</strong> sin trasladarlo. Para registrar <strong>pesajes o demás ingresos de datos</strong> en esta finca, es necesario trasladarlo primero.
+                </p>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              ${this.onVerFicha ? `
+                <button type="button" id="btn-manga-ver-ficha-otra-finca" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <span>🔍</span> Ver Ficha Técnica (Sin Trasladar)
+                </button>
+              ` : ''}
+              ${this.onTrasladarAFinca ? `
+                <button type="button" id="btn-manga-trasladar-ahora" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <span>🚚</span> Trasladar a esta Finca para Ingresar Datos
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        ` : `
+          <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
+          ${inputsModulo}
 
-        <!-- FEEDBACK DE IA EN TIEMPO REAL -->
-        <div id="alerta-ia-manga" class="empty:hidden"></div>
+          <!-- FEEDBACK DE IA EN TIEMPO REAL -->
+          <div id="alerta-ia-manga" class="empty:hidden"></div>
 
-        <!-- BOTÓN DE CONFIRMACIÓN -->
-        <div class="flex justify-end pt-1">
-          <button id="btn-agregar-a-sesion" class="w-full sm:w-auto px-6 py-3.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-            <span>➕</span> Añadir Registro a la Sesión (Enter)
-          </button>
-        </div>
+          <!-- BOTÓN DE CONFIRMACIÓN -->
+          <div class="flex justify-end pt-1">
+            <button id="btn-agregar-a-sesion" class="w-full sm:w-auto px-6 py-3.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+              <span>➕</span> Añadir Registro a la Sesión (Enter)
+            </button>
+          </div>
+        `}
       </div>
     `;
   }
@@ -629,6 +664,25 @@ export class CuadriculaMasiva {
       });
     }
 
+    // Botones de ficha y traslado desde la tarjeta de manga
+    const btnVerFicha = this.container.querySelector('#btn-manga-ver-ficha');
+    if (btnVerFicha && this.onVerFicha) {
+      btnVerFicha.addEventListener('click', () => this.onVerFicha(a.id));
+    }
+
+    const btnVerFichaOtra = this.container.querySelector('#btn-manga-ver-ficha-otra-finca');
+    if (btnVerFichaOtra && this.onVerFicha) {
+      btnVerFichaOtra.addEventListener('click', () => this.onVerFicha(a.id));
+    }
+
+    const btnTrasladarAhora = this.container.querySelector('#btn-manga-trasladar-ahora');
+    if (btnTrasladarAhora && this.onTrasladarAFinca) {
+      btnTrasladarAhora.addEventListener('click', () => {
+        this.onTrasladarAFinca(a);
+        this.seleccionarAnimal(a.identificacionTag || a.numero);
+      });
+    }
+
     // Botón agregar a sesión
     const btnAdd = this.container.querySelector('#btn-agregar-a-sesion');
     if (btnAdd) {
@@ -658,6 +712,11 @@ export class CuadriculaMasiva {
   confirmarRegistroActual() {
     const a = this.animalSeleccionado;
     if (!a) return;
+
+    if (a._estaEnOtraFinca) {
+      alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      return;
+    }
 
     const hoy = new Date().toISOString().split('T')[0];
     const tag = a.identificacionTag || a.numero;
@@ -912,9 +971,11 @@ export class CuadriculaMasiva {
       const encontrado = this.buscarAnimalPorTag(val);
       if (encontrado) {
         if (encontrado._estaEnOtraFinca && this.onTrasladarAFinca) {
-          const confirmar = confirm(`El animal "${val}" se encuentra registrado en "${encontrado._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a esta finca de trabajo?`);
+          const confirmar = confirm(`El animal "${val}" se encuentra registrado en "${encontrado._fincaNombre || 'otra finca'}".\n\nPara registrar pesaje o ingresar datos es necesario trasladarlo a esta finca de trabajo.\n¿Deseas trasladarlo inmediatamente?\n(Presiona Cancelar si solo deseas consultar su ficha sin trasladarlo)`);
           if (confirmar) {
             this.onTrasladarAFinca(encontrado);
+          } else if (this.onVerFicha) {
+            this.onVerFicha(encontrado.id);
           }
         } else if (encontrado._estaExtraido && this.onReactivarAnimal) {
           const confirmar = confirm(`El animal "${val}" se encuentra actualmente EXTRAÍDO (${encontrado._motivoExtraido || 'Baja'}).\n\n¿Deseas reactivarlo e ingresarlo nuevamente al hato de esta finca?`);
@@ -954,6 +1015,9 @@ export class CuadriculaMasiva {
         },
         onReactivarAnimal: (animal) => {
           if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
         },
         theme: 'emerald'
       });

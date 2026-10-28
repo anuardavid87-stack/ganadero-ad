@@ -2828,6 +2828,8 @@ END $$;
           return;
         }
 
+        this.modalCrearEmpresaAbierto = false;
+
         if (this.onCrearEmpresa) {
           const selTiempo = document.getElementById('emp-tiempo-activacion');
           const checkIndef = document.getElementById('emp-tiempo-indefinido-check');
@@ -2852,7 +2854,6 @@ END $$;
           });
         }
 
-        this.modalCrearEmpresaAbierto = false;
         this.render();
       });
     }
@@ -2964,9 +2965,12 @@ END $$;
         const tiempoIndefinido = esIndef;
         const planVigencia = esIndef ? 'Tiempo Indefinido' : (this.empresaEditando.planVigencia || 'Personalizado');
 
+        const empresaOriginal = this.empresaEditando;
+        this.empresaEditando = null;
+
         if (this.onActualizarEmpresa) {
           this.onActualizarEmpresa({
-            ...this.empresaEditando,
+            ...empresaOriginal,
             nombre,
             nit,
             pais,
@@ -2981,7 +2985,6 @@ END $$;
           });
         }
 
-        this.empresaEditando = null;
         this.render();
       });
     }
@@ -3045,7 +3048,7 @@ END $$;
 
         if (confirm(`¿Estás seguro de que deseas eliminar permanentemente la empresa "${nombre}" y todos sus predios y animales asociados?`)) {
           if (this.onEliminarEmpresa) {
-            this.onEliminarEmpresa(id);
+            this.onEliminarEmpresa(id, true);
           }
           this.render();
         }

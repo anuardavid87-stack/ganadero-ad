@@ -511,7 +511,7 @@ export class SupabaseSyncService {
       // ======================================================================
       const tareasOla1 = [];
 
-      // 0. Sincronizar Empresas (Multi-Tenant)
+      // 0. Sincronizar Empresas (Multi-Tenant) + Directorio Espejo Resiliente
       if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
         const empresasFiltradas = esSuperAdmin
           ? appState.empresas
@@ -522,6 +522,39 @@ export class SupabaseSyncService {
             this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
               .then(() => { resultados.empresas = payloadEmpresas.length; })
               .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
+          );
+        }
+
+        if (esSuperAdmin) {
+          const fincasEmpresaMap = {};
+          (appState.fincas || []).forEach(f => {
+            if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          });
+          const usuariosEmpresaMap = {};
+          (appState.usuarios || []).forEach(u => {
+            if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+          });
+          const registroDirectorio = [{
+            id: 'SYS_DIRECTORIO_EMPRESAS',
+            empresa_id: null,
+            fecha: new Date().toISOString().split('T')[0],
+            finca_id: null,
+            finca_nombre: 'SISTEMA',
+            accion: 'SYS_DIRECTORIO_EMPRESAS',
+            modulo: 'sistema_empresas',
+            detalles: {
+              _esSistemaDirectorio: true,
+              empresas: appState.empresas,
+              empresasEliminadas: appState._empresasEliminadas || [],
+              fincasEmpresaMap,
+              usuariosEmpresaMap
+            },
+            usuario: 'Sistema'
+          }];
+          tareasOla1.push(
+            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+              .catch(() => {})
           );
         }
       }
@@ -537,7 +570,17 @@ export class SupabaseSyncService {
         tareasOla1.push(
           this._postgrestUpsert('fincas', payloadFincas, 'id', 10000)
             .then(() => { resultados.fincas = payloadFincas.length; })
-            .catch(err => { console.warn('Supabase Sync fincas:', err.message); })
+            .catch(async (err) => {
+              if (String(err.message || '').includes('23503')) {
+                const payloadSinFk = payloadFincas.map(f => ({ ...f, empresa_id: null }));
+                try {
+                  await this._postgrestUpsert('fincas', payloadSinFk, 'id', 10000);
+                  resultados.fincas = payloadSinFk.length;
+                  return;
+                } catch (_) {}
+              }
+              console.warn('Supabase Sync fincas:', err.message);
+            })
         );
       }
 
@@ -878,6 +921,39 @@ export class SupabaseSyncService {
         telefono: r.telefono || '',
         activo: r.activo !== false
       }));
+
+      // Integrar directorio espejo de empresas si existe en operaciones_diarias
+      const regDir = (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
+        const det = regDir.detalles;
+        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        if (Array.isArray(det.empresas)) {
+          det.empresas.forEach(eDir => {
+            if (!eDir || !eDir.id || eliminadasSet.has(eDir.id)) return;
+            if (!esSuperAdmin && empId && eDir.id !== empId) return;
+            const idx = empresas.findIndex(ec => ec.id === eDir.id);
+            if (idx === -1) {
+              empresas.push(eDir);
+            } else {
+              empresas[idx] = { ...empresas[idx], ...eDir };
+            }
+          });
+        }
+        if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
+          fincas.forEach(f => {
+            if (!f.empresaId && det.fincasEmpresaMap[f.id]) {
+              f.empresaId = det.fincasEmpresaMap[f.id];
+            }
+          });
+        }
+        if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
+          usuarios.forEach(u => {
+            if (!u.empresaId && u.rol !== 'superadmin' && det.usuariosEmpresaMap[u.usuario]) {
+              u.empresaId = det.usuariosEmpresaMap[u.usuario];
+            }
+          });
+        }
+      }
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
 
@@ -923,8 +999,10 @@ export class SupabaseSyncService {
         nombreAlias: (r.animales && r.animales[0]) ? r.animales[0].alias : ''
       }));
 
-      // Operaciones Diarias
-      const operacionesDiarias = (operacionesRes || []).map(r => {
+      // Operaciones Diarias (excluyendo registros internos de sistema)
+      const operacionesDiarias = (operacionesRes || [])
+        .filter(r => r && r.id !== 'SYS_DIRECTORIO_EMPRESAS' && r.accion !== 'SYS_DIRECTORIO_EMPRESAS' && !(r.detalles && r.detalles._esSistemaDirectorio))
+        .map(r => {
         if (r.detalles && typeof r.detalles === 'object' && Object.keys(r.detalles).length > 0) {
           return {
             ...r.detalles,
@@ -1059,13 +1137,15 @@ export class SupabaseSyncService {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
     try {
-      const [empresasRes, usuariosRes] = await Promise.allSettled([
+      const [empresasRes, usuariosRes, dirRes] = await Promise.allSettled([
         this._postgrestGet('empresas', timeoutMs, 'activa=eq.true'),
-        this._postgrestGet('usuarios', timeoutMs, 'activo=eq.true')
+        this._postgrestGet('usuarios', timeoutMs, 'activo=eq.true'),
+        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
       const empresasData = empresasRes.status === 'fulfilled' ? empresasRes.value : [];
       const usuariosData = usuariosRes.status === 'fulfilled' ? usuariosRes.value : [];
+      const dirData = dirRes.status === 'fulfilled' ? dirRes.value : [];
 
       const empresas = (empresasData || []).map(r => this.mapearEmpresaCloudALocal(r));
       const usuarios = (usuariosData || []).map(r => ({
@@ -1080,6 +1160,30 @@ export class SupabaseSyncService {
         telefono: r.telefono || '',
         activo: r.activo !== false
       }));
+
+      const regDir = (dirData || [])[0];
+      if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
+        const det = regDir.detalles;
+        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        if (Array.isArray(det.empresas)) {
+          det.empresas.forEach(eDir => {
+            if (!eDir || !eDir.id || eliminadasSet.has(eDir.id) || eDir.activa === false) return;
+            const idx = empresas.findIndex(ec => ec.id === eDir.id);
+            if (idx === -1) {
+              empresas.push(eDir);
+            } else {
+              empresas[idx] = { ...empresas[idx], ...eDir };
+            }
+          });
+        }
+        if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
+          usuarios.forEach(u => {
+            if (!u.empresaId && u.rol !== 'superadmin' && det.usuariosEmpresaMap[u.usuario]) {
+              u.empresaId = det.usuariosEmpresaMap[u.usuario];
+            }
+          });
+        }
+      }
 
       return {
         ok: true,

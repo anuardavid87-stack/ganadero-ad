@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-26T02:33:50.656Z
+ * Generado automáticamente: 2026-10-28T01:42:23.979Z
  */
 (function() {
   "use strict";
@@ -1138,7 +1138,7 @@ class SupabaseSyncService {
       // ======================================================================
       const tareasOla1 = [];
 
-      // 0. Sincronizar Empresas (Multi-Tenant)
+      // 0. Sincronizar Empresas (Multi-Tenant) + Directorio Espejo Resiliente
       if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
         const empresasFiltradas = esSuperAdmin
           ? appState.empresas
@@ -1149,6 +1149,39 @@ class SupabaseSyncService {
             this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
               .then(() => { resultados.empresas = payloadEmpresas.length; })
               .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
+          );
+        }
+
+        if (esSuperAdmin) {
+          const fincasEmpresaMap = {};
+          (appState.fincas || []).forEach(f => {
+            if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          });
+          const usuariosEmpresaMap = {};
+          (appState.usuarios || []).forEach(u => {
+            if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+          });
+          const registroDirectorio = [{
+            id: 'SYS_DIRECTORIO_EMPRESAS',
+            empresa_id: null,
+            fecha: new Date().toISOString().split('T')[0],
+            finca_id: null,
+            finca_nombre: 'SISTEMA',
+            accion: 'SYS_DIRECTORIO_EMPRESAS',
+            modulo: 'sistema_empresas',
+            detalles: {
+              _esSistemaDirectorio: true,
+              empresas: appState.empresas,
+              empresasEliminadas: appState._empresasEliminadas || [],
+              fincasEmpresaMap,
+              usuariosEmpresaMap
+            },
+            usuario: 'Sistema'
+          }];
+          tareasOla1.push(
+            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+              .catch(() => {})
           );
         }
       }
@@ -1164,7 +1197,17 @@ class SupabaseSyncService {
         tareasOla1.push(
           this._postgrestUpsert('fincas', payloadFincas, 'id', 10000)
             .then(() => { resultados.fincas = payloadFincas.length; })
-            .catch(err => { console.warn('Supabase Sync fincas:', err.message); })
+            .catch(async (err) => {
+              if (String(err.message || '').includes('23503')) {
+                const payloadSinFk = payloadFincas.map(f => ({ ...f, empresa_id: null }));
+                try {
+                  await this._postgrestUpsert('fincas', payloadSinFk, 'id', 10000);
+                  resultados.fincas = payloadSinFk.length;
+                  return;
+                } catch (_) {}
+              }
+              console.warn('Supabase Sync fincas:', err.message);
+            })
         );
       }
 
@@ -1505,6 +1548,39 @@ class SupabaseSyncService {
         telefono: r.telefono || '',
         activo: r.activo !== false
       }));
+
+      // Integrar directorio espejo de empresas si existe en operaciones_diarias
+      const regDir = (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
+        const det = regDir.detalles;
+        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        if (Array.isArray(det.empresas)) {
+          det.empresas.forEach(eDir => {
+            if (!eDir || !eDir.id || eliminadasSet.has(eDir.id)) return;
+            if (!esSuperAdmin && empId && eDir.id !== empId) return;
+            const idx = empresas.findIndex(ec => ec.id === eDir.id);
+            if (idx === -1) {
+              empresas.push(eDir);
+            } else {
+              empresas[idx] = { ...empresas[idx], ...eDir };
+            }
+          });
+        }
+        if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
+          fincas.forEach(f => {
+            if (!f.empresaId && det.fincasEmpresaMap[f.id]) {
+              f.empresaId = det.fincasEmpresaMap[f.id];
+            }
+          });
+        }
+        if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
+          usuarios.forEach(u => {
+            if (!u.empresaId && u.rol !== 'superadmin' && det.usuariosEmpresaMap[u.usuario]) {
+              u.empresaId = det.usuariosEmpresaMap[u.usuario];
+            }
+          });
+        }
+      }
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
 
@@ -1550,8 +1626,10 @@ class SupabaseSyncService {
         nombreAlias: (r.animales && r.animales[0]) ? r.animales[0].alias : ''
       }));
 
-      // Operaciones Diarias
-      const operacionesDiarias = (operacionesRes || []).map(r => {
+      // Operaciones Diarias (excluyendo registros internos de sistema)
+      const operacionesDiarias = (operacionesRes || [])
+        .filter(r => r && r.id !== 'SYS_DIRECTORIO_EMPRESAS' && r.accion !== 'SYS_DIRECTORIO_EMPRESAS' && !(r.detalles && r.detalles._esSistemaDirectorio))
+        .map(r => {
         if (r.detalles && typeof r.detalles === 'object' && Object.keys(r.detalles).length > 0) {
           return {
             ...r.detalles,
@@ -1686,13 +1764,15 @@ class SupabaseSyncService {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
     try {
-      const [empresasRes, usuariosRes] = await Promise.allSettled([
+      const [empresasRes, usuariosRes, dirRes] = await Promise.allSettled([
         this._postgrestGet('empresas', timeoutMs, 'activa=eq.true'),
-        this._postgrestGet('usuarios', timeoutMs, 'activo=eq.true')
+        this._postgrestGet('usuarios', timeoutMs, 'activo=eq.true'),
+        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
       const empresasData = empresasRes.status === 'fulfilled' ? empresasRes.value : [];
       const usuariosData = usuariosRes.status === 'fulfilled' ? usuariosRes.value : [];
+      const dirData = dirRes.status === 'fulfilled' ? dirRes.value : [];
 
       const empresas = (empresasData || []).map(r => this.mapearEmpresaCloudALocal(r));
       const usuarios = (usuariosData || []).map(r => ({
@@ -1707,6 +1787,30 @@ class SupabaseSyncService {
         telefono: r.telefono || '',
         activo: r.activo !== false
       }));
+
+      const regDir = (dirData || [])[0];
+      if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
+        const det = regDir.detalles;
+        const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
+        if (Array.isArray(det.empresas)) {
+          det.empresas.forEach(eDir => {
+            if (!eDir || !eDir.id || eliminadasSet.has(eDir.id) || eDir.activa === false) return;
+            const idx = empresas.findIndex(ec => ec.id === eDir.id);
+            if (idx === -1) {
+              empresas.push(eDir);
+            } else {
+              empresas[idx] = { ...empresas[idx], ...eDir };
+            }
+          });
+        }
+        if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
+          usuarios.forEach(u => {
+            if (!u.empresaId && u.rol !== 'superadmin' && det.usuariosEmpresaMap[u.usuario]) {
+              u.empresaId = det.usuariosEmpresaMap[u.usuario];
+            }
+          });
+        }
+      }
 
       return {
         ok: true,
@@ -3693,6 +3797,8 @@ function conectarAutosuggestAnimales({
   onSeleccionar,
   onTrasladarAFinca,
   onReactivarAnimal,
+  onVerFicha = null,
+  modoConsulta = false,
   theme = 'emerald', // 'emerald' | 'purple' | 'indigo' | 'amber'
   maxResultados = 8,
   textoVacio = 'Sin coincidencias con esos números o letras'
@@ -3810,10 +3916,19 @@ function conectarAutosuggestAnimales({
       let mensajeAccion = '';
       if (esEnOtraFinca) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}</span>`;
-        mensajeAccion = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
+        if (modoConsulta) {
+          mensajeAccion = `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">🔍 Clic para ver ficha (sin trasladar)</span>`;
+        } else {
+          mensajeAccion = (typeof onVerFicha === 'function'
+            ? `<button type="button" class="btn-autosuggest-ver-ficha text-[9px] font-black text-slate-800 bg-white hover:bg-slate-100 px-2 py-0.5 rounded border border-slate-300 shadow-xs flex items-center gap-1 cursor-pointer mb-0.5" data-index="${idx}" title="Ver ficha técnica sin trasladar el animal">🔍 Ver Ficha (Sin trasladar)</button>`
+            : '') +
+            `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">🚚 Clic para trasladar</span>`;
+        }
       } else if (esExtraido) {
         badgeEstadoExtra = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">🚪 Extraído (${a.motivoBaja || a._motivoExtraido || 'Baja'})</span>`;
-        mensajeAccion = `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
+        mensajeAccion = modoConsulta
+          ? `<span class="text-[9px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">🔍 Clic para ver ficha</span>`
+          : `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
       html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
@@ -3848,8 +3963,31 @@ function conectarAutosuggestAnimales({
     dropMenu.innerHTML = html;
     dropMenu.classList.remove('hidden');
 
+    dropMenu.querySelectorAll('.btn-autosuggest-ver-ficha').forEach((btnFicha) => {
+      btnFicha.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const index = parseInt(btnFicha.getAttribute('data-index'), 10);
+        const seleccionado = coincidenciasActuales[index];
+        if (seleccionado) {
+          const tag = seleccionado.identificacionTag || seleccionado.numero || '';
+          el.value = tag;
+          dropMenu.classList.add('hidden');
+          coincidenciasActuales = [];
+          indiceActivo = -1;
+          if (typeof onVerFicha === 'function') {
+            onVerFicha(seleccionado.id);
+          }
+          if (typeof onSeleccionar === 'function') {
+            onSeleccionar(seleccionado);
+          }
+        }
+      });
+    });
+
     dropMenu.querySelectorAll('.item-sugerencia-animal').forEach((item) => {
       item.addEventListener('mousedown', (e) => {
+        if (e.target && e.target.closest && e.target.closest('.btn-autosuggest-ver-ficha')) return;
         e.preventDefault();
         const index = parseInt(item.getAttribute('data-index'), 10);
         const seleccionado = coincidenciasActuales[index];
@@ -3876,19 +4014,24 @@ function conectarAutosuggestAnimales({
     if (!animal) return;
     const tag = animal.identificacionTag || animal.numero || '';
 
-    // Si el animal está en otra finca de la misma empresa
-    if (animal._estaEnOtraFinca) {
-      const confirmacion = confirm(`El animal "${tag}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
-      if (confirmacion && typeof onTrasladarAFinca === 'function') {
-        onTrasladarAFinca(animal);
+    // En modo consulta (ej. Inventario General, Tablas Dinámicas), abrir la ficha directamente sin trasladar
+    if (!modoConsulta) {
+      // Si el animal está en otra finca de la misma empresa y estamos en un módulo de ingreso de datos
+      if (animal._estaEnOtraFinca) {
+        const confirmacion = confirm(`El animal "${tag}" se encuentra registrado en la finca "${animal._fincaNombre || 'otra finca'}".\n\nPara registrar pesaje o ingresar datos es necesario trasladarlo a la finca en la que estás trabajando.\n¿Deseas trasladarlo inmediatamente?\n(Presiona Cancelar si solo deseas consultar su ficha sin trasladarlo)`);
+        if (confirmacion && typeof onTrasladarAFinca === 'function') {
+          onTrasladarAFinca(animal);
+        } else if (!confirmacion && typeof onVerFicha === 'function') {
+          onVerFicha(animal.id);
+        }
       }
-    }
-    // Si el animal está extraído (baja por venta o muerte)
-    else if (animal._estaExtraido || animal.estadoVida === 'inactivo' || animal.estado === 'inactivo' || animal.motivoBaja) {
-      const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
-      const confirmacion = confirm(`El animal "${tag}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
-      if (confirmacion && typeof onReactivarAnimal === 'function') {
-        onReactivarAnimal(animal);
+      // Si el animal está extraído (baja por venta o muerte)
+      else if (animal._estaExtraido || animal.estadoVida === 'inactivo' || animal.estado === 'inactivo' || animal.motivoBaja) {
+        const motivo = animal.motivoBaja || animal._motivoExtraido || 'Baja';
+        const confirmacion = confirm(`El animal "${tag}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
+        if (confirmacion && typeof onReactivarAnimal === 'function') {
+          onReactivarAnimal(animal);
+        }
       }
     }
 
@@ -3967,7 +4110,6 @@ function conectarAutosuggestAnimales({
   el._autosuggestBound = controlador;
   return controlador;
 }
-
 
 
 // ============================================================================
@@ -4991,9 +5133,10 @@ class PanelAlertas {
 
 
 class TablaDinamica {
-  constructor({ containerId, getAnimales, onVerFicha }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, onVerFicha }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.onVerFicha = onVerFicha;
     this.filtroEspecie = 'todas'; // 'todas' | 'bovino' | 'bufalino'
     this.filtroRepro = 'todos';
@@ -5099,7 +5242,10 @@ class TablaDinamica {
   render() {
     if (!this.container) return;
 
-    let animales = (this.getAnimales ? this.getAnimales() : []).filter(
+    const fuenteBase = (this.busqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : (this.getAnimales ? this.getAnimales() : []);
+    let animales = fuenteBase.filter(
       (a) => a.estadoVida === 'activo' || a.estado === 'activo'
     );
 
@@ -5420,13 +5566,20 @@ class TablaDinamica {
     if (inTag) {
       conectarAutosuggestAnimales({
         inputElement: inTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
+        modoConsulta: true,
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inTag.value = tag;
           this.busqueda = tag;
+          if (animal && animal._estaEnOtraFinca && this.onVerFicha) {
+            this.onVerFicha(animal.id);
+          }
           this.filtrarTabla();
         }
       });
@@ -5488,7 +5641,10 @@ class TablaDinamica {
   filtrarTabla() {
     if (!this.container) return;
 
-    let animales = (this.getAnimales ? this.getAnimales() : []).filter(
+    const fuenteBase = (this.busqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : (this.getAnimales ? this.getAnimales() : []);
+    let animales = fuenteBase.filter(
       (a) => a.estadoVida === 'activo' || a.estado === 'activo'
     );
 
@@ -10314,6 +10470,8 @@ END $$;
           return;
         }
 
+        this.modalCrearEmpresaAbierto = false;
+
         if (this.onCrearEmpresa) {
           const selTiempo = document.getElementById('emp-tiempo-activacion');
           const checkIndef = document.getElementById('emp-tiempo-indefinido-check');
@@ -10338,7 +10496,6 @@ END $$;
           });
         }
 
-        this.modalCrearEmpresaAbierto = false;
         this.render();
       });
     }
@@ -10450,9 +10607,12 @@ END $$;
         const tiempoIndefinido = esIndef;
         const planVigencia = esIndef ? 'Tiempo Indefinido' : (this.empresaEditando.planVigencia || 'Personalizado');
 
+        const empresaOriginal = this.empresaEditando;
+        this.empresaEditando = null;
+
         if (this.onActualizarEmpresa) {
           this.onActualizarEmpresa({
-            ...this.empresaEditando,
+            ...empresaOriginal,
             nombre,
             nit,
             pais,
@@ -10467,7 +10627,6 @@ END $$;
           });
         }
 
-        this.empresaEditando = null;
         this.render();
       });
     }
@@ -10531,7 +10690,7 @@ END $$;
 
         if (confirm(`¿Estás seguro de que deseas eliminar permanentemente la empresa "${nombre}" y todos sus predios y animales asociados?`)) {
           if (this.onEliminarEmpresa) {
-            this.onEliminarEmpresa(id);
+            this.onEliminarEmpresa(id, true);
           }
           this.render();
         }
@@ -11598,7 +11757,7 @@ ModuloAdmin;
 
 
 class ModuloReproduccion {
-  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, getServicios, onRegistrarServicio, onActualizarServicio, onEliminarServicio, onTrasladarAFinca, onReactivarAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.getAnimales = getAnimales;
     this.getAnimalesBusqueda = getAnimalesBusqueda;
@@ -11608,6 +11767,7 @@ class ModuloReproduccion {
     this.onEliminarServicio = onEliminarServicio;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
+    this.onVerFicha = onVerFicha;
 
     this.subvistaActiva = 'formulario'; // 'formulario' | 'historial' | 'kpis'
     this.tipoServicioSeleccionado = 'inseminacion_artificial';
@@ -12220,6 +12380,9 @@ class ModuloReproduccion {
         onReactivarAnimal: (animal) => {
           if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
         },
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inputTagManual.value = tag;
@@ -12414,20 +12577,60 @@ class ModuloReproduccion {
     const tag = animal.identificacionTag || animal.numero;
     const st = animal.estadoReproductivo || 'Vacía';
     const especie = animal.especie === 'bufalino' ? 'Bufalino 🦬' : 'Vacuno 🐂';
+    const esOtraFinca = Boolean(animal._estaEnOtraFinca);
 
     card.classList.remove('hidden');
     card.innerHTML = `
-      <div class="flex items-center justify-between">
-        <div>
-          <span class="font-black text-indigo-900 text-sm">Hembra Seleccionada: ${tag} (${animal.nombreAlias || 'Sin Nombre'})</span>
-          <p class="text-[11px] text-indigo-700 mt-0.5">${especie} • Raza: ${animal.raza} • Lote: ${animal.lote} • Estado Reproductivo: <strong>${st}</strong></p>
+      <div class="space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-black text-indigo-900 text-sm">Hembra Seleccionada: ${tag} (${animal.nombreAlias || 'Sin Nombre'})</span>
+              ${esOtraFinca ? `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                  🏡 En otra finca: ${animal._fincaNombre || 'Otra Finca'}
+                </span>
+              ` : ''}
+            </div>
+            <p class="text-[11px] text-indigo-700 mt-0.5">${especie} • Raza: ${animal.raza} • Lote: ${animal.lote} • Estado Reproductivo: <strong>${st}</strong></p>
+          </div>
+          <div class="flex items-center gap-2">
+            ${this.onVerFicha ? `
+              <button type="button" id="btn-repro-ver-ficha-hembra" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
+                <span>🔍</span> Ver Ficha
+              </button>
+            ` : ''}
+            <div class="text-right">
+              <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
+              <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
+            </div>
+          </div>
         </div>
-        <div class="text-right">
-          <span class="text-[10px] text-indigo-800 uppercase font-bold block">Último Parto</span>
-          <span class="font-mono font-bold text-slate-800">${formatearFecha(animal.fechaUltimoParto, 'Primeriza / Sin Partos')}</span>
-        </div>
+        ${esOtraFinca ? `
+          <div class="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+            <span>⚠️ Puedes consultar la ficha de esta hembra sin trasladarla, pero para registrar un servicio reproductivo debes trasladarla primero a esta finca.</span>
+            ${this.onTrasladarAFinca ? `
+              <button type="button" id="btn-repro-trasladar-hembra" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
+                <span>🚚</span> Trasladar a esta Finca
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
       </div>
     `;
+
+    const btnFichaHembra = document.getElementById('btn-repro-ver-ficha-hembra');
+    if (btnFichaHembra && this.onVerFicha) {
+      btnFichaHembra.addEventListener('click', () => this.onVerFicha(animal.id));
+    }
+
+    const btnTrasladarHembra = document.getElementById('btn-repro-trasladar-hembra');
+    if (btnTrasladarHembra && this.onTrasladarAFinca) {
+      btnTrasladarHembra.addEventListener('click', () => {
+        this.onTrasladarAFinca(animal);
+        this.actualizarCardAntecedentes(animal);
+      });
+    }
   }
 
   actualizarProyeccionesEnVivo() {
@@ -12488,6 +12691,20 @@ class ModuloReproduccion {
     if (!tag) {
       alert('Debes seleccionar o digitar el arete de la hembra.');
       return;
+    }
+
+    if (!this.animalSeleccionado && tag) {
+      const base = this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []);
+      this.animalSeleccionado = base.find((a) => (a.identificacionTag || a.numero || '').toUpperCase() === tag.toUpperCase()) || null;
+    }
+
+    if (this.animalSeleccionado && this.animalSeleccionado._estaEnOtraFinca) {
+      const confirmar = confirm(`La hembra "${tag}" se encuentra registrada en la finca "${this.animalSeleccionado._fincaNombre || 'otra finca'}".\n\nPara registrar este servicio reproductivo es necesario trasladarla primero a la finca activa.\n¿Deseas trasladarla ahora mismo y guardar el servicio?`);
+      if (confirmar && typeof this.onTrasladarAFinca === 'function') {
+        this.onTrasladarAFinca(this.animalSeleccionado);
+      } else {
+        return;
+      }
     }
 
     const fecha = document.getElementById('input-fecha-servicio')?.value;
@@ -12638,12 +12855,15 @@ class PestanaAnimales {
     const esSoloConsulta = rol === 'consulta' || rol === 'propietario' || rol === 'consultor';
 
     const todosAnimales = this.getAnimales ? this.getAnimales() : [];
+    const baseAnimales = (this.filtroBusqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : todosAnimales;
     const lotes = this.getLotes ? this.getLotes() : [];
     const razas = [...new Set(todosAnimales.map((a) => (a.raza || '').trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
     // Aplicar filtros
-    let lista = todosAnimales;
+    let lista = baseAnimales;
     if (this.filtroEstadoVida === 'activos') {
       lista = lista.filter((a) => a.estadoVida === 'activo' || a.estado === 'activo');
     } else if (this.filtroEstadoVida === 'vendidos') {
@@ -12851,20 +13071,26 @@ class PestanaAnimales {
     const diasG = parseInt(a.diasGestacionActual || a.diasGestacion || 0);
 
     const esInactivo = (a.estadoVida || a.estado) === 'inactivo' || Boolean(a.motivoBaja);
+    const esOtraFinca = Boolean(a._estaEnOtraFinca);
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : 'hover:bg-slate-50'} transition items-center">
+      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : 'hover:bg-slate-50')} transition items-center">
         <!-- Arete & Especie -->
         <td class="p-3">
           <div class="flex items-center gap-2">
             <span class="text-lg">${esBufalo ? '🦬' : '🐂'}</span>
             <div>
               <span class="font-black font-mono text-slate-900 text-sm block">${tag}</span>
-              <div class="flex items-center gap-1 mt-0.5">
+              <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                 <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${esBufalo ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
                   ${esBufalo ? 'Bufalino' : 'Vacuno'}
                 </span>
+                ${esOtraFinca ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                    🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}
+                  </span>
+                ` : ''}
                 ${esInactivo ? `
                   <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
                     🚪 ${motivoBaja === 'venta' ? 'Vendido' : (motivoBaja === 'muerte' ? 'Muerto' : 'Extraído')}
@@ -13432,7 +13658,7 @@ class PestanaAnimales {
   }
 
   attachEvents() {
-    // Búsqueda reactiva con autosuggest universal (números o letras)
+    // Búsqueda reactiva con autosuggest universal en MODO CONSULTA (ver ficha sin exigir traslado)
     const inputTag = this.container.querySelector('#input-tag-animal-directo');
     if (inputTag) {
       conectarAutosuggestAnimales({
@@ -13440,11 +13666,9 @@ class PestanaAnimales {
         getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
-        onTrasladarAFinca: (animal) => {
-          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
-        },
-        onReactivarAnimal: (animal) => {
-          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        modoConsulta: true,
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
         },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
@@ -13463,7 +13687,7 @@ class PestanaAnimales {
       });
     }
 
-    // Formulario de Búsqueda Directa estilo Manga (Abre la Ficha si coincide exactamente)
+    // Formulario de Búsqueda Directa (Abre la Ficha directamente sin trasladar el animal)
     const formBuscarDirecto = this.container.querySelector('#form-buscar-animal-directo');
     if (formBuscarDirecto) {
       formBuscarDirecto.addEventListener('submit', (e) => {
@@ -13485,24 +13709,9 @@ class PestanaAnimales {
           (a.numero || '').toUpperCase() === q
         );
 
-        // Si es exacto, comprobar si está en otra finca o extraído
-        if (matchExacto) {
-          if (matchExacto._estaEnOtraFinca) {
-            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra registrado en la finca "${matchExacto._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
-            if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
-              this.onTrasladarAFinca(matchExacto);
-            }
-          } else if (matchExacto._estaExtraido) {
-            const motivo = matchExacto.motivoBaja || matchExacto._motivoExtraido || 'Baja';
-            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
-            if (confirmacion && typeof this.onReactivarAnimal === 'function') {
-              this.onReactivarAnimal(matchExacto);
-            }
-          }
-
-          if (this.onVerFicha) {
-            this.onVerFicha(matchExacto.id);
-          }
+        // Si coincide, abrir directamente la ficha sin trasladar el animal
+        if (matchExacto && this.onVerFicha) {
+          this.onVerFicha(matchExacto.id);
         }
 
         this.filtrarTablaEnVivo();
@@ -13910,7 +14119,10 @@ class PestanaAnimales {
   filtrarTablaEnVivo() {
     if (!this.container) return;
     const todosAnimales = this.getAnimales ? this.getAnimales() : [];
-    let lista = todosAnimales;
+    const baseAnimales = (this.filtroBusqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : todosAnimales;
+    let lista = baseAnimales;
 
     if (this.filtroEstadoVida === 'activos') {
       lista = lista.filter((a) => a.estadoVida === 'activo' || a.estado === 'activo');
@@ -16692,7 +16904,7 @@ class ModuloNutricion {
 
 
 class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, getAnimales, getLotes, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal }) {
+  constructor({ containerId, onGuardarRegistros, getAnimales, getLotes, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.onGuardarRegistros = onGuardarRegistros;
     this.getAnimales = getAnimales;
@@ -16700,6 +16912,7 @@ class CuadriculaMasiva {
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
     this.onExtraerAnimal = onExtraerAnimal;
+    this.onVerFicha = onVerFicha;
     this.moduloActivo = 'pesajes'; // 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destetes' | 'extracciones'
     this.loteFiltro = 'todos';
     this.animalSeleccionado = null;
@@ -17153,30 +17366,64 @@ class CuadriculaMasiva {
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
-            ${this.onExtraerAnimal ? `
-              <button id="btn-manga-extraer-animal" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Extraer animal por venta o muerte">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${this.onVerFicha ? `
+              <button type="button" id="btn-manga-ver-ficha" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Ver Ficha Técnica del Animal">
+                <span>🔍</span> Ver Ficha
+              </button>
+            ` : ''}
+            ${(!a._estaEnOtraFinca && this.onExtraerAnimal) ? `
+              <button type="button" id="btn-manga-extraer-animal" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Extraer animal por venta o muerte">
                 <span>🚪</span> Extraer Animal
               </button>
             ` : ''}
-            <button id="btn-cerrar-animal-manga" class="text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
+            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
               ✕ Cancelar
             </button>
           </div>
         </div>
 
-        <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
-        ${inputsModulo}
+        ${a._estaEnOtraFinca ? `
+          <!-- BLOQUEO DE INGRESO DE DATOS PARA ANIMALES EN OTRA FINCA (CONSULTA PERMITIDA SIN TRASLADAR) -->
+          <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-3 text-xs text-amber-950">
+            <div class="flex items-start gap-2.5">
+              <span class="text-xl">🏡</span>
+              <div>
+                <div class="font-black text-sm text-amber-950">
+                  Ejemplar registrado en otra finca (${a._fincaNombre || 'Otra Finca'})
+                </div>
+                <p class="mt-0.5 text-amber-900">
+                  Puedes <strong>consultar su ficha técnica</strong> sin trasladarlo. Para registrar <strong>pesajes o demás ingresos de datos</strong> en esta finca, es necesario trasladarlo primero.
+                </p>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              ${this.onVerFicha ? `
+                <button type="button" id="btn-manga-ver-ficha-otra-finca" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <span>🔍</span> Ver Ficha Técnica (Sin Trasladar)
+                </button>
+              ` : ''}
+              ${this.onTrasladarAFinca ? `
+                <button type="button" id="btn-manga-trasladar-ahora" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+                  <span>🚚</span> Trasladar a esta Finca para Ingresar Datos
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        ` : `
+          <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
+          ${inputsModulo}
 
-        <!-- FEEDBACK DE IA EN TIEMPO REAL -->
-        <div id="alerta-ia-manga" class="empty:hidden"></div>
+          <!-- FEEDBACK DE IA EN TIEMPO REAL -->
+          <div id="alerta-ia-manga" class="empty:hidden"></div>
 
-        <!-- BOTÓN DE CONFIRMACIÓN -->
-        <div class="flex justify-end pt-1">
-          <button id="btn-agregar-a-sesion" class="w-full sm:w-auto px-6 py-3.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-            <span>➕</span> Añadir Registro a la Sesión (Enter)
-          </button>
-        </div>
+          <!-- BOTÓN DE CONFIRMACIÓN -->
+          <div class="flex justify-end pt-1">
+            <button id="btn-agregar-a-sesion" class="w-full sm:w-auto px-6 py-3.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+              <span>➕</span> Añadir Registro a la Sesión (Enter)
+            </button>
+          </div>
+        `}
       </div>
     `;
   }
@@ -17312,6 +17559,25 @@ class CuadriculaMasiva {
       });
     }
 
+    // Botones de ficha y traslado desde la tarjeta de manga
+    const btnVerFicha = this.container.querySelector('#btn-manga-ver-ficha');
+    if (btnVerFicha && this.onVerFicha) {
+      btnVerFicha.addEventListener('click', () => this.onVerFicha(a.id));
+    }
+
+    const btnVerFichaOtra = this.container.querySelector('#btn-manga-ver-ficha-otra-finca');
+    if (btnVerFichaOtra && this.onVerFicha) {
+      btnVerFichaOtra.addEventListener('click', () => this.onVerFicha(a.id));
+    }
+
+    const btnTrasladarAhora = this.container.querySelector('#btn-manga-trasladar-ahora');
+    if (btnTrasladarAhora && this.onTrasladarAFinca) {
+      btnTrasladarAhora.addEventListener('click', () => {
+        this.onTrasladarAFinca(a);
+        this.seleccionarAnimal(a.identificacionTag || a.numero);
+      });
+    }
+
     // Botón agregar a sesión
     const btnAdd = this.container.querySelector('#btn-agregar-a-sesion');
     if (btnAdd) {
@@ -17341,6 +17607,11 @@ class CuadriculaMasiva {
   confirmarRegistroActual() {
     const a = this.animalSeleccionado;
     if (!a) return;
+
+    if (a._estaEnOtraFinca) {
+      alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      return;
+    }
 
     const hoy = new Date().toISOString().split('T')[0];
     const tag = a.identificacionTag || a.numero;
@@ -17595,9 +17866,11 @@ class CuadriculaMasiva {
       const encontrado = this.buscarAnimalPorTag(val);
       if (encontrado) {
         if (encontrado._estaEnOtraFinca && this.onTrasladarAFinca) {
-          const confirmar = confirm(`El animal "${val}" se encuentra registrado en "${encontrado._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a esta finca de trabajo?`);
+          const confirmar = confirm(`El animal "${val}" se encuentra registrado en "${encontrado._fincaNombre || 'otra finca'}".\n\nPara registrar pesaje o ingresar datos es necesario trasladarlo a esta finca de trabajo.\n¿Deseas trasladarlo inmediatamente?\n(Presiona Cancelar si solo deseas consultar su ficha sin trasladarlo)`);
           if (confirmar) {
             this.onTrasladarAFinca(encontrado);
+          } else if (this.onVerFicha) {
+            this.onVerFicha(encontrado.id);
           }
         } else if (encontrado._estaExtraido && this.onReactivarAnimal) {
           const confirmar = confirm(`El animal "${val}" se encuentra actualmente EXTRAÍDO (${encontrado._motivoExtraido || 'Baja'}).\n\n¿Deseas reactivarlo e ingresarlo nuevamente al hato de esta finca?`);
@@ -17637,6 +17910,9 @@ class CuadriculaMasiva {
         },
         onReactivarAnimal: (animal) => {
           if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        },
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
         },
         theme: 'emerald'
       });
@@ -17856,9 +18132,14 @@ class BoviTrackApp {
     }
 
     const idsEmpresasDemo = ['EMP-02'];
+    if (!Array.isArray(state._empresasEliminadas)) {
+      state._empresasEliminadas = [];
+    }
+    const eliminadasEmp = new Set(state._empresasEliminadas);
     if (Array.isArray(state.empresas)) {
       state.empresas = state.empresas.filter((e) => 
         !idsEmpresasDemo.includes(e.id) && 
+        !eliminadasEmp.has(e.id) &&
         e.nombre !== 'Hacienda San José' &&
         e.nombre !== 'Agropecuaria El Porvenir'
       );
@@ -17988,39 +18269,74 @@ class BoviTrackApp {
     if (!datos) return false;
     let huboCambios = false;
 
-    // 1. EMPRESAS: Comparación semántica y fusión
+    // 1. EMPRESAS: Comparación semántica y fusión inteligente preservando empresas creadas localmente
     if (Array.isArray(datos.empresas)) {
+      const eliminadasEmp = new Set(this.state._empresasEliminadas || []);
+      const idsEmpresasDemo = new Set(['EMP-02']);
+      const empresasValidasCloud = datos.empresas.filter((e) =>
+        e && e.id &&
+        !eliminadasEmp.has(e.id) &&
+        !idsEmpresasDemo.has(e.id) &&
+        e.nombre !== 'Hacienda San José' &&
+        e.nombre !== 'Agropecuaria El Porvenir'
+      );
+
       const empLocalesMap = new Map((this.state.empresas || []).map((e) => [e.id, e]));
-      let empCambiaron = (this.state.empresas || []).length !== datos.empresas.length;
+      const empModLoc = this.state._empresasModificadasLocalmente || {};
+      const ahoraEmp = Date.now();
+
+      const nuevasEmpresas = empresasValidasCloud.map((eCloud) => {
+        const local = empLocalesMap.get(eCloud.id) || {};
+        const modLocal = empModLoc[eCloud.id];
+        const protegerLocal = modLocal && (ahoraEmp - (modLocal.timestamp || 0) < 60000);
+        if (protegerLocal && local.id) {
+          return { ...eCloud, ...local };
+        }
+        return { ...local, ...eCloud };
+      });
+
+      // Preservar empresas creadas localmente que no han sido eliminadas ni están aún en Cloud
+      let hayEmpresasLocalesPendientes = false;
+      for (const [eId, eLoc] of empLocalesMap.entries()) {
+        if (!eliminadasEmp.has(eId) && !idsEmpresasDemo.has(eId) && !empresasValidasCloud.some((ec) => ec.id === eId)) {
+          nuevasEmpresas.push(eLoc);
+          hayEmpresasLocalesPendientes = true;
+        }
+      }
+
+      const actualesEmp = this.state.empresas || [];
+      let empCambiaron = actualesEmp.length !== nuevasEmpresas.length;
       if (!empCambiaron) {
-        for (const eCloud of datos.empresas) {
-          const eLoc = empLocalesMap.get(eCloud.id);
+        for (const eNueva of nuevasEmpresas) {
+          const eLoc = empLocalesMap.get(eNueva.id);
           if (!eLoc ||
-              eLoc.nombre !== eCloud.nombre ||
-              eLoc.nit !== eCloud.nit ||
-              Boolean(eLoc.activa !== false) !== Boolean(eCloud.activa !== false) ||
-              String(eLoc.fechaVencimiento || '') !== String(eCloud.fechaVencimiento || '') ||
-              Boolean(eLoc.tiempoIndefinido) !== Boolean(eCloud.tiempoIndefinido)) {
+              eLoc.nombre !== eNueva.nombre ||
+              eLoc.nit !== eNueva.nit ||
+              Boolean(eLoc.activa !== false) !== Boolean(eNueva.activa !== false) ||
+              String(eLoc.fechaVencimiento || '') !== String(eNueva.fechaVencimiento || '') ||
+              Boolean(eLoc.tiempoIndefinido) !== Boolean(eNueva.tiempoIndefinido)) {
             empCambiaron = true;
             break;
           }
         }
       }
-      if (empCambiaron) {
-        this.state.empresas = datos.empresas.map((eCloud) => {
-          const local = empLocalesMap.get(eCloud.id) || {};
-          return { ...local, ...eCloud };
-        });
+      if (empCambiaron && (nuevasEmpresas.length > 0 || actualesEmp.length === 0)) {
+        this.state.empresas = nuevasEmpresas;
         huboCambios = true;
+      }
+      if (hayEmpresasLocalesPendientes) {
+        this.sincronizarConSupabaseDebounced(500);
       }
     }
 
-    // 2. FINCAS: Comparación semántica preservando lotes locales y precios modificados localmente
+    // 2. FINCAS: Comparación semántica preservando lotes locales, precios y fincas creadas localmente
     if (Array.isArray(datos.fincas)) {
       const eliminadasFincas = new Set(this.state._fincasEliminadas || []);
+      const eliminadasEmp = new Set(this.state._empresasEliminadas || []);
       const fincasValidasCloud = datos.fincas.filter((f) => 
         !eliminadasFincas.has(f.id) && 
         !eliminadasFincas.has(f.codigo) &&
+        (!f.empresaId || !eliminadasEmp.has(f.empresaId)) &&
         f.id !== 'FIN-01' &&
         f.id !== 'FIN-1789617298779' &&
         !(f.codigo === 'FIN-01' && f.nombre === 'El Pueblito' && f.id !== 'FIN-PUEBLITO')
@@ -18030,53 +18346,66 @@ class BoviTrackApp {
       const preciosModLoc = this.state._preciosModificadosLocalmente || {};
       const ahora = Date.now();
 
-      let fincasCambiaron = (this.state.fincas || []).length !== fincasValidasCloud.length;
+      const nuevasFincas = fincasValidasCloud.map((fCloud) => {
+        const local = fincasLocalesMap.get(fCloud.id);
+        const modLocal = preciosModLoc[fCloud.id];
+        const protegerPrecios = modLocal && (ahora - (modLocal.timestamp || 0) < 60000);
+
+        return {
+          ...fCloud,
+          empresaId: fCloud.empresaId || (local && local.empresaId) || null,
+          precioLecheLitro: (protegerPrecios && local && local.precioLecheLitro !== undefined)
+            ? local.precioLecheLitro
+            : fCloud.precioLecheLitro,
+          precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
+            ? local.precioCarneKgPie
+            : fCloud.precioCarneKgPie,
+          lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
+            ? local.lotes
+            : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
+        };
+      });
+
+      // Preservar fincas creadas localmente que aún no están en Cloud y no han sido eliminadas
+      let hayFincasLocalesPendientes = false;
+      for (const [fId, fLoc] of fincasLocalesMap.entries()) {
+        if (!eliminadasFincas.has(fId) &&
+            !eliminadasFincas.has(fLoc.codigo) &&
+            (!fLoc.empresaId || !eliminadasEmp.has(fLoc.empresaId)) &&
+            !fincasValidasCloud.some((fc) => fc.id === fId)) {
+          nuevasFincas.push(fLoc);
+          hayFincasLocalesPendientes = true;
+        }
+      }
+
+      const actualesFincas = this.state.fincas || [];
+      let fincasCambiaron = actualesFincas.length !== nuevasFincas.length;
       if (!fincasCambiaron) {
-        for (const fCloud of fincasValidasCloud) {
-          const fLoc = fincasLocalesMap.get(fCloud.id);
-          const modLocal = preciosModLoc[fCloud.id];
-          const protegerPrecios = modLocal && (ahora - (modLocal.timestamp || 0) < 60000);
-
-          const precioLecheTarget = protegerPrecios ? Number(fLoc.precioLecheLitro || 0) : Number(fCloud.precioLecheLitro || 0);
-          const precioCarneTarget = protegerPrecios ? Number(fLoc.precioCarneKgPie || 0) : Number(fCloud.precioCarneKgPie || 0);
-
+        for (const fNueva of nuevasFincas) {
+          const fLoc = fincasLocalesMap.get(fNueva.id);
           if (!fLoc ||
-              fLoc.nombre !== fCloud.nombre ||
-              fLoc.codigo !== fCloud.codigo ||
-              fLoc.empresaId !== fCloud.empresaId ||
-              Number(fLoc.areaHa || 0) !== Number(fCloud.areaHa || 0) ||
-              Number(fLoc.precioLecheLitro || 0) !== precioLecheTarget ||
-              Number(fLoc.precioCarneKgPie || 0) !== precioCarneTarget ||
-              (fLoc.ubicacion || '') !== (fCloud.ubicacion || '')) {
+              fLoc.nombre !== fNueva.nombre ||
+              fLoc.codigo !== fNueva.codigo ||
+              fLoc.empresaId !== fNueva.empresaId ||
+              Number(fLoc.areaHa || 0) !== Number(fNueva.areaHa || 0) ||
+              Number(fLoc.precioLecheLitro || 0) !== Number(fNueva.precioLecheLitro || 0) ||
+              Number(fLoc.precioCarneKgPie || 0) !== Number(fNueva.precioCarneKgPie || 0) ||
+              (fLoc.ubicacion || '') !== (fNueva.ubicacion || '')) {
             fincasCambiaron = true;
             break;
           }
         }
       }
-      if (fincasCambiaron) {
-        this.state.fincas = fincasValidasCloud.map((fCloud) => {
-          const local = fincasLocalesMap.get(fCloud.id);
-          const modLocal = preciosModLoc[fCloud.id];
-          const protegerPrecios = modLocal && (ahora - (modLocal.timestamp || 0) < 60000);
-
-          return {
-            ...fCloud,
-            precioLecheLitro: (protegerPrecios && local && local.precioLecheLitro !== undefined)
-              ? local.precioLecheLitro
-              : fCloud.precioLecheLitro,
-            precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
-              ? local.precioCarneKgPie
-              : fCloud.precioCarneKgPie,
-            lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
-              ? local.lotes
-              : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
-          };
-        });
+      if (fincasCambiaron && (nuevasFincas.length > 0 || actualesFincas.length === 0)) {
+        this.state.fincas = nuevasFincas;
         const fPermitidas = this.getFincasEmpresa();
         if (fPermitidas.length > 0 && !fPermitidas.some((f) => f.id === this.state.fincaActivaId)) {
           this.state.fincaActivaId = fPermitidas[0].id;
         }
         huboCambios = true;
+      }
+      if (hayFincasLocalesPendientes) {
+        this.sincronizarConSupabaseDebounced(500);
       }
     }
 
@@ -19107,9 +19436,10 @@ class BoviTrackApp {
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
-      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal.id, targetFincaId),
-      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal.id),
-      onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal)
+      onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
+      onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal),
+      onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 
     // 2. Panel de Alertas Zootécnicas
@@ -19123,6 +19453,7 @@ class BoviTrackApp {
     this.compDinamica = new TablaDinamica({
       containerId: 'pantalla-dinamica',
       getAnimales: () => this.getAnimalesPredio(),
+      getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 
@@ -19305,7 +19636,8 @@ class BoviTrackApp {
       onActualizarServicio: (data) => this.actualizarEstadoServicio(data),
       onEliminarServicio: (id) => this.eliminarServicioReproductivo(id),
       onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
-      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
+      onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
+      onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 
     // 10. Módulo de Traslados de Animales entre Fincas
@@ -19581,6 +19913,9 @@ class BoviTrackApp {
     emp.planVigencia = `${mInt} ${mInt === 1 ? 'Mes' : mInt === 12 ? 'Año' : 'Meses'}`;
     emp.activa = true;
 
+    if (!this.state._empresasModificadasLocalmente) this.state._empresasModificadasLocalmente = {};
+    this.state._empresasModificadasLocalmente[emp.id] = { timestamp: Date.now() };
+
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compAdmin) this.compAdmin.render();
@@ -19597,6 +19932,8 @@ class BoviTrackApp {
     if (!emp) return;
 
     emp.activa = nuevoEstado;
+    if (!this.state._empresasModificadasLocalmente) this.state._empresasModificadasLocalmente = {};
+    this.state._empresasModificadasLocalmente[emp.id] = { timestamp: Date.now() };
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compAdmin) this.compAdmin.render();
@@ -19644,7 +19981,7 @@ class BoviTrackApp {
         const mes = String(d.getMonth() + 1).padStart(2, '0');
         const dia = String(d.getDate()).padStart(2, '0');
         empresa.fechaVencimiento = `${anio}-${mes}-${dia}`;
-        empresa.planVigencia = `${mes} ${meses === 1 ? 'Mes' : meses === 12 ? 'Año' : 'Meses'}`;
+        empresa.planVigencia = `${meses === 12 ? 1 : meses} ${meses === 1 ? 'Mes' : meses === 12 ? 'Año' : 'Meses'}`;
         empresa.tiempoIndefinido = false;
       }
     } else if (empresa.fechaVencimiento === 'indefinido' || empresa.tiempoIndefinido) {
@@ -19653,7 +19990,25 @@ class BoviTrackApp {
       empresa.planVigencia = 'Tiempo Indefinido';
     }
 
-    this.state.empresas.push(empresa);
+    if (Array.isArray(this.state._empresasEliminadas)) {
+      this.state._empresasEliminadas = this.state._empresasEliminadas.filter((id) => id !== empresa.id);
+    }
+    if (!this.state._empresasModificadasLocalmente) {
+      this.state._empresasModificadasLocalmente = {};
+    }
+    this.state._empresasModificadasLocalmente[empresa.id] = { timestamp: Date.now() };
+
+    const idxExistente = this.state.empresas.findIndex((e) => e.id === empresa.id);
+    if (idxExistente !== -1) {
+      this.state.empresas[idxExistente] = { ...this.state.empresas[idxExistente], ...empresa };
+    } else {
+      this.state.empresas.push(empresa);
+    }
+
+    if (!this.state.empresaActivaId) {
+      this.state.empresaActivaId = empresa.id;
+    }
+
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compAdmin) this.compAdmin.render();
@@ -19672,6 +20027,10 @@ class BoviTrackApp {
         empresaActualizada.tiempoIndefinido = false;
       }
       this.state.empresas[idx] = { ...this.state.empresas[idx], ...empresaActualizada };
+      if (!this.state._empresasModificadasLocalmente) {
+        this.state._empresasModificadasLocalmente = {};
+      }
+      this.state._empresasModificadasLocalmente[empresaActualizada.id] = { timestamp: Date.now() };
       this.guardarEstado();
       this.actualizarHeader();
       if (this.compAdmin) this.compAdmin.render();
@@ -19679,12 +20038,29 @@ class BoviTrackApp {
     }
   }
 
-  eliminarEmpresa(empresaId) {
+  eliminarEmpresa(empresaId, yaConfirmado = false) {
     const emp = (this.state.empresas || []).find((e) => e.id === empresaId);
-    const confirmacion = confirm(`¿Estás seguro de eliminar la empresa "${emp ? emp.nombre : empresaId}"?\nSe eliminarán sus fincas y animales asociados.`);
-    if (!confirmacion) return;
+    if (!yaConfirmado) {
+      const confirmacion = confirm(`¿Estás seguro de eliminar la empresa "${emp ? emp.nombre : empresaId}"?\nSe eliminarán sus fincas y animales asociados.`);
+      if (!confirmacion) return;
+    }
+
+    if (!Array.isArray(this.state._empresasEliminadas)) {
+      this.state._empresasEliminadas = [];
+    }
+    if (!this.state._empresasEliminadas.includes(empresaId)) {
+      this.state._empresasEliminadas.push(empresaId);
+    }
 
     const fincasAEliminar = (this.state.fincas || []).filter((f) => f.empresaId === empresaId).map((f) => f.id);
+    if (!Array.isArray(this.state._fincasEliminadas)) {
+      this.state._fincasEliminadas = [];
+    }
+    fincasAEliminar.forEach((fid) => {
+      if (!this.state._fincasEliminadas.includes(fid)) {
+        this.state._fincasEliminadas.push(fid);
+      }
+    });
     this.state.animales = (this.state.animales || []).filter((a) => !fincasAEliminar.includes(a.fincaId));
     this.state.inversiones = (this.state.inversiones || []).filter((i) => !fincasAEliminar.includes(i.fincaId));
     if (Array.isArray(this.state.servicios)) {
@@ -20063,6 +20439,13 @@ class BoviTrackApp {
     animal._fincaNombre = destinoNombre;
     animal._estaEnOtraFinca = false;
 
+    if (typeof animalOrId === 'object' && animalOrId !== null) {
+      animalOrId.fincaId = destinoId;
+      animalOrId.fincaNombre = destinoNombre;
+      animalOrId._fincaNombre = destinoNombre;
+      animalOrId._estaEnOtraFinca = false;
+    }
+
     // Si estaba inactivo, lo reactivamos en la nueva finca
     if (animal.estadoVida === 'inactivo' || animal.motivoBaja) {
       animal.estadoVida = 'activo';
@@ -20324,7 +20707,13 @@ class BoviTrackApp {
       });
     }
 
-    const servicios = this.getServiciosPredio();
+    const servicios = (this.state.servicios || []).filter(
+      (s) => s && (
+        s.fincaId === animal.fincaId ||
+        s.animalId === animal.id ||
+        String(s.tag || s.animalTag || '').trim().toUpperCase() === String(aTag || '').trim().toUpperCase()
+      )
+    );
     this.compFicha.mostrar(animal, partos, pesajes, servicios);
   }
 

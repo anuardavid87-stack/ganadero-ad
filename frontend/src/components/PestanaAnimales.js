@@ -70,12 +70,15 @@ export class PestanaAnimales {
     const esSoloConsulta = rol === 'consulta' || rol === 'propietario' || rol === 'consultor';
 
     const todosAnimales = this.getAnimales ? this.getAnimales() : [];
+    const baseAnimales = (this.filtroBusqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : todosAnimales;
     const lotes = this.getLotes ? this.getLotes() : [];
     const razas = [...new Set(todosAnimales.map((a) => (a.raza || '').trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
     // Aplicar filtros
-    let lista = todosAnimales;
+    let lista = baseAnimales;
     if (this.filtroEstadoVida === 'activos') {
       lista = lista.filter((a) => a.estadoVida === 'activo' || a.estado === 'activo');
     } else if (this.filtroEstadoVida === 'vendidos') {
@@ -283,20 +286,26 @@ export class PestanaAnimales {
     const diasG = parseInt(a.diasGestacionActual || a.diasGestacion || 0);
 
     const esInactivo = (a.estadoVida || a.estado) === 'inactivo' || Boolean(a.motivoBaja);
+    const esOtraFinca = Boolean(a._estaEnOtraFinca);
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : 'hover:bg-slate-50'} transition items-center">
+      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : 'hover:bg-slate-50')} transition items-center">
         <!-- Arete & Especie -->
         <td class="p-3">
           <div class="flex items-center gap-2">
             <span class="text-lg">${esBufalo ? '🦬' : '🐂'}</span>
             <div>
               <span class="font-black font-mono text-slate-900 text-sm block">${tag}</span>
-              <div class="flex items-center gap-1 mt-0.5">
+              <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                 <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${esBufalo ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
                   ${esBufalo ? 'Bufalino' : 'Vacuno'}
                 </span>
+                ${esOtraFinca ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                    🏡 En otra finca: ${a._fincaNombre || 'Otra Finca'}
+                  </span>
+                ` : ''}
                 ${esInactivo ? `
                   <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
                     🚪 ${motivoBaja === 'venta' ? 'Vendido' : (motivoBaja === 'muerte' ? 'Muerto' : 'Extraído')}
@@ -864,7 +873,7 @@ export class PestanaAnimales {
   }
 
   attachEvents() {
-    // Búsqueda reactiva con autosuggest universal (números o letras)
+    // Búsqueda reactiva con autosuggest universal en MODO CONSULTA (ver ficha sin exigir traslado)
     const inputTag = this.container.querySelector('#input-tag-animal-directo');
     if (inputTag) {
       conectarAutosuggestAnimales({
@@ -872,11 +881,9 @@ export class PestanaAnimales {
         getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
-        onTrasladarAFinca: (animal) => {
-          if (this.onTrasladarAFinca) this.onTrasladarAFinca(animal);
-        },
-        onReactivarAnimal: (animal) => {
-          if (this.onReactivarAnimal) this.onReactivarAnimal(animal);
+        modoConsulta: true,
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
         },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
@@ -895,7 +902,7 @@ export class PestanaAnimales {
       });
     }
 
-    // Formulario de Búsqueda Directa estilo Manga (Abre la Ficha si coincide exactamente)
+    // Formulario de Búsqueda Directa (Abre la Ficha directamente sin trasladar el animal)
     const formBuscarDirecto = this.container.querySelector('#form-buscar-animal-directo');
     if (formBuscarDirecto) {
       formBuscarDirecto.addEventListener('submit', (e) => {
@@ -917,24 +924,9 @@ export class PestanaAnimales {
           (a.numero || '').toUpperCase() === q
         );
 
-        // Si es exacto, comprobar si está en otra finca o extraído
-        if (matchExacto) {
-          if (matchExacto._estaEnOtraFinca) {
-            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra registrado en la finca "${matchExacto._fincaNombre || 'otra finca'}".\n\n¿Deseas trasladarlo inmediatamente a la finca en la que estás trabajando?`);
-            if (confirmacion && typeof this.onTrasladarAFinca === 'function') {
-              this.onTrasladarAFinca(matchExacto);
-            }
-          } else if (matchExacto._estaExtraido) {
-            const motivo = matchExacto.motivoBaja || matchExacto._motivoExtraido || 'Baja';
-            const confirmacion = confirm(`El animal "${matchExacto.identificacionTag || matchExacto.numero}" se encuentra actualmente EXTRAÍDO del hato (Motivo: ${motivo}).\n\n¿Deseas activarlo nuevamente en esta finca?`);
-            if (confirmacion && typeof this.onReactivarAnimal === 'function') {
-              this.onReactivarAnimal(matchExacto);
-            }
-          }
-
-          if (this.onVerFicha) {
-            this.onVerFicha(matchExacto.id);
-          }
+        // Si coincide, abrir directamente la ficha sin trasladar el animal
+        if (matchExacto && this.onVerFicha) {
+          this.onVerFicha(matchExacto.id);
         }
 
         this.filtrarTablaEnVivo();
@@ -1342,7 +1334,10 @@ export class PestanaAnimales {
   filtrarTablaEnVivo() {
     if (!this.container) return;
     const todosAnimales = this.getAnimales ? this.getAnimales() : [];
-    let lista = todosAnimales;
+    const baseAnimales = (this.filtroBusqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : todosAnimales;
+    let lista = baseAnimales;
 
     if (this.filtroEstadoVida === 'activos') {
       lista = lista.filter((a) => a.estadoVida === 'activo' || a.estado === 'activo');

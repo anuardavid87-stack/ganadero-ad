@@ -9,9 +9,10 @@ import { calcularDiasAbiertos, calcularDEL, calcularIEP, formatearFecha } from '
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class TablaDinamica {
-  constructor({ containerId, getAnimales, onVerFicha }) {
+  constructor({ containerId, getAnimales, getAnimalesBusqueda, onVerFicha }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
+    this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.onVerFicha = onVerFicha;
     this.filtroEspecie = 'todas'; // 'todas' | 'bovino' | 'bufalino'
     this.filtroRepro = 'todos';
@@ -117,7 +118,10 @@ export class TablaDinamica {
   render() {
     if (!this.container) return;
 
-    let animales = (this.getAnimales ? this.getAnimales() : []).filter(
+    const fuenteBase = (this.busqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : (this.getAnimales ? this.getAnimales() : []);
+    let animales = fuenteBase.filter(
       (a) => a.estadoVida === 'activo' || a.estado === 'activo'
     );
 
@@ -438,13 +442,20 @@ export class TablaDinamica {
     if (inTag) {
       conectarAutosuggestAnimales({
         inputElement: inTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => this.getAnimalesBusqueda ? this.getAnimalesBusqueda() : (this.getAnimales ? this.getAnimales() : []),
         theme: 'emerald',
         maxResultados: 8,
+        modoConsulta: true,
+        onVerFicha: (animalId) => {
+          if (this.onVerFicha) this.onVerFicha(animalId);
+        },
         onSeleccionar: (animal) => {
           const tag = animal.identificacionTag || animal.numero;
           inTag.value = tag;
           this.busqueda = tag;
+          if (animal && animal._estaEnOtraFinca && this.onVerFicha) {
+            this.onVerFicha(animal.id);
+          }
           this.filtrarTabla();
         }
       });
@@ -506,7 +517,10 @@ export class TablaDinamica {
   filtrarTabla() {
     if (!this.container) return;
 
-    let animales = (this.getAnimales ? this.getAnimales() : []).filter(
+    const fuenteBase = (this.busqueda.trim().length > 0 && this.getAnimalesBusqueda)
+      ? this.getAnimalesBusqueda()
+      : (this.getAnimales ? this.getAnimales() : []);
+    let animales = fuenteBase.filter(
       (a) => a.estadoVida === 'activo' || a.estado === 'activo'
     );
 

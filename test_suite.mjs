@@ -5606,6 +5606,124 @@ test(
   'Motor Zootécnico: Cálculos de GDP y Días Abiertos aceptan tanto DD/MM/YYYY como YYYY-MM-DD'
 );
 
+// ============================================================================
+// 51. PRUEBAS DE CREACIÓN DE EMPRESAS Y CONSULTA SIN TRASLADO EN OTRA FINCA
+// ============================================================================
+console.log(`\n--- 51. Pruebas de Persistencia al Crear Empresas y Consulta de Ficha sin Trasladar ---`);
+
+const appEmpTest = Object.create(BoviTrackApp.prototype);
+appEmpTest.state = {
+  empresaActivaId: 'EMP-01',
+  fincaActivaId: 'FIN-PUEBLITO',
+  empresas: [{ id: 'EMP-01', nombre: 'La Vaca', nit: '1044392241', activa: true }],
+  fincas: [
+    { id: 'FIN-PUEBLITO', empresaId: 'EMP-01', codigo: 'FIN-01', nombre: 'El Pueblito' },
+    { id: 'FIN-BRISAS', empresaId: 'EMP-01', codigo: 'FIN-02', nombre: 'Las Brisas' }
+  ],
+  animales: [
+    { id: 'ANM-OTRA-01', fincaId: 'FIN-BRISAS', identificacionTag: '9988', nombreAlias: 'Mariposa', especie: 'bovino', raza: 'Brahman', sexo: 'hembra', categoria: 'Vaca de Cría', lote: 'Lote 1', estadoVida: 'activo', ultimoPesoKg: 460 }
+  ],
+  usuarios: [{ id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin', activo: true }],
+  usuarioActual: { id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin', activo: true },
+  servicios: [],
+  pesajes: [],
+  costosFijos: {},
+  inversiones: [],
+  traslados: [],
+  operacionesDiarias: [],
+  _empresasEliminadas: [],
+  _fincasEliminadas: []
+};
+appEmpTest.guardarEstado = () => {};
+appEmpTest.actualizarHeader = () => {};
+appEmpTest.sincronizarConSupabaseDebounced = () => {};
+appEmpTest.mostrarVistaActiva = () => {};
+appEmpTest.actualizarContadorAlertas = () => {};
+
+// 51.1: Crear una nueva empresa y verificar que permanece visible tras integrarDatosSupabase
+const empCreada = appEmpTest.crearEmpresa({
+  id: 'EMP-NUEVA-2026',
+  nombre: 'Ganadería El Edén S.A.S.',
+  nit: '901.555.888-2',
+  pais: 'Colombia',
+  moneda: 'COP',
+  mesesVigencia: 12
+});
+
+test(
+  empCreada.planVigencia === '1 Año' && appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026'),
+  'crearEmpresa: Crea la nueva empresa en el estado activo con planVigencia bien formateado ("1 Año")'
+);
+
+// Simular descarga de Supabase donde la nube aún sólo retorna EMP-01
+appEmpTest.integrarDatosSupabase({
+  empresas: [{ id: 'EMP-01', nombre: 'La Vaca', nit: '1044392241', activa: true }],
+  fincas: [
+    { id: 'FIN-PUEBLITO', empresaId: 'EMP-01', codigo: 'FIN-01', nombre: 'El Pueblito' },
+    { id: 'FIN-BRISAS', empresaId: 'EMP-01', codigo: 'FIN-02', nombre: 'Las Brisas' }
+  ]
+});
+
+test(
+  appEmpTest.state.empresas.length === 2 && appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026'),
+  'integrarDatosSupabase (Smart Merge): Preserva empresas recién creadas localmente sin que desaparezcan al sincronizar'
+);
+
+// 51.2: Consultar animal de otra finca permite ver la ficha sin trasladarlo
+const listaUniversal = appEmpTest.getAnimalesParaBusquedaUniversal();
+const animalEnOtraFinca = listaUniversal.find(a => a.identificacionTag === '9988');
+test(
+  Boolean(animalEnOtraFinca && animalEnOtraFinca._estaEnOtraFinca === true && animalEnOtraFinca._fincaNombre === 'Las Brisas'),
+  'getAnimalesParaBusquedaUniversal: Identifica correctamente al ejemplar de otra finca (_estaEnOtraFinca: true)'
+);
+
+let fichaAbiertaAnimal = null;
+appEmpTest.compFicha = {
+  mostrar: (animal) => { fichaAbiertaAnimal = animal; }
+};
+appEmpTest.abrirFichaAnimal('ANM-OTRA-01');
+
+test(
+  fichaAbiertaAnimal &&
+  fichaAbiertaAnimal.id === 'ANM-OTRA-01' &&
+  fichaAbiertaAnimal._estaEnOtraFinca === true &&
+  appEmpTest.state.animales[0].fincaId === 'FIN-BRISAS',
+  'abrirFichaAnimal: Permite consultar la ficha completa de un animal de otra finca SIN trasladarlo de su predio original'
+);
+
+// 51.3: En CuadriculaMasiva (Pesajes y demás ingresos), bloquea el ingreso de datos hasta que se traslade
+const cuadriculaOtraFincaTest = Object.create(CuadriculaMasiva.prototype);
+cuadriculaOtraFincaTest.container = { querySelector: () => null, querySelectorAll: () => [] };
+cuadriculaOtraFincaTest.moduloActivo = 'pesajes';
+cuadriculaOtraFincaTest.registrosSesion = [];
+cuadriculaOtraFincaTest.onVerFicha = (id) => appEmpTest.abrirFichaAnimal(id);
+cuadriculaOtraFincaTest.onTrasladarAFinca = (anm) => appEmpTest.trasladarAnimalInmediato(anm);
+cuadriculaOtraFincaTest.animalSeleccionado = { ...animalEnOtraFinca };
+
+const htmlFormOtraFinca = cuadriculaOtraFincaTest.obtenerHtmlFormularioIngreso();
+test(
+  htmlFormOtraFinca.includes('Ver Ficha Técnica (Sin Trasladar)') &&
+  htmlFormOtraFinca.includes('Trasladar a esta Finca para Ingresar Datos') &&
+  !htmlFormOtraFinca.includes('id="form-nuevo-peso"'),
+  'CuadriculaMasiva: Cuando el animal pertenece a otra finca, permite ver su ficha sin trasladar pero bloquea los campos de pesaje hasta trasladarlo'
+);
+
+cuadriculaOtraFincaTest.confirmarRegistroActual();
+test(
+  cuadriculaOtraFincaTest.registrosSesion.length === 0,
+  'CuadriculaMasiva: Impide guardar pesaje u otros datos mientras el animal no haya sido trasladado a la finca activa'
+);
+
+// Ahora trasladamos al animal y verificamos que habilita el ingreso de pesajes
+appEmpTest.trasladarAnimalInmediato(cuadriculaOtraFincaTest.animalSeleccionado);
+const htmlFormTrasladado = cuadriculaOtraFincaTest.obtenerHtmlFormularioIngreso();
+test(
+  cuadriculaOtraFincaTest.animalSeleccionado._estaEnOtraFinca === false &&
+  appEmpTest.state.animales[0].fincaId === 'FIN-PUEBLITO' &&
+  htmlFormTrasladado.includes('id="form-nuevo-peso"'),
+  'CuadriculaMasiva: Una vez trasladado a la finca activa, desbloquea inmediatamente el formulario de pesaje e ingreso de datos'
+);
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);
