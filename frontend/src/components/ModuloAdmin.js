@@ -23,6 +23,7 @@ export class ModuloAdmin {
   constructor({
     containerId = 'pantalla-admin',
     getFincas,
+    getTodasLasFincas,
     getFincaActiva,
     getUsuarios,
     getTodosLosUsuarios,
@@ -33,6 +34,7 @@ export class ModuloAdmin {
     getEmpresas,
     getEmpresaActiva,
     getAnimales,
+    getTodosLosAnimales,
     getCostosFijosMap,
     getInversionesTodas,
     onSeleccionarEmpresa,
@@ -71,6 +73,7 @@ export class ModuloAdmin {
     this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
 
     this.getFincas = getFincas;
+    this.getTodasLasFincas = getTodasLasFincas || getFincas;
     this.getFincaActiva = getFincaActiva;
     this.getUsuarios = getUsuarios;
     this.getTodosLosUsuarios = getTodosLosUsuarios || getUsuarios;
@@ -81,6 +84,7 @@ export class ModuloAdmin {
     this.getEmpresas = getEmpresas;
     this.getEmpresaActiva = getEmpresaActiva;
     this.getAnimales = getAnimales;
+    this.getTodosLosAnimales = getTodosLosAnimales || getAnimales;
     this.getCostosFijosMap = getCostosFijosMap;
     this.getInversionesTodas = getInversionesTodas;
     this.getPesajes = getPesajes;
@@ -365,9 +369,12 @@ export class ModuloAdmin {
       }
     }
 
-    const todosLosAnimales = this.getAnimales ? this.getAnimales() : [];
+    const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : fincas;
+    const todosLosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : (this.getAnimales ? this.getAnimales() : []);
+    const todosLosUsuariosGlobal = this.getTodosLosUsuarios ? this.getTodosLosUsuarios() : usuarios;
     const costosMap = this.getCostosFijosMap ? this.getCostosFijosMap() : {};
     const todasInversiones = this.getInversionesTodas ? this.getInversionesTodas() : [];
+    const empActivaId = empresaActiva ? empresaActiva.id : (empresasAMostrar[0] ? empresasAMostrar[0].id : null);
 
     return `
       <div class="space-y-6">
@@ -397,9 +404,11 @@ export class ModuloAdmin {
         <!-- LISTA JERÁRQUICA DE EMPRESAS -->
         <div class="space-y-6">
           ${empresasAMostrar.length > 0 ? empresasAMostrar.map((emp) => {
-            const esActiva = empresaActiva && empresaActiva.id === emp.id;
-            const fincasDeEmpresa = fincas.filter((f) => f.empresaId === emp.id);
-            const usuariosDeEmpresa = usuarios.filter((u) => u.empresaId === emp.id);
+            const esActiva = emp.id === empActivaId;
+            const fincasDeEmpresa = todasLasFincasGlobal.filter((f) => f && f.empresaId === emp.id);
+            const fincasEmpresaIdsSet = new Set(fincasDeEmpresa.map((f) => f.id));
+            const totalAnimalesEmpresa = todosLosAnimales.filter((a) => a && fincasEmpresaIdsSet.has(a.fincaId)).length;
+            const usuariosDeEmpresa = todosLosUsuariosGlobal.filter((u) => u && u.empresaId === emp.id);
 
             return `
               <div class="bg-white rounded-3xl border-2 ${esActiva ? 'border-purple-500 ring-4 ring-purple-400/20 shadow-xl' : 'border-slate-200 shadow-md'} overflow-hidden transition">
@@ -470,15 +479,16 @@ export class ModuloAdmin {
                   </div>
                 </div>
 
+                ${esActiva ? `
                 <div class="p-5 sm:p-6 space-y-6">
                   <!-- SECCIÓN ANIDADA 1: PREDIOS & FINCAS -->
                   <div class="space-y-3.5">
                     <div class="flex justify-between items-center pb-2.5 border-b border-slate-100">
                       <div>
                         <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
-                          <span>🏡</span> Predios & Fincas de esta Empresa (${fincasDeEmpresa.length})
+                          <span>🏡</span> Predios & Fincas de ${emp.nombre} (${fincasDeEmpresa.length})
                         </h5>
-                        <p class="text-[11px] text-slate-500">Cada predio administra su hato zootécnico independiente y costos propios.</p>
+                        <p class="text-[11px] text-slate-500">Cada predio administra su hato zootécnico independiente y costos propios (100% aislado de otras empresas).</p>
                       </div>
                       ${!esConsultor ? `
                         <button class="btn-crear-finca-empresa px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}" data-empresa-nombre="${emp.nombre}">
@@ -557,8 +567,8 @@ export class ModuloAdmin {
                         }).join('')}
                       </div>
                     ` : `
-                      <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
-                        Esta empresa aún no tiene fincas registradas. Presiona <strong>"+ Nueva Finca"</strong> para registrar su primer predio.
+                      <div class="p-6 text-center text-slate-500 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-300 text-xs">
+                        🌱 <strong>Empresa en blanco (0 fincas registradas):</strong> Esta empresa está completamente aislada y lista para iniciar desde cero. Presiona <strong>"+ Nueva Finca"</strong> para crear su primer predio e ingresar su inventario.
                       </div>
                     `}
                   </div>
@@ -611,7 +621,7 @@ export class ModuloAdmin {
                                   </td>
                                   <td class="p-2.5">
                                     <div class="flex flex-wrap gap-1 items-center">
-                                      ${this.renderBadgeFincasUsuario(u, fincas)}
+                                      ${this.renderBadgeFincasUsuario(u, fincasDeEmpresa)}
                                     </div>
                                   </td>
                                   <td class="p-2.5">
@@ -657,6 +667,21 @@ export class ModuloAdmin {
                     `}
                   </div>
                 </div>
+                ` : `
+                <div class="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div class="flex items-center gap-3 text-xs text-slate-600">
+                    <span class="px-2.5 py-1 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 shadow-sm">
+                      🏡 ${fincasDeEmpresa.length} Finca(s) • 🏷️ ${totalAnimalesEmpresa} Cabezas • 👥 ${usuariosDeEmpresa.length} Usuario(s)
+                    </span>
+                    <span class="text-[11px] text-slate-500">
+                      🔒 <strong>Aislamiento Multi-Tenant Activo:</strong> Las fincas y el hato de esta empresa están ocultos y protegidos mientras trabajas en otra empresa.
+                    </span>
+                  </div>
+                  <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 shrink-0 cursor-pointer" data-id="${emp.id}">
+                    <span>🎯</span> Seleccionar Empresa para Gestionar sus Fincas
+                  </button>
+                </div>
+                `}
               </div>
             `;
           }).join('') : `

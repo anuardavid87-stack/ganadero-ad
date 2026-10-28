@@ -560,9 +560,16 @@ export class SupabaseSyncService {
       }
 
       // 1. Sincronizar Fincas
-      const fincasFiltradas = esSuperAdmin
+      const eliminadasFincasSet = new Set(Array.isArray(appState._fincasEliminadas) ? appState._fincasEliminadas : []);
+      const todasFincasIdsLocal = new Set(
+        (appState.fincas || [])
+          .filter(f => f && f.id && !eliminadasFincasSet.has(f.id) && !eliminadasFincasSet.has(f.codigo))
+          .map(f => f.id)
+      );
+      const fincasFiltradas = (esSuperAdmin
         ? (appState.fincas || [])
-        : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva);
+        : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva)
+      ).filter(f => f && f.id && todasFincasIdsLocal.has(f.id));
       const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
 
       if (fincasFiltradas.length > 0) {
@@ -621,9 +628,10 @@ export class SupabaseSyncService {
 
       // 3. Sincronizar Animales (Chunking en lotes de 50)
       if (Array.isArray(appState.animales) && appState.animales.length > 0) {
-        const animalesFiltrados = esSuperAdmin
+        const animalesFiltrados = (esSuperAdmin
           ? appState.animales
-          : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId));
+          : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId))
+        ).filter(a => a && a.fincaId && todasFincasIdsLocal.has(a.fincaId));
         if (animalesFiltrados.length > 0) {
           const payloadAnimales = animalesFiltrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
           const BATCH_SIZE = 50;
@@ -641,9 +649,10 @@ export class SupabaseSyncService {
 
       // 4. Sincronizar Servicios Reproductivos
       if (Array.isArray(appState.servicios) && appState.servicios.length > 0) {
-        const serviciosFiltrados = esSuperAdmin
+        const serviciosFiltrados = (esSuperAdmin
           ? appState.servicios
-          : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId));
+          : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId))
+        ).filter(s => s && s.fincaId && todasFincasIdsLocal.has(s.fincaId));
         if (serviciosFiltrados.length > 0) {
           const payloadServicios = serviciosFiltrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
           tareasOla2.push(
@@ -658,7 +667,7 @@ export class SupabaseSyncService {
       if (appState.costosFijos && typeof appState.costosFijos === 'object') {
         const payloadCostos = [];
         for (const [fincaId, c] of Object.entries(appState.costosFijos)) {
-          if (!fincasIdsValidas.has(fincaId)) continue;
+          if (!fincasIdsValidas.has(fincaId) || !todasFincasIdsLocal.has(fincaId)) continue;
           payloadCostos.push({
             finca_id: fincaId,
             nomina: Number(c.nomina || 0),
@@ -680,9 +689,10 @@ export class SupabaseSyncService {
 
       // 6. Inversiones Diferidas
       if (Array.isArray(appState.inversiones) && appState.inversiones.length > 0) {
-        const invFiltradas = esSuperAdmin
+        const invFiltradas = (esSuperAdmin
           ? appState.inversiones
-          : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId));
+          : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId))
+        ).filter(i => i && i.fincaId && todasFincasIdsLocal.has(i.fincaId));
         if (invFiltradas.length > 0) {
           const payloadInv = invFiltradas.map(i => ({
             id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -731,9 +741,10 @@ export class SupabaseSyncService {
 
       // 8. Operaciones Diarias
       if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
-        const opsFiltradas = esSuperAdmin
+        const opsFiltradas = (esSuperAdmin
           ? appState.operacionesDiarias
-          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)));
+          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
+        ).filter(o => o && (!o.fincaId || todasFincasIdsLocal.has(o.fincaId)));
         if (opsFiltradas.length > 0) {
           const payloadOps = opsFiltradas.map(o => ({
             id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -761,9 +772,10 @@ export class SupabaseSyncService {
 
       // 9. Pesajes
       if (Array.isArray(appState.pesajes) && appState.pesajes.length > 0) {
-        const pesajesFiltrados = esSuperAdmin
+        const pesajesFiltrados = (esSuperAdmin
           ? appState.pesajes
-          : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId));
+          : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId))
+        ).filter(p => p && p.fincaId && todasFincasIdsLocal.has(p.fincaId));
         if (pesajesFiltrados.length > 0) {
           const payloadPesajes = pesajesFiltrados.map(p => ({
             id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -789,9 +801,10 @@ export class SupabaseSyncService {
 
       // 10. Nutrición Animal Especial & IA
       if (Array.isArray(appState.nutricion) && appState.nutricion.length > 0) {
-        const nutricionFiltrada = esSuperAdmin
+        const nutricionFiltrada = (esSuperAdmin
           ? appState.nutricion
-          : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId));
+          : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId))
+        ).filter(n => n && n.fincaId && todasFincasIdsLocal.has(n.fincaId));
         if (nutricionFiltrada.length > 0) {
           const payloadNutricion = nutricionFiltrada.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
           tareasOla2.push(
@@ -941,9 +954,11 @@ export class SupabaseSyncService {
         }
         if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
           fincas.forEach(f => {
-            if (!f.empresaId && det.fincasEmpresaMap[f.id]) {
-              f.empresaId = det.fincasEmpresaMap[f.id];
-            }
+            f.empresaId = det.fincasEmpresaMap[f.id] || f.empresaId || 'EMP-01';
+          });
+        } else {
+          fincas.forEach(f => {
+            if (!f.empresaId) f.empresaId = 'EMP-01';
           });
         }
         if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {

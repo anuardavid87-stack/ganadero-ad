@@ -4352,6 +4352,8 @@ console.log('\n--- 40. Pruebas de Eliminación Definitiva de Usuarios en Cloud y
 let postgrestDeleteLlamadas = [];
 const mockSync = new SupabaseSyncService();
 mockSync.estaConfigurado = () => true;
+mockSync.subirDatosASupabase = async () => ({ ok: true });
+mockSync._postgrestUpsert = async () => true;
 mockSync._postgrestDelete = async (tabla, query) => {
   postgrestDeleteLlamadas.push({ tabla, query });
   return true;
@@ -5651,8 +5653,13 @@ const empCreada = appEmpTest.crearEmpresa({
 });
 
 test(
-  empCreada.planVigencia === '1 Año' && appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026'),
-  'crearEmpresa: Crea la nueva empresa en el estado activo con planVigencia bien formateado ("1 Año")'
+  empCreada.planVigencia === '1 Año' &&
+  appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026') &&
+  appEmpTest.state.empresaActivaId === 'EMP-NUEVA-2026' &&
+  appEmpTest.state.fincaActivaId === null &&
+  appEmpTest.getFincasEmpresa().length === 0 &&
+  appEmpTest.getAnimalesParaBusquedaUniversal().length === 0,
+  'crearEmpresa: Crea la nueva empresa y la activa totalmente en blanco (0 fincas, fincaActivaId = null, 0 animales)'
 );
 
 // Simular descarga de Supabase donde la nube aún sólo retorna EMP-01
@@ -5665,11 +5672,16 @@ appEmpTest.integrarDatosSupabase({
 });
 
 test(
-  appEmpTest.state.empresas.length === 2 && appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026'),
-  'integrarDatosSupabase (Smart Merge): Preserva empresas recién creadas localmente sin que desaparezcan al sincronizar'
+  appEmpTest.state.empresas.length === 2 &&
+  appEmpTest.state.empresas.some(e => e.id === 'EMP-NUEVA-2026') &&
+  appEmpTest.getFincasEmpresa().length === 0 &&
+  appEmpTest.state.fincaActivaId === null,
+  'integrarDatosSupabase (Smart Merge): Preserva empresas recién creadas localmente y mantiene 0 fincas en la empresa nueva'
 );
 
-// 51.2: Consultar animal de otra finca permite ver la ficha sin trasladarlo
+// 51.2: Regresar a EMP-01 y verificar que consultar animal de otra finca de LA MISMA empresa permite ver la ficha sin trasladarlo
+appEmpTest.setEmpresaActiva('EMP-01');
+appEmpTest.setFincaActiva('FIN-PUEBLITO');
 const listaUniversal = appEmpTest.getAnimalesParaBusquedaUniversal();
 const animalEnOtraFinca = listaUniversal.find(a => a.identificacionTag === '9988');
 test(
@@ -5722,6 +5734,50 @@ test(
   appEmpTest.state.animales[0].fincaId === 'FIN-PUEBLITO' &&
   htmlFormTrasladado.includes('id="form-nuevo-peso"'),
   'CuadriculaMasiva: Una vez trasladado a la finca activa, desbloquea inmediatamente el formulario de pesaje e ingreso de datos'
+);
+
+// ============================================================================
+// 52. PRUEBAS DE BLINDAJE MULTI-TENANT ESTRICTO ENTRE EMPRESAS Y RESCATE DE FINCAS
+// ============================================================================
+console.log(`\n--- 52. Pruebas de Blindaje Multi-Tenant Estricto entre Empresas y Rescate de Fincas ---`);
+
+// 52.1: Candado de seguridad impide eliminar una finca de EMP-01 cuando se está en otra empresa (EMP-NUEVA-2026)
+appEmpTest.setEmpresaActiva('EMP-NUEVA-2026');
+test(
+  appEmpTest.getFincasEmpresa().length === 0 &&
+  appEmpTest.getFincasAdmin().length === 0 &&
+  appEmpTest.getFincaActiva() === null &&
+  appEmpTest.getAnimalesPredio().length === 0 &&
+  appEmpTest.getAnimalesParaBusquedaUniversal().length === 0,
+  'Aislamiento Multi-Tenant: Al cambiar a una empresa nueva sin fincas, todas las colecciones y selectores retornan 0 registros'
+);
+
+const resEliminarCrossTenant = appEmpTest.eliminarFinca('FIN-PUEBLITO');
+test(
+  resEliminarCrossTenant === false &&
+  appEmpTest.state.fincas.some(f => f.id === 'FIN-PUEBLITO' && f.empresaId === 'EMP-01'),
+  'Seguridad Multi-Tenant (eliminarFinca): Bloquea la eliminación de una finca que pertenece a otra empresa distinta a la activa'
+);
+
+// 52.2: Migración de rescate limpia _fincasEliminadas para restituir El Pueblito, Vesubio y WATERLOO
+const estadoParaRescate = {
+  empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES', activa: true }],
+  fincas: [
+    { id: 'FIN-1789697106872', codigo: 'FIN-528', nombre: 'Vesubio' },
+    { id: 'FIN-1789773477033', codigo: 'FIN-592', nombre: 'WATERLOO' },
+    { id: 'FIN-PUEBLITO', codigo: 'PUE-01', nombre: 'El Pueblito' }
+  ],
+  _fincasEliminadas: ['FIN-PUEBLITO', 'PUE-01', 'FIN-1789697106872', 'FIN-01'],
+  usuarios: []
+};
+appEmpTest.migrarEstadoMultiTenant(estadoParaRescate);
+test(
+  estadoParaRescate._rescateMultiTenant20261028 === true &&
+  !estadoParaRescate._fincasEliminadas.includes('FIN-PUEBLITO') &&
+  !estadoParaRescate._fincasEliminadas.includes('FIN-1789697106872') &&
+  estadoParaRescate.fincas.length === 3 &&
+  estadoParaRescate.fincas.every(f => f.empresaId === 'EMP-01'),
+  'Rescate Multi-Tenant: Restaura FIN-PUEBLITO, Vesubio y WATERLOO removiéndolas de _fincasEliminadas y asegurando empresaId = EMP-01'
 );
 
 console.log(`\n=====================================================================`);

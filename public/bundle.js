@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-28T01:42:23.979Z
+ * Generado automáticamente: 2026-10-28T03:41:58.953Z
  */
 (function() {
   "use strict";
@@ -1187,9 +1187,16 @@ class SupabaseSyncService {
       }
 
       // 1. Sincronizar Fincas
-      const fincasFiltradas = esSuperAdmin
+      const eliminadasFincasSet = new Set(Array.isArray(appState._fincasEliminadas) ? appState._fincasEliminadas : []);
+      const todasFincasIdsLocal = new Set(
+        (appState.fincas || [])
+          .filter(f => f && f.id && !eliminadasFincasSet.has(f.id) && !eliminadasFincasSet.has(f.codigo))
+          .map(f => f.id)
+      );
+      const fincasFiltradas = (esSuperAdmin
         ? (appState.fincas || [])
-        : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva);
+        : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva)
+      ).filter(f => f && f.id && todasFincasIdsLocal.has(f.id));
       const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
 
       if (fincasFiltradas.length > 0) {
@@ -1248,9 +1255,10 @@ class SupabaseSyncService {
 
       // 3. Sincronizar Animales (Chunking en lotes de 50)
       if (Array.isArray(appState.animales) && appState.animales.length > 0) {
-        const animalesFiltrados = esSuperAdmin
+        const animalesFiltrados = (esSuperAdmin
           ? appState.animales
-          : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId));
+          : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId))
+        ).filter(a => a && a.fincaId && todasFincasIdsLocal.has(a.fincaId));
         if (animalesFiltrados.length > 0) {
           const payloadAnimales = animalesFiltrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
           const BATCH_SIZE = 50;
@@ -1268,9 +1276,10 @@ class SupabaseSyncService {
 
       // 4. Sincronizar Servicios Reproductivos
       if (Array.isArray(appState.servicios) && appState.servicios.length > 0) {
-        const serviciosFiltrados = esSuperAdmin
+        const serviciosFiltrados = (esSuperAdmin
           ? appState.servicios
-          : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId));
+          : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId))
+        ).filter(s => s && s.fincaId && todasFincasIdsLocal.has(s.fincaId));
         if (serviciosFiltrados.length > 0) {
           const payloadServicios = serviciosFiltrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
           tareasOla2.push(
@@ -1285,7 +1294,7 @@ class SupabaseSyncService {
       if (appState.costosFijos && typeof appState.costosFijos === 'object') {
         const payloadCostos = [];
         for (const [fincaId, c] of Object.entries(appState.costosFijos)) {
-          if (!fincasIdsValidas.has(fincaId)) continue;
+          if (!fincasIdsValidas.has(fincaId) || !todasFincasIdsLocal.has(fincaId)) continue;
           payloadCostos.push({
             finca_id: fincaId,
             nomina: Number(c.nomina || 0),
@@ -1307,9 +1316,10 @@ class SupabaseSyncService {
 
       // 6. Inversiones Diferidas
       if (Array.isArray(appState.inversiones) && appState.inversiones.length > 0) {
-        const invFiltradas = esSuperAdmin
+        const invFiltradas = (esSuperAdmin
           ? appState.inversiones
-          : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId));
+          : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId))
+        ).filter(i => i && i.fincaId && todasFincasIdsLocal.has(i.fincaId));
         if (invFiltradas.length > 0) {
           const payloadInv = invFiltradas.map(i => ({
             id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -1358,9 +1368,10 @@ class SupabaseSyncService {
 
       // 8. Operaciones Diarias
       if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
-        const opsFiltradas = esSuperAdmin
+        const opsFiltradas = (esSuperAdmin
           ? appState.operacionesDiarias
-          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)));
+          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
+        ).filter(o => o && (!o.fincaId || todasFincasIdsLocal.has(o.fincaId)));
         if (opsFiltradas.length > 0) {
           const payloadOps = opsFiltradas.map(o => ({
             id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -1388,9 +1399,10 @@ class SupabaseSyncService {
 
       // 9. Pesajes
       if (Array.isArray(appState.pesajes) && appState.pesajes.length > 0) {
-        const pesajesFiltrados = esSuperAdmin
+        const pesajesFiltrados = (esSuperAdmin
           ? appState.pesajes
-          : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId));
+          : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId))
+        ).filter(p => p && p.fincaId && todasFincasIdsLocal.has(p.fincaId));
         if (pesajesFiltrados.length > 0) {
           const payloadPesajes = pesajesFiltrados.map(p => ({
             id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
@@ -1416,9 +1428,10 @@ class SupabaseSyncService {
 
       // 10. Nutrición Animal Especial & IA
       if (Array.isArray(appState.nutricion) && appState.nutricion.length > 0) {
-        const nutricionFiltrada = esSuperAdmin
+        const nutricionFiltrada = (esSuperAdmin
           ? appState.nutricion
-          : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId));
+          : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId))
+        ).filter(n => n && n.fincaId && todasFincasIdsLocal.has(n.fincaId));
         if (nutricionFiltrada.length > 0) {
           const payloadNutricion = nutricionFiltrada.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
           tareasOla2.push(
@@ -1568,9 +1581,11 @@ class SupabaseSyncService {
         }
         if (det.fincasEmpresaMap && typeof det.fincasEmpresaMap === 'object') {
           fincas.forEach(f => {
-            if (!f.empresaId && det.fincasEmpresaMap[f.id]) {
-              f.empresaId = det.fincasEmpresaMap[f.id];
-            }
+            f.empresaId = det.fincasEmpresaMap[f.id] || f.empresaId || 'EMP-01';
+          });
+        } else {
+          fincas.forEach(f => {
+            if (!f.empresaId) f.empresaId = 'EMP-01';
           });
         }
         if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
@@ -7665,6 +7680,7 @@ class ModuloAdmin {
   constructor({
     containerId = 'pantalla-admin',
     getFincas,
+    getTodasLasFincas,
     getFincaActiva,
     getUsuarios,
     getTodosLosUsuarios,
@@ -7675,6 +7691,7 @@ class ModuloAdmin {
     getEmpresas,
     getEmpresaActiva,
     getAnimales,
+    getTodosLosAnimales,
     getCostosFijosMap,
     getInversionesTodas,
     onSeleccionarEmpresa,
@@ -7713,6 +7730,7 @@ class ModuloAdmin {
     this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
 
     this.getFincas = getFincas;
+    this.getTodasLasFincas = getTodasLasFincas || getFincas;
     this.getFincaActiva = getFincaActiva;
     this.getUsuarios = getUsuarios;
     this.getTodosLosUsuarios = getTodosLosUsuarios || getUsuarios;
@@ -7723,6 +7741,7 @@ class ModuloAdmin {
     this.getEmpresas = getEmpresas;
     this.getEmpresaActiva = getEmpresaActiva;
     this.getAnimales = getAnimales;
+    this.getTodosLosAnimales = getTodosLosAnimales || getAnimales;
     this.getCostosFijosMap = getCostosFijosMap;
     this.getInversionesTodas = getInversionesTodas;
     this.getPesajes = getPesajes;
@@ -8007,9 +8026,12 @@ class ModuloAdmin {
       }
     }
 
-    const todosLosAnimales = this.getAnimales ? this.getAnimales() : [];
+    const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : fincas;
+    const todosLosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : (this.getAnimales ? this.getAnimales() : []);
+    const todosLosUsuariosGlobal = this.getTodosLosUsuarios ? this.getTodosLosUsuarios() : usuarios;
     const costosMap = this.getCostosFijosMap ? this.getCostosFijosMap() : {};
     const todasInversiones = this.getInversionesTodas ? this.getInversionesTodas() : [];
+    const empActivaId = empresaActiva ? empresaActiva.id : (empresasAMostrar[0] ? empresasAMostrar[0].id : null);
 
     return `
       <div class="space-y-6">
@@ -8039,9 +8061,11 @@ class ModuloAdmin {
         <!-- LISTA JERÁRQUICA DE EMPRESAS -->
         <div class="space-y-6">
           ${empresasAMostrar.length > 0 ? empresasAMostrar.map((emp) => {
-            const esActiva = empresaActiva && empresaActiva.id === emp.id;
-            const fincasDeEmpresa = fincas.filter((f) => f.empresaId === emp.id);
-            const usuariosDeEmpresa = usuarios.filter((u) => u.empresaId === emp.id);
+            const esActiva = emp.id === empActivaId;
+            const fincasDeEmpresa = todasLasFincasGlobal.filter((f) => f && f.empresaId === emp.id);
+            const fincasEmpresaIdsSet = new Set(fincasDeEmpresa.map((f) => f.id));
+            const totalAnimalesEmpresa = todosLosAnimales.filter((a) => a && fincasEmpresaIdsSet.has(a.fincaId)).length;
+            const usuariosDeEmpresa = todosLosUsuariosGlobal.filter((u) => u && u.empresaId === emp.id);
 
             return `
               <div class="bg-white rounded-3xl border-2 ${esActiva ? 'border-purple-500 ring-4 ring-purple-400/20 shadow-xl' : 'border-slate-200 shadow-md'} overflow-hidden transition">
@@ -8112,15 +8136,16 @@ class ModuloAdmin {
                   </div>
                 </div>
 
+                ${esActiva ? `
                 <div class="p-5 sm:p-6 space-y-6">
                   <!-- SECCIÓN ANIDADA 1: PREDIOS & FINCAS -->
                   <div class="space-y-3.5">
                     <div class="flex justify-between items-center pb-2.5 border-b border-slate-100">
                       <div>
                         <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
-                          <span>🏡</span> Predios & Fincas de esta Empresa (${fincasDeEmpresa.length})
+                          <span>🏡</span> Predios & Fincas de ${emp.nombre} (${fincasDeEmpresa.length})
                         </h5>
-                        <p class="text-[11px] text-slate-500">Cada predio administra su hato zootécnico independiente y costos propios.</p>
+                        <p class="text-[11px] text-slate-500">Cada predio administra su hato zootécnico independiente y costos propios (100% aislado de otras empresas).</p>
                       </div>
                       ${!esConsultor ? `
                         <button class="btn-crear-finca-empresa px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}" data-empresa-nombre="${emp.nombre}">
@@ -8199,8 +8224,8 @@ class ModuloAdmin {
                         }).join('')}
                       </div>
                     ` : `
-                      <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
-                        Esta empresa aún no tiene fincas registradas. Presiona <strong>"+ Nueva Finca"</strong> para registrar su primer predio.
+                      <div class="p-6 text-center text-slate-500 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-300 text-xs">
+                        🌱 <strong>Empresa en blanco (0 fincas registradas):</strong> Esta empresa está completamente aislada y lista para iniciar desde cero. Presiona <strong>"+ Nueva Finca"</strong> para crear su primer predio e ingresar su inventario.
                       </div>
                     `}
                   </div>
@@ -8253,7 +8278,7 @@ class ModuloAdmin {
                                   </td>
                                   <td class="p-2.5">
                                     <div class="flex flex-wrap gap-1 items-center">
-                                      ${this.renderBadgeFincasUsuario(u, fincas)}
+                                      ${this.renderBadgeFincasUsuario(u, fincasDeEmpresa)}
                                     </div>
                                   </td>
                                   <td class="p-2.5">
@@ -8299,6 +8324,21 @@ class ModuloAdmin {
                     `}
                   </div>
                 </div>
+                ` : `
+                <div class="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div class="flex items-center gap-3 text-xs text-slate-600">
+                    <span class="px-2.5 py-1 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 shadow-sm">
+                      🏡 ${fincasDeEmpresa.length} Finca(s) • 🏷️ ${totalAnimalesEmpresa} Cabezas • 👥 ${usuariosDeEmpresa.length} Usuario(s)
+                    </span>
+                    <span class="text-[11px] text-slate-500">
+                      🔒 <strong>Aislamiento Multi-Tenant Activo:</strong> Las fincas y el hato de esta empresa están ocultos y protegidos mientras trabajas en otra empresa.
+                    </span>
+                  </div>
+                  <button class="btn-seleccionar-empresa px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs shadow transition flex items-center gap-1.5 shrink-0 cursor-pointer" data-id="${emp.id}">
+                    <span>🎯</span> Seleccionar Empresa para Gestionar sus Fincas
+                  </button>
+                </div>
+                `}
               </div>
             `;
           }).join('') : `
@@ -18108,9 +18148,26 @@ class BoviTrackApp {
     if (!state._fincasEliminadas.includes('FIN-01')) state._fincasEliminadas.push('FIN-01');
     if (!state._fincasEliminadas.includes('FIN-1789617298779')) state._fincasEliminadas.push('FIN-1789617298779');
 
+    // Rescate único Multi-Tenant (Oct 2026): Restaurar fincas legítimas de EMP-01 si fueron eliminadas por confusión entre empresas
+    if (!state._rescateMultiTenant20261028) {
+      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-PUEBLITO', 'PUE-01']);
+      state._fincasEliminadas = state._fincasEliminadas.filter((id) => !idsRescatar.has(id));
+      state._rescateMultiTenant20261028 = true;
+    }
+
     const eliminadasFincas = new Set(state._fincasEliminadas);
     if (Array.isArray(state.fincas)) {
       state.fincas = state.fincas.filter((f) => !idsFincasDemo.includes(f.id) && !eliminadasFincas.has(f.id) && !eliminadasFincas.has(f.codigo));
+      state.fincas.forEach((f) => {
+        if (!f.empresaId) {
+          f.empresaId = 'EMP-01';
+        }
+      });
+    }
+
+    // Garantizar que siempre haya una empresa específica seleccionada (nunca 'todas' mezclado)
+    if (!state.empresaActivaId || state.empresaActivaId === 'todas') {
+      state.empresaActivaId = state.empresas?.[0]?.id || 'EMP-01';
     }
 
     const idsUsuariosDemo = ['USR-00', 'USR-01', 'USR-02', 'USR-03'];
@@ -18269,6 +18326,14 @@ class BoviTrackApp {
     if (!datos) return false;
     let huboCambios = false;
 
+    if (!this.state._rescateMultiTenant20261028) {
+      const idsRescatar = new Set(['FIN-1789697106872', 'FIN-528', 'FIN-1789773477033', 'FIN-592', 'FIN-PUEBLITO', 'PUE-01']);
+      if (Array.isArray(this.state._fincasEliminadas)) {
+        this.state._fincasEliminadas = this.state._fincasEliminadas.filter((id) => !idsRescatar.has(id));
+      }
+      this.state._rescateMultiTenant20261028 = true;
+    }
+
     // 1. EMPRESAS: Comparación semántica y fusión inteligente preservando empresas creadas localmente
     if (Array.isArray(datos.empresas)) {
       const eliminadasEmp = new Set(this.state._empresasEliminadas || []);
@@ -18353,7 +18418,7 @@ class BoviTrackApp {
 
         return {
           ...fCloud,
-          empresaId: fCloud.empresaId || (local && local.empresaId) || null,
+          empresaId: fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
           precioLecheLitro: (protegerPrecios && local && local.precioLecheLitro !== undefined)
             ? local.precioLecheLitro
             : fCloud.precioLecheLitro,
@@ -18399,7 +18464,9 @@ class BoviTrackApp {
       if (fincasCambiaron && (nuevasFincas.length > 0 || actualesFincas.length === 0)) {
         this.state.fincas = nuevasFincas;
         const fPermitidas = this.getFincasEmpresa();
-        if (fPermitidas.length > 0 && !fPermitidas.some((f) => f.id === this.state.fincaActivaId)) {
+        if (fPermitidas.length === 0) {
+          this.state.fincaActivaId = null;
+        } else if (!fPermitidas.some((f) => f.id === this.state.fincaActivaId)) {
           this.state.fincaActivaId = fPermitidas[0].id;
         }
         huboCambios = true;
@@ -18460,13 +18527,15 @@ class BoviTrackApp {
 
     // 4. ANIMALES: Sincronización inteligente con Supabase Cloud
     if (Array.isArray(datos.animales)) {
-      const actuales = this.state.animales || [];
+      const eliminadasFincasAnm = new Set(this.state._fincasEliminadas || []);
+      const animalesValidosCloud = datos.animales.filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)));
+      const actuales = (this.state.animales || []).filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)));
       // Protección de seguridad: Si la nube responde vacío pero hay animales locales, no sobreescribir con []
-      if (datos.animales.length === 0 && actuales.length > 0) {
+      if (animalesValidosCloud.length === 0 && actuales.length > 0) {
         // No sobreescribir animales locales con array vacío de error o consulta en blanco
       } else {
-        const cloudIds = new Set(datos.animales.map((a) => a.id || `${a.fincaId}_${a.identificacionTag}`));
-        const cloudTags = new Set(datos.animales.map((a) => `${a.fincaId}_${a.identificacionTag}`));
+        const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || `${a.fincaId}_${a.identificacionTag}`));
+        const cloudTags = new Set(animalesValidosCloud.map((a) => `${a.fincaId}_${a.identificacionTag}`));
 
         // Preservar ejemplares locales recién registrados que aún no se han subido
         const localesPendientes = actuales.filter((a) => {
@@ -18477,11 +18546,11 @@ class BoviTrackApp {
         });
 
         const anmLocalesMap = new Map(actuales.map((a) => [a.id || a.identificacionTag, a]));
-        const listaFinalAnimales = [...datos.animales, ...localesPendientes];
+        const listaFinalAnimales = [...animalesValidosCloud, ...localesPendientes];
 
-        let anmCambiaron = actuales.length !== listaFinalAnimales.length;
+        let anmCambiaron = (this.state.animales || []).length !== listaFinalAnimales.length;
         if (!anmCambiaron) {
-          for (const aCloud of datos.animales) {
+          for (const aCloud of animalesValidosCloud) {
             const aLoc = anmLocalesMap.get(aCloud.id || aCloud.identificacionTag);
             if (!aLoc ||
                 aLoc.identificacionTag !== aCloud.identificacionTag ||
@@ -18538,18 +18607,20 @@ class BoviTrackApp {
     }
 
     // 6. COLECCIONES OPERATIVAS Y REPRODUCTIVAS (Fusión bidireccional inteligente sin pérdida de datos)
+    const eliminadasFincasSet = new Set(this.state._fincasEliminadas || []);
     const fusionarColeccion = (key, nuevasFilasCloud) => {
       if (!Array.isArray(nuevasFilasCloud)) return;
-      const actuales = this.state[key] || [];
+      const actuales = (this.state[key] || []).filter((item) => !item || !item.fincaId || !eliminadasFincasSet.has(item.fincaId));
+      const filasCloudValidas = nuevasFilasCloud.filter((item) => !item || !item.fincaId || !eliminadasFincasSet.has(item.fincaId));
 
       // Mapeo rápido de filas cloud por id
       const cloudMap = new Map();
-      nuevasFilasCloud.forEach((item) => {
+      filasCloudValidas.forEach((item) => {
         if (item && item.id) cloudMap.set(String(item.id), item);
       });
 
       // Conservar registros locales recién ingresados que aún no figuran en la descarga cloud
-      const combinados = [...nuevasFilasCloud];
+      const combinados = [...filasCloudValidas];
       let hayLocalesPendientesDeSubida = false;
 
       for (const loc of actuales) {
@@ -19525,6 +19596,7 @@ class BoviTrackApp {
     this.compAdmin = new ModuloAdmin({
       containerId: 'pantalla-admin',
       getFincas: () => this.getFincasAdmin(),
+      getTodasLasFincas: () => this.state.fincas || [],
       getFincaActiva: () => this.getFincaActiva(),
       getUsuarios: () => this.getUsuariosAdmin(),
       getTodosLosUsuarios: () => this.state.usuarios || [],
@@ -19534,9 +19606,16 @@ class BoviTrackApp {
       getUsuarioActual: () => this.state.usuarioActual,
       getEmpresas: () => this.getEmpresas(),
       getEmpresaActiva: () => this.getEmpresaActiva(),
-      getAnimales: () => this.state.animales,
+      getAnimales: () => {
+        const fIds = new Set(this.getFincasAdmin().map((f) => f.id));
+        return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
+      },
+      getTodosLosAnimales: () => this.state.animales || [],
       getCostosFijosMap: () => this.state.costosFijos,
-      getInversionesTodas: () => this.state.inversiones,
+      getInversionesTodas: () => {
+        const fIds = new Set(this.getFincasAdmin().map((f) => f.id));
+        return (this.state.inversiones || []).filter((i) => i && fIds.has(i.fincaId));
+      },
       onSeleccionarEmpresa: (empId) => this.setEmpresaActiva(empId),
       onSeleccionarFinca: (fincaId) => this.setFincaActiva(fincaId),
       onCrearEmpresa: (emp) => this.crearEmpresa(emp),
@@ -19564,7 +19643,7 @@ class BoviTrackApp {
       },
       onCrearFinca: (finca) => {
         if (!finca.empresaId) {
-          finca.empresaId = this.state.usuarioActual.empresaId || (this.state.empresaActivaId !== 'todas' ? this.state.empresaActivaId : null) || (this.state.empresas?.[0]?.id || null);
+          finca.empresaId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' ? this.state.empresaActivaId : null) || this.state.usuarioActual?.empresaId || (this.state.empresas?.[0]?.id || null);
         }
         if (!finca.id) {
           finca.id = `FIN-${Date.now()}`;
@@ -19580,11 +19659,10 @@ class BoviTrackApp {
           };
         }
         this.state.fincas.push(finca);
-        if (!this.state.fincaActivaId) {
-          this.state.fincaActivaId = finca.id;
-        }
+        this.state.fincaActivaId = finca.id;
         this.guardarEstado();
         this.actualizarHeader();
+        this.refrescarVistas();
         this.compAdmin.render();
       },
       onEliminarFinca: (fincaId) => this.eliminarFinca(fincaId),
@@ -19620,8 +19698,14 @@ class BoviTrackApp {
         this.actualizarBadgeConexion();
         return res;
       },
-      getPesajes: () => this.state.pesajes || [],
-      getOperaciones: () => this.state.operacionesDiarias || [],
+      getPesajes: () => {
+        const fIds = new Set(this.getFincasAdmin().map((f) => f.id));
+        return (this.state.pesajes || []).filter((p) => p && fIds.has(p.fincaId));
+      },
+      getOperaciones: () => {
+        const fIds = new Set(this.getFincasAdmin().map((f) => f.id));
+        return (this.state.operacionesDiarias || []).filter((o) => o && (!o.fincaId || fIds.has(o.fincaId)));
+      },
       onExportarBackupExcel: async () => await this.exportarCopiaSeguridadCompleta('xlsx'),
       onExportarBackupJSON: async () => await this.exportarCopiaSeguridadCompleta('json')
     });
@@ -19950,14 +20034,20 @@ class BoviTrackApp {
   }
 
   setEmpresaActiva(empId) {
-    this.state.empresaActivaId = empId;
+    const targetEmpId = (!empId || empId === 'todas')
+      ? (this.state.empresas?.[0]?.id || null)
+      : empId;
+    this.state.empresaActivaId = targetEmpId;
     const fincasEmpresa = this.getFincasEmpresa();
-    if (fincasEmpresa.length > 0 && !fincasEmpresa.some((f) => f.id === this.state.fincaActivaId)) {
+    if (fincasEmpresa.length === 0) {
+      this.state.fincaActivaId = null;
+    } else if (!fincasEmpresa.some((f) => f.id === this.state.fincaActivaId)) {
       this.state.fincaActivaId = fincasEmpresa[0].id;
     }
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compCuadricula) this.compCuadricula.cargarFilasDesdeInventario();
+    if (typeof this.refrescarVistas === 'function') this.refrescarVistas();
     this.mostrarVistaActiva();
   }
 
@@ -20005,14 +20095,17 @@ class BoviTrackApp {
       this.state.empresas.push(empresa);
     }
 
-    if (!this.state.empresaActivaId) {
-      this.state.empresaActivaId = empresa.id;
-    }
+    // Aislamiento Multi-Tenant estricto: al crear una nueva empresa se activa en blanco (0 fincas, fincaActivaId = null)
+    this.state.empresaActivaId = empresa.id;
+    const fincasNuevaEmpresa = (this.state.fincas || []).filter((f) => f.empresaId === empresa.id);
+    this.state.fincaActivaId = fincasNuevaEmpresa.length > 0 ? fincasNuevaEmpresa[0].id : null;
 
     this.guardarEstado();
     this.actualizarHeader();
+    if (this.compCuadricula) this.compCuadricula.cargarFilasDesdeInventario();
+    if (typeof this.refrescarVistas === 'function') this.refrescarVistas();
     if (this.compAdmin) this.compAdmin.render();
-    alert(`✓ Empresa "${empresa.nombre}" creada exitosamente.`);
+    alert(`✓ Empresa "${empresa.nombre}" creada exitosamente (0 fincas registradas, lista para iniciar desde cero).`);
     return empresa;
   }
 
@@ -20105,19 +20198,18 @@ class BoviTrackApp {
     if (!this.state.usuarioActual) return [];
     const u = this.state.usuarioActual;
     const rol = u.rol;
-    let fincas = [];
     if (rol === 'superadmin') {
-      if (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas') {
-        fincas = (this.state.fincas || []).filter((f) => f.empresaId === this.state.empresaActivaId);
-      } else {
-        fincas = this.state.fincas || [];
-      }
-      return fincas;
+      const empId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+        ? this.state.empresaActivaId
+        : (this.state.empresas?.[0]?.id || null);
+      if (!empId) return this.state.fincas || [];
+      return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
     }
 
     // Delimitación estricta: usuarios convencionales sólo ven fincas de su empresa asignada
     const empId = u.empresaId || this.state.empresaActivaId;
-    fincas = (this.state.fincas || []).filter((f) => f.empresaId === empId);
+    if (!empId) return this.state.fincas || [];
+    let fincas = (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
 
     // Delimitación por predios/fincas asignadas al usuario (1, 2 o todas)
     if (u.fincasAsignadas && u.fincasAsignadas !== 'todas') {
@@ -20131,46 +20223,57 @@ class BoviTrackApp {
 
   getFincaActiva() {
     const fincas = this.getFincasEmpresa();
+    if (fincas.length === 0) {
+      this.state.fincaActivaId = null;
+      return null;
+    }
     let activa = fincas.find((f) => f.id === this.state.fincaActivaId);
-    if (!activa && fincas.length > 0) {
+    if (!activa) {
       const conAnimales = fincas.find((f) => (this.state.animales || []).some((a) => a.fincaId === f.id));
       activa = conAnimales || fincas[0];
       this.state.fincaActivaId = activa.id;
     }
-    return activa || fincas[0] || null;
+    return activa || null;
   }
 
   getUsuariosEmpresa() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
     if (rol === 'superadmin') {
-      if (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas') {
-        return this.state.usuarios.filter((u) => !u.empresaId || u.empresaId === this.state.empresaActivaId);
+      const empId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+        ? this.state.empresaActivaId
+        : (this.state.empresas?.[0]?.id || null);
+      if (empId) {
+        return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
       }
-      return this.state.usuarios;
+      return this.state.usuarios || [];
     }
     // Delimitación estricta: sólo usuarios de la empresa asignada
     const empId = this.state.usuarioActual.empresaId;
-    return this.state.usuarios.filter((u) => u.empresaId === empId);
+    return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
   }
 
-  // Fincas accesibles para el módulo de administración (el superadmin ve todas las de todas las empresas)
+  // Fincas accesibles para el módulo de administración (delimitadas estrictamente a la empresa activa)
   getFincasAdmin() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
-    if (rol === 'superadmin') {
-      return this.state.fincas || [];
-    }
-    const empId = this.state.usuarioActual.empresaId || this.state.empresaActivaId;
-    return (this.state.fincas || []).filter((f) => f.empresaId === empId);
+    const empId = rol === 'superadmin'
+      ? ((this.state.empresaActivaId && this.state.empresaActivaId !== 'todas') ? this.state.empresaActivaId : (this.state.empresas?.[0]?.id || null))
+      : (this.state.usuarioActual.empresaId || this.state.empresaActivaId);
+    if (!empId) return this.state.fincas || [];
+    return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
   }
 
-  // Usuarios accesibles para el módulo de administración (el superadmin ve todos los del sistema)
+  // Usuarios accesibles para el módulo de administración (delimitados a la empresa activa)
   getUsuariosAdmin() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
     if (rol === 'superadmin') {
-      return this.state.usuarios || [];
+      const empId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+        ? this.state.empresaActivaId
+        : (this.state.empresas?.[0]?.id || null);
+      if (!empId) return this.state.usuarios || [];
+      return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
     }
     const empId = this.state.usuarioActual.empresaId;
     return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
@@ -20211,12 +20314,18 @@ class BoviTrackApp {
     const fActiva = this.getFincaActiva();
     const fincaActivaId = fActiva ? fActiva.id : this.state.fincaActivaId;
     const fincasEmpresa = this.getFincasEmpresa();
-    const fincaMap = new Map((this.state.fincas || []).map((f) => [f.id, f.nombre]));
     const fincasEmpresaIds = new Set(fincasEmpresa.map((f) => f.id));
 
-    // Incluir todos los animales asociados a las fincas de la empresa (o todos si no hay restricción)
+    // Aislamiento Multi-Tenant estricto: si la empresa activa no tiene fincas, jamás exponer animales de otra empresa
+    if (fincasEmpresaIds.size === 0) {
+      return [];
+    }
+
+    const fincaMap = new Map(fincasEmpresa.map((f) => [f.id, f.nombre]));
+
+    // Incluir únicamente los animales asociados a las fincas de la empresa activa
     const animalesBase = (this.state.animales || []).filter((a) =>
-      fincasEmpresaIds.size === 0 || !a.fincaId || fincasEmpresaIds.has(a.fincaId)
+      Boolean(a && a.fincaId && fincasEmpresaIds.has(a.fincaId))
     );
 
     return animalesBase.map((a) => {
@@ -20882,7 +20991,18 @@ class BoviTrackApp {
   eliminarFinca(fincaId) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
-      return;
+      return false;
+    }
+
+    const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId || f.codigo === fincaId);
+    const empActivaId = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual?.empresaId || null);
+
+    // Candado de Seguridad Multi-Tenant: bloquear eliminación si la finca pertenece a una empresa distinta a la activa
+    if (fincaObj && fincaObj.empresaId && empActivaId && fincaObj.empresaId !== empActivaId) {
+      alert('⛔ Acción bloqueada por seguridad Multi-Tenant: Esta finca pertenece a otra empresa y no puede eliminarse desde la empresa actual.');
+      return false;
     }
 
     // Remover animales, costos, inversiones, pesajes, servicios, traslados, operaciones y nutrición asociados
@@ -20911,7 +21031,6 @@ class BoviTrackApp {
       delete this.state._preciosModificadosLocalmente[fincaId];
     }
 
-    const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId || f.codigo === fincaId);
     if (!Array.isArray(this.state._fincasEliminadas)) {
       this.state._fincasEliminadas = [];
     }
@@ -20940,10 +21059,10 @@ class BoviTrackApp {
       });
     }
 
-    // Si era la finca activa, seleccionar la primera permitida disponible
+    // Si era la finca activa, seleccionar la primera permitida disponible de LA MISMA EMPRESA (o null si quedó en 0)
     const fincasRestantes = this.getFincasEmpresa();
-    if (this.state.fincaActivaId === fincaId) {
-      this.state.fincaActivaId = fincasRestantes.length > 0 ? fincasRestantes[0].id : (this.state.fincas[0]?.id || null);
+    if (this.state.fincaActivaId === fincaId || this.state.fincaActivaId === realFincaId) {
+      this.state.fincaActivaId = fincasRestantes.length > 0 ? fincasRestantes[0].id : null;
     }
 
     // Eliminar inmediatamente en Supabase Cloud
@@ -22509,9 +22628,11 @@ class BoviTrackApp {
           if (empList.length === 0) {
             selEmp.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Empresas Registradas)</option>';
           } else {
+            const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+              ? this.state.empresaActivaId
+              : empList[0].id;
             selEmp.innerHTML = `
-              <option value="todas" ${this.state.empresaActivaId === 'todas' || !this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🌐 Todas las Empresas</option>
-              ${empList.map((e) => `<option value="${e.id}" ${e.id === this.state.empresaActivaId ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
+              ${empList.map((e) => `<option value="${e.id}" ${e.id === empActiva ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🏢 ${e.nombre}</option>`).join('')}
             `;
           }
         }
@@ -22981,10 +23102,8 @@ class BoviTrackApp {
 
   getTrasladosEmpresa() {
     if (!Array.isArray(this.state.traslados)) return [];
-    if (this.state.usuarioActual && this.state.usuarioActual.rol === 'superadmin') {
-      return this.state.traslados;
-    }
     const fincasEmpresaIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+    if (fincasEmpresaIds.size === 0) return [];
     return this.state.traslados.filter(
       (t) => fincasEmpresaIds.has(t.fincaOrigenId) || fincasEmpresaIds.has(t.fincaDestinoId)
     );
@@ -23169,12 +23288,12 @@ class BoviTrackApp {
     }
 
     const fincasEmpresa = this.getFincasEmpresa().map((f) => f.id);
-    const esSuperAdmin = this.state.usuarioActual && this.state.usuarioActual.rol === 'superadmin';
 
-    // Aislamiento tenant: solo operaciones de fincas de la empresa del usuario
-    if (!esSuperAdmin) {
-      list = list.filter((op) => !op.fincaId || fincasEmpresa.includes(op.fincaId));
+    // Aislamiento Multi-Tenant estricto: solo operaciones de las fincas de la empresa activa
+    if (fincasEmpresa.length === 0) {
+      return [];
     }
+    list = list.filter((op) => Boolean(op && op.fincaId && fincasEmpresa.includes(op.fincaId)));
 
     // Filtro por finca
     if (finca && finca !== 'todas') {
