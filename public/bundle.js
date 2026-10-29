@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-29T15:21:43.559Z
+ * Generado automáticamente: 2026-10-29T15:22:41.887Z
  */
 (function() {
   "use strict";
@@ -6994,7 +6994,7 @@ class TablaDinamica {
       };
     });
 
-    if (typeof XLSX !== 'undefined' && XLSX.utils) {
+    if (typeof XLSX !== 'undefined' && XLSX.utils && typeof XLSX.utils.book_new === 'function' && typeof XLSX.utils.json_to_sheet === 'function') {
       const wb = XLSX.utils.book_new();
       const wsAnimales = XLSX.utils.json_to_sheet(filasAnimales.length > 0 ? filasAnimales : [{ Mensaje: 'Sin registros para el filtro actual' }]);
       XLSX.utils.book_append_sheet(wb, wsAnimales, 'Informe_Animales');
