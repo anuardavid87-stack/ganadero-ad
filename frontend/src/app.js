@@ -1556,11 +1556,12 @@ class BoviTrackApp {
       onAccionZootecnica: ({ animalId, tipo }) => this.manejarAccionZootecnica(animalId, tipo)
     });
 
-    // 3. Tablas Dinámicas (Animal por Animal)
+    // 3. Centro de Informes & Inteligencia Ganadera (Rankings, Razas & Cruces)
     this.compDinamica = new TablaDinamica({
       containerId: 'pantalla-dinamica',
       getAnimales: () => this.getAnimalesPredio(),
       getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
+      getFincaActiva: () => this.getFincaActiva(),
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 

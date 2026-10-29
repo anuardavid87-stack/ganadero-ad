@@ -5885,6 +5885,107 @@ test(
   '_postgrestGet (Paginación Automática): Supera el límite de 1,000 filas de PostgREST descargando los 2,150 registros completos para la app móvil'
 );
 
+// ============================================================================
+// 54. PRUEBAS DEL CENTRO DE INFORMES & INTELIGENCIA GANADERA (RANKINGS, RAZAS & CRUCES)
+// ============================================================================
+console.log(`\n--- 54. Pruebas del Centro de Informes & Inteligencia Ganadera (Rankings, Razas & Cruces) ---`);
+
+const { CATALOGO_INFORMES_GANADEROS, RAZAS_REFERENCIA_GANADERA } = await import('./frontend/src/components/TablaDinamica.js');
+
+// 54.1: Verificar los 12 informes ganaderos especializados del catálogo y razas de referencia (incluyendo Simmental)
+test(
+  Array.isArray(CATALOGO_INFORMES_GANADEROS) &&
+  CATALOGO_INFORMES_GANADEROS.length === 12 &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_leche') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_gdp') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_peso') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_iep') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'analisis_raza') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'merito_genetico') &&
+  CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'candidatos_descarte') &&
+  RAZAS_REFERENCIA_GANADERA.includes('Simmental'),
+  'Centro de Informes: Dispone de los 12 informes ganaderos especializados y catálogo racial con Simmental'
+);
+
+// 54.2: Filtrado específico por Raza Simmental y selección del dato puntual (Ganancia de Peso - GDP o Todos los datos)
+const hatoMultiRaza = [
+  { id: 'SIM-01', identificacionTag: 'SM-101', nombreAlias: 'Princesa', especie: 'bovino', raza: 'Simmental', sexo: 'hembra', categoria: 'Vaca de Ordeño', lote: 'Lote Élite', ultimoPesoKg: 580, gdpPromedioGDia: 840, promedioLecheDiariaL: 19.5, estadoReproductivo: 'Preñada', diasGestacionActual: 150, fechaUltimoParto: '2025-11-10', padre: 'TORO-SIM-REX', madre: 'MADRE-01', estadoVida: 'activo' },
+  { id: 'SIM-02', identificacionTag: 'SM-102', nombreAlias: 'Titán', especie: 'bovino', raza: 'Simmental', sexo: 'macho', categoria: 'Novillo de Ceba', lote: 'Lote Ceba', ultimoPesoKg: 510, gdpPromedioGDia: 960, promedioLecheDiariaL: 0, estadoReproductivo: 'No aplica', padre: 'TORO-SIM-REX', madre: 'MADRE-02', estadoVida: 'activo' },
+  { id: 'BRA-01', identificacionTag: 'BR-201', nombreAlias: 'Sultana', especie: 'bovino', raza: 'Brahman', sexo: 'hembra', categoria: 'Vaca de Cría', lote: 'Lote Cría', ultimoPesoKg: 490, gdpPromedioGDia: 590, promedioLecheDiariaL: 6.5, estadoReproductivo: 'Vacía', fechaUltimoParto: '2025-07-01', padre: 'TORO-BRA-99', madre: 'MADRE-03', estadoVida: 'activo' },
+  { id: 'GIR-01', identificacionTag: 'GL-301', nombreAlias: 'Estrella', especie: 'bovino', raza: 'Girolando', sexo: 'hembra', categoria: 'Vaca de Ordeño', lote: 'Lote Élite', ultimoPesoKg: 470, gdpPromedioGDia: 510, promedioLecheDiariaL: 24.0, estadoReproductivo: 'Preñada', diasGestacionActual: 215, fechaUltimoParto: '2025-12-01', padre: 'TORO-GIR-10', madre: 'MADRE-04', estadoVida: 'activo' }
+];
+
+const centroInformes = new TablaDinamica({
+  containerId: 'pantalla-dinamica-test',
+  getAnimales: () => hatoMultiRaza,
+  getFincaActiva: () => ({ id: 'FIN-TEST', nombre: 'Hacienda Experimental', precioLecheLitro: 2600, precioCarneKgPie: 9200 })
+});
+centroInformes.container = new MockDomElement('pantalla-dinamica-test');
+
+// Seleccionar raza Simmental y ordenar por Ganancia de Peso (GDP)
+centroInformes.filtroRaza = 'Simmental';
+centroInformes.filtroOrden = 'gdp_desc';
+centroInformes.modoColumnas = 'solo_dato'; // Ver SOLO el dato seleccionado (GDP)
+centroInformes.render();
+
+const filtradosSimmental = centroInformes.obtenerAnimalesFiltradosYOrdenados();
+test(
+  filtradosSimmental.length === 2 &&
+  filtradosSimmental[0].identificacionTag === 'SM-102' &&
+  filtradosSimmental[1].identificacionTag === 'SM-101' &&
+  centroInformes.obtenerColumnasActivas().size === 0 &&
+  centroInformes.container.innerHTML.includes('🧬 Raza: Simmental') &&
+  centroInformes.container.innerHTML.includes('+960 g/día'),
+  'Centro de Informes (Raza Simmental + Solo Dato GDP): Filtra exclusivamente la raza Simmental, ordena por GDP (+960 g/d #1) y aísla el dato elegido'
+);
+
+// Cambiar a "Ver Todos los Datos" de la raza Simmental
+centroInformes.modoColumnas = 'todas';
+centroInformes.render();
+test(
+  centroInformes.obtenerColumnasActivas().size === 11 &&
+  centroInformes.container.innerHTML.includes('19.5 L') &&
+  centroInformes.container.innerHTML.includes('TORO-SIM-REX'),
+  'Centro de Informes (Raza Simmental + Todos los Datos): Despliega las 11 dimensiones zootécnicas completas de la raza seleccionada'
+);
+
+// 54.3: Matriz de Cruce Estadístico por Raza (calcularResumenAgrupado)
+centroInformes.filtroRaza = 'todas';
+const resumenPorRaza = centroInformes.calcularResumenAgrupado(hatoMultiRaza, 'raza');
+const grupoSimmental = resumenPorRaza.find(g => g.grupo === 'Simmental');
+test(
+  resumenPorRaza.length === 3 &&
+  grupoSimmental &&
+  grupoSimmental.cantidad === 2 &&
+  grupoSimmental.gdpPromedio === 900 &&
+  grupoSimmental.pesoPromedio === 545 &&
+  grupoSimmental.mejorEjemplar.tag === 'SM-102',
+  'Matriz Comparativa por Raza: Calcula exactamente promedios de Simmental (2 cabezas, GDP prom 900 g/d, Peso prom 545 kg, Líder SM-102)'
+);
+
+// 54.4: Activación de Informes Especializados (Ranking Leche, IEP, Candidatos a Descarte) y Exportación Excel
+centroInformes.seleccionarInforme('ranking_leche');
+const rankingLeche = centroInformes.obtenerAnimalesFiltradosYOrdenados();
+test(
+  rankingLeche[0].identificacionTag === 'GL-301' &&
+  rankingLeche[1].identificacionTag === 'SM-101',
+  'Informe Ranking de Leche: Posiciona en #1 a la vaca de mayor producción diaria (GL-301 con 24.0 L/día)'
+);
+
+centroInformes.seleccionarInforme('candidatos_descarte');
+const candidatosDescarte = centroInformes.obtenerAnimalesFiltradosYOrdenados();
+test(
+  candidatosDescarte.length === 1 &&
+  candidatosDescarte[0].identificacionTag === 'BR-201',
+  'Informe Candidatos a Descarte: Identifica objetivamente vientres improductivos (>200 días abiertos)'
+);
+
+const exportResult = centroInformes.exportarInformeActualExcel();
+test(
+  exportResult && exportResult.ok === true && exportResult.total === 1,
+  'Exportador de Informes: Genera estructura tabular lista para Excel (.xlsx) con los filtros y cruces activos'
+);
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);
