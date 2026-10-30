@@ -559,6 +559,8 @@ export class SupabaseSyncService {
             empresasEliminadas: appState._empresasEliminadas || [],
             fincasEliminadas: appState._fincasEliminadas || [],
             usuariosEliminados: appState._usuariosEliminados || [],
+            fincasPurgadas: appState._fincasPurgadas || {},
+            animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
             usuariosEmpresaMap
           },
@@ -959,6 +961,8 @@ export class SupabaseSyncService {
 
       let empresasEliminadasCloud = [];
       let fincasEliminadasCloud = [];
+      let fincasPurgadasCloud = {};
+      let animalesEliminadosCloud = [];
 
       // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
       const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
@@ -967,6 +971,8 @@ export class SupabaseSyncService {
         const det = regDir.detalles;
         empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
         fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
+        fincasPurgadasCloud = (det.fincasPurgadas && typeof det.fincasPurgadas === 'object') ? det.fincasPurgadas : {};
+        animalesEliminadosCloud = Array.isArray(det.animalesEliminados) ? det.animalesEliminados : [];
         const eliminadasSet = new Set(empresasEliminadasCloud);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
@@ -1121,7 +1127,9 @@ export class SupabaseSyncService {
           pesajes,
           nutricion,
           empresasEliminadas: empresasEliminadasCloud,
-          fincasEliminadas: fincasEliminadasCloud
+          fincasEliminadas: fincasEliminadasCloud,
+          _fincasPurgadas: fincasPurgadasCloud,
+          _animalesEliminados: animalesEliminadosCloud
         },
         ultimoSync: this.ultimoSync
       };
@@ -1481,23 +1489,54 @@ export class SupabaseSyncService {
 
   /**
    * Vacía el hato de una finca en Supabase Cloud (0 animales y eventos zootécnicos).
+   * Orden estricto: Elimina primero tablas hijas dependientes y luego la tabla de animales.
    */
   async purgarFincaCloud(fincaId) {
     if (!this.estaConfigurado() || !fincaId) return { ok: false };
     const fid = encodeURIComponent(fincaId);
 
     try {
+      // 1. Eliminar primero eventos e historiales zootécnicos vinculados al predio
       await Promise.allSettled([
-        this._postgrestDelete('animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('pesajes_animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('servicios_reproductivos', `finca_id=eq.${fid}`),
         this._postgrestDelete('palpaciones_reproductivas', `finca_id=eq.${fid}`),
         this._postgrestDelete('controles_lecheros', `finca_id=eq.${fid}`),
-        this._postgrestDelete('nutricion_animales', `finca_id=eq.${fid}`)
+        this._postgrestDelete('nutricion_animales', `finca_id=eq.${fid}`),
+        this._postgrestDelete('inversiones_diferidas', `finca_id=eq.${fid}`),
+        this._postgrestDelete('operaciones_diarias', `finca_id=eq.${fid}`)
       ]);
+      // 2. Eliminar la tabla principal de animales
+      await this._postgrestDelete('animales', `finca_id=eq.${fid}`);
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando finca en cloud:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Vacía los hatos de múltiples fincas en Supabase Cloud de forma atómica.
+   */
+  async purgarFincasCloud(fincasIds = []) {
+    if (!this.estaConfigurado() || !Array.isArray(fincasIds) || fincasIds.length === 0) return { ok: false };
+    const listaIn = fincasIds.map((id) => encodeURIComponent(id)).join(',');
+    const queryIn = `finca_id=in.(${listaIn})`;
+
+    try {
+      await Promise.allSettled([
+        this._postgrestDelete('pesajes_animales', queryIn),
+        this._postgrestDelete('servicios_reproductivos', queryIn),
+        this._postgrestDelete('palpaciones_reproductivas', queryIn),
+        this._postgrestDelete('controles_lecheros', queryIn),
+        this._postgrestDelete('nutricion_animales', queryIn),
+        this._postgrestDelete('inversiones_diferidas', queryIn),
+        this._postgrestDelete('operaciones_diarias', queryIn)
+      ]);
+      await this._postgrestDelete('animales', queryIn);
+      return { ok: true };
+    } catch (err) {
+      console.warn('Advertencia purgando fincas en cloud:', err.message);
       return { ok: false, error: err.message };
     }
   }
@@ -1528,9 +1567,9 @@ export class SupabaseSyncService {
         this._postgrestDelete('nutricion_animales', 'id=not.is.null'),
         this._postgrestDelete('inversiones_diferidas', 'id=not.is.null'),
         this._postgrestDelete('traslados_animales', 'id=not.is.null'),
-        this._postgrestDelete('operaciones_diarias', 'id=not.is.null'),
-        this._postgrestDelete('animales', 'id=not.is.null')
+        this._postgrestDelete('operaciones_diarias', 'id=neq.SYS_DIRECTORIO_EMPRESAS')
       ]);
+      await this._postgrestDelete('animales', 'id=not.is.null');
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando base de datos total en cloud:', err.message);

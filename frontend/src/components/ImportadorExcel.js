@@ -32,6 +32,9 @@ export class ImportadorExcel {
     this.fincaDestinoId = null;
     this._ultimaFincaActivaGlobal = null;
     this.informeResultados = null;
+    this.modoReemplazo = true; // Por defecto en inventario: reemplazar para garantizar que el predio quede exactamente con el archivo
+    this.especiePredeterminada = null;
+    this._especieFijadaManual = false;
   }
 
   resolverFincaDestino() {
@@ -61,6 +64,21 @@ export class ImportadorExcel {
     }
 
     return fincas.find((f) => f.id === this.fincaDestinoId) || fincas[0] || null;
+  }
+
+  resolverEspeciePredeterminada() {
+    if (this._especieFijadaManual && this.especiePredeterminada) {
+      return this.especiePredeterminada;
+    }
+    const emp = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
+    const fincas = this.getFincas ? this.getFincas() : [];
+    const f = fincas.find((x) => x.id === this.fincaDestinoId);
+    const nombreEmp = (emp && emp.nombre ? emp.nombre : '').toLowerCase();
+    const nombreF = (f && f.nombre ? f.nombre : '').toLowerCase();
+    const esBufalera = nombreEmp.includes('bufal') || nombreF.includes('bufal') ||
+      ['FIN-1789697106872', 'FIN-1789773477033', 'FIN-1793204645231'].includes(this.fincaDestinoId);
+    this.especiePredeterminada = esBufalera ? 'bufalino' : 'bovino';
+    return this.especiePredeterminada;
   }
 
   init() {
@@ -811,12 +829,28 @@ export class ImportadorExcel {
       const idxDiasGest = findIdx(['dias_gestacion', 'gestacion', 'dias_prenez', 'prenez'], 15);
       const idxUltParto = findIdx(['fecha_ultimo_parto', 'ultimo_parto', 'fecha_parto', 'parto'], 16);
 
+      const esFilaResumenOTotal = (t) => {
+        const s = String(t || '').trim().toUpperCase();
+        if (!s) return true;
+        return s.startsWith('TOTAL') || s.startsWith('SUMA') || s.startsWith('CANTIDAD') ||
+               s.startsWith('RESUMEN') || s.startsWith('PROMEDIO') || s.includes('TOTAL ANIMALES') ||
+               s.includes('TOTAL EJEMPLARES') || s.includes('TOTAL GENERAL');
+      };
+
+      const especiePred = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
+
       this.registros = lines.slice(1).map((l, lineIdx) => {
         const c = l.split(sep).map((val) => val.trim().replace(/^"|"$/g, ''));
 
         const tag = (c[idxTag] || '').trim();
-        const especieRaw = (c[idxEspecie] || 'vacuno').toLowerCase();
-        const especie = especieRaw.includes('buf') ? 'bufalino' : 'bovino';
+        if (esFilaResumenOTotal(tag)) return null;
+
+        let especie = especiePred;
+        const especieRaw = (c[idxEspecie] || '').trim().toLowerCase();
+        if (especieRaw) {
+          if (especieRaw.includes('buf')) especie = 'bufalino';
+          else if (especieRaw.includes('bov') || especieRaw.includes('vac') || especieRaw.includes('toro') || especieRaw.includes('vaca')) especie = 'bovino';
+        }
         const nombre = (c[idxNombre] || '').trim() || (tag ? `Animal ${tag}` : `Ejemplar ${lineIdx + 1}`);
         const sexoRaw = (c[idxSexo] || 'hembra').toLowerCase();
         const sexo = sexoRaw.includes('macho') || sexoRaw.startsWith('m') ? 'macho' : 'hembra';
@@ -898,7 +932,7 @@ export class ImportadorExcel {
         }
 
         return reg;
-      }).filter((r) => r.tag !== '');
+      }).filter(Boolean).filter((r) => r.tag !== '');
     }
 
     this.render();
@@ -940,8 +974,13 @@ export class ImportadorExcel {
 
     if (this.onImportConfirmada) {
       const filasAImportar = [...validos];
+      const especieF = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
+      const modoR = Boolean(this.modoReemplazo);
       this.registros = [];
-      this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal);
+      this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal, {
+        modoReemplazo: modoR,
+        especiePredeterminada: especieF
+      });
     }
   }
 
@@ -1194,6 +1233,37 @@ export class ImportadorExcel {
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
               </select>
             </div>
+          </div>
+        </div>
+
+        <!-- BARRA DE CONFIGURACIÓN DE ESPECIE Y MODO DE CARGUE -->
+        <div class="px-4 sm:px-6 pt-3">
+          <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <!-- SELECTOR DE ESPECIE DEL ARCHIVO -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-black uppercase text-slate-800 tracking-wider">Especie del Hato:</span>
+              <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+                <button type="button" id="btn-toggle-esp-bufalino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bufalino' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                  🦬 Bufalino
+                </button>
+                <button type="button" id="btn-toggle-esp-bovino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bovino' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                  🐂 Vacuno / Bovino
+                </button>
+              </div>
+              <span class="text-[11px] text-slate-500 font-semibold">(Se aplica si las filas del Excel no traen columna "especie")</span>
+            </div>
+
+            <!-- MODO DE CARGUE (SOLO PARA INVENTARIO) -->
+            ${this.tipoCargue === 'inventario' ? `
+              <div class="flex items-center gap-2">
+                <label class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-emerald-100/60 transition">
+                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded cursor-pointer">
+                  <span class="text-xs font-black text-emerald-950">
+                    🔄 Reemplazar inventario completo (dejar exactamente los ejemplares de este archivo)
+                  </span>
+                </label>
+              </div>
+            ` : ''}
           </div>
         </div>
 
@@ -1542,6 +1612,34 @@ export class ImportadorExcel {
       });
     }
 
+    // Toggle de especie predeterminada
+    const btnBuf = this.container.querySelector('#btn-toggle-esp-bufalino');
+    const btnBov = this.container.querySelector('#btn-toggle-esp-bovino');
+    if (btnBuf) {
+      btnBuf.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.especiePredeterminada = 'bufalino';
+        this._especieFijadaManual = true;
+        this.render();
+      });
+    }
+    if (btnBov) {
+      btnBov.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.especiePredeterminada = 'bovino';
+        this._especieFijadaManual = true;
+        this.render();
+      });
+    }
+
+    // Checkbox modo reemplazo
+    const checkReemplazo = this.container.querySelector('#check-modo-reemplazo');
+    if (checkReemplazo) {
+      checkReemplazo.addEventListener('change', (e) => {
+        this.modoReemplazo = e.target.checked;
+      });
+    }
+
     // Selector finca destino
     const selFinca = this.container.querySelector('#select-finca-importador');
     if (selFinca) {
@@ -1549,6 +1647,9 @@ export class ImportadorExcel {
         const nuevaFincaId = e.target.value;
         this.fincaDestinoId = nuevaFincaId;
         this._ultimaFincaActivaGlobal = nuevaFincaId;
+        if (!this._especieFijadaManual) {
+          this.resolverEspeciePredeterminada();
+        }
         if (this.onCambiarFinca) {
           this.onCambiarFinca(nuevaFincaId);
         } else {

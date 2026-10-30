@@ -6140,6 +6140,99 @@ if (typeof appEmpTest !== 'undefined' && appEmpTest && appEmpTest.state) {
   appEmpTest.state.pesajes = backupPesajes;
 }
 
+// --- 56. Pruebas de Blindaje contra Resurrección de Fantasmas, Purga Atómica y Normalización de Especies ---
+console.log('\n--- 56. Pruebas de Blindaje contra Fantasmas, Purga Atómica y Especies en Bufaleras ---');
+{
+  const syncTest = new SupabaseSyncService();
+  test(typeof syncTest.purgarFincasCloud === 'function', 'SupabaseSyncService: purgarFincasCloud implementado para purga multi-predio');
+
+  // Test de detección de especie en ImportadorExcel
+  const mockExcel = new ImportadorExcel({
+    containerId: 'pantalla-excel-app-test',
+    getEmpresaActiva: () => ({ id: 'EMP-01', nombre: 'BUFALERA INVERSIONES' }),
+    getFincas: () => [
+      { id: 'FIN-1789697106872', nombre: 'Vesubio', empresaId: 'EMP-01' },
+      { id: 'FIN-1789773477033', nombre: 'WATERLOO', empresaId: 'EMP-01' },
+      { id: 'FIN-1793204645231', nombre: 'BUFALERA GALLINAZO', empresaId: 'EMP-01' },
+      { id: 'FIN-1793207707789', nombre: 'Gallinazo', empresaId: 'EMP-1793154262914' }
+    ]
+  });
+
+  mockExcel.fincaDestinoId = 'FIN-1789697106872'; // Vesubio
+  test(mockExcel.resolverEspeciePredeterminada() === 'bufalino', 'ImportadorExcel: Auto-detecta especie "bufalino" para Vesubio (BUFALERA INVERSIONES)');
+
+  mockExcel.fincaDestinoId = 'FIN-1789773477033'; // Waterloo
+  test(mockExcel.resolverEspeciePredeterminada() === 'bufalino', 'ImportadorExcel: Auto-detecta especie "bufalino" para WATERLOO (100% Bufalina)');
+
+  mockExcel.fincaDestinoId = 'FIN-1793207707789'; // Gallinazo (Vacuno Inversiones)
+  mockExcel.getEmpresaActiva = () => ({ id: 'EMP-1793154262914', nombre: 'VACUNO INVERSIONES' });
+  test(mockExcel.resolverEspeciePredeterminada() === 'bovino', 'ImportadorExcel: Auto-detecta especie "bovino" para Gallinazo (VACUNO INVERSIONES)');
+
+  // Test de exclusión de filas de totales y resúmenes
+  const csvConTotales = [
+    'Arete,Nombre,Sexo,Peso,Raza',
+    'BF-001,Búfala 1,H,450,Murrah',
+    'BF-002,Búfala 2,H,480,Mediterráneo',
+    'TOTAL ANIMALES: 342,,,,',
+    'TOTAL GENERAL,,,,',
+    'PROMEDIO LOTE,,,,'
+  ].join('\n');
+
+  mockExcel.fincaDestinoId = 'FIN-1789697106872';
+  mockExcel.getEmpresaActiva = () => ({ id: 'EMP-01', nombre: 'BUFALERA INVERSIONES' });
+  mockExcel._parsearTextoCSV(csvConTotales);
+
+  test(
+    mockExcel.registros.length === 2 &&
+    mockExcel.registros[0].tag === 'BF-001' &&
+    mockExcel.registros[0].especie === 'bufalino' &&
+    mockExcel.registros[1].tag === 'BF-002' &&
+    mockExcel.registros[1].especie === 'bufalino',
+    'ImportadorExcel: Descarta automáticamente filas de totales ("TOTAL ANIMALES: 342", "TOTAL GENERAL") y aplica "bufalino"'
+  );
+
+  // Test de protección contra resurrección de animales eliminados/purgados en integrarDatosSupabase
+  const appGhostTest = Object.create(BoviTrackApp.prototype);
+  appGhostTest.guardarEstado = () => {};
+  appGhostTest.actualizarHeader = () => {};
+  appGhostTest.sincronizarConSupabaseDebounced = () => {};
+  appGhostTest.mostrarVistaActiva = () => {};
+  appGhostTest.actualizarContadorAlertas = () => {};
+  appGhostTest.state = {};
+  appGhostTest.state.fincas = [
+    { id: 'FIN-VESUBIO', nombre: 'Vesubio', empresaId: 'EMP-01' }
+  ];
+  appGhostTest.state.empresas = [
+    { id: 'EMP-01', nombre: 'BUFALERA INVERSIONES', activa: true }
+  ];
+  appGhostTest.state.fincasEmpresaMap = { 'FIN-VESUBIO': 'EMP-01' };
+  appGhostTest.state.fincaActivaId = 'FIN-VESUBIO';
+  appGhostTest.state.animales = [
+    { id: 'ANM-NEW-1', fincaId: 'FIN-VESUBIO', identificacionTag: '301', especie: 'bufalino', creadoEn: new Date().toISOString() }
+  ];
+  const cincoMinutosAtras = Date.now() - 300000;
+  appGhostTest.state._fincasPurgadas = { 'FIN-VESUBIO': cincoMinutosAtras };
+  appGhostTest.state._animalesEliminados = ['FIN-VESUBIO__GHOST-999'];
+
+  const cloudDataSimulada = {
+    animales: [
+      { id: 'ANM-OLD-GHOST', fincaId: 'FIN-VESUBIO', identificacionTag: 'GHOST-OLD', especie: 'bovino', creado_en: new Date(cincoMinutosAtras - 60000).toISOString() },
+      { id: 'ANM-DEL', fincaId: 'FIN-VESUBIO', identificacionTag: 'GHOST-999', especie: 'bufalino', creado_en: new Date().toISOString() },
+      { id: 'ANM-NEW-1', fincaId: 'FIN-VESUBIO', identificacionTag: '301', especie: 'bufalino', creado_en: new Date().toISOString() }
+    ],
+    _fincasPurgadas: { 'FIN-VESUBIO': cincoMinutosAtras },
+    _animalesEliminados: ['FIN-VESUBIO__GHOST-999']
+  };
+
+  appGhostTest.integrarDatosSupabase(cloudDataSimulada);
+  test(
+    appGhostTest.state.animales.length === 1 &&
+    appGhostTest.state.animales[0].identificacionTag === '301' &&
+    appGhostTest.state.animales[0].especie === 'bufalino',
+    'integrarDatosSupabase (Anti-Fantasma): Bloquea resurrección de registros viejos pre-purga y aretes marcados en tombstones'
+  );
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

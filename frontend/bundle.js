@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-30T17:16:18.682Z
+ * Generado automáticamente: 2026-10-30T21:51:59.175Z
  */
 (function() {
   "use strict";
@@ -1186,6 +1186,8 @@ class SupabaseSyncService {
             empresasEliminadas: appState._empresasEliminadas || [],
             fincasEliminadas: appState._fincasEliminadas || [],
             usuariosEliminados: appState._usuariosEliminados || [],
+            fincasPurgadas: appState._fincasPurgadas || {},
+            animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
             usuariosEmpresaMap
           },
@@ -1586,6 +1588,8 @@ class SupabaseSyncService {
 
       let empresasEliminadasCloud = [];
       let fincasEliminadasCloud = [];
+      let fincasPurgadasCloud = {};
+      let animalesEliminadosCloud = [];
 
       // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
       const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
@@ -1594,6 +1598,8 @@ class SupabaseSyncService {
         const det = regDir.detalles;
         empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
         fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
+        fincasPurgadasCloud = (det.fincasPurgadas && typeof det.fincasPurgadas === 'object') ? det.fincasPurgadas : {};
+        animalesEliminadosCloud = Array.isArray(det.animalesEliminados) ? det.animalesEliminados : [];
         const eliminadasSet = new Set(empresasEliminadasCloud);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
@@ -1748,7 +1754,9 @@ class SupabaseSyncService {
           pesajes,
           nutricion,
           empresasEliminadas: empresasEliminadasCloud,
-          fincasEliminadas: fincasEliminadasCloud
+          fincasEliminadas: fincasEliminadasCloud,
+          _fincasPurgadas: fincasPurgadasCloud,
+          _animalesEliminados: animalesEliminadosCloud
         },
         ultimoSync: this.ultimoSync
       };
@@ -2108,23 +2116,54 @@ class SupabaseSyncService {
 
   /**
    * Vacía el hato de una finca en Supabase Cloud (0 animales y eventos zootécnicos).
+   * Orden estricto: Elimina primero tablas hijas dependientes y luego la tabla de animales.
    */
   async purgarFincaCloud(fincaId) {
     if (!this.estaConfigurado() || !fincaId) return { ok: false };
     const fid = encodeURIComponent(fincaId);
 
     try {
+      // 1. Eliminar primero eventos e historiales zootécnicos vinculados al predio
       await Promise.allSettled([
-        this._postgrestDelete('animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('pesajes_animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('servicios_reproductivos', `finca_id=eq.${fid}`),
         this._postgrestDelete('palpaciones_reproductivas', `finca_id=eq.${fid}`),
         this._postgrestDelete('controles_lecheros', `finca_id=eq.${fid}`),
-        this._postgrestDelete('nutricion_animales', `finca_id=eq.${fid}`)
+        this._postgrestDelete('nutricion_animales', `finca_id=eq.${fid}`),
+        this._postgrestDelete('inversiones_diferidas', `finca_id=eq.${fid}`),
+        this._postgrestDelete('operaciones_diarias', `finca_id=eq.${fid}`)
       ]);
+      // 2. Eliminar la tabla principal de animales
+      await this._postgrestDelete('animales', `finca_id=eq.${fid}`);
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando finca en cloud:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Vacía los hatos de múltiples fincas en Supabase Cloud de forma atómica.
+   */
+  async purgarFincasCloud(fincasIds = []) {
+    if (!this.estaConfigurado() || !Array.isArray(fincasIds) || fincasIds.length === 0) return { ok: false };
+    const listaIn = fincasIds.map((id) => encodeURIComponent(id)).join(',');
+    const queryIn = `finca_id=in.(${listaIn})`;
+
+    try {
+      await Promise.allSettled([
+        this._postgrestDelete('pesajes_animales', queryIn),
+        this._postgrestDelete('servicios_reproductivos', queryIn),
+        this._postgrestDelete('palpaciones_reproductivas', queryIn),
+        this._postgrestDelete('controles_lecheros', queryIn),
+        this._postgrestDelete('nutricion_animales', queryIn),
+        this._postgrestDelete('inversiones_diferidas', queryIn),
+        this._postgrestDelete('operaciones_diarias', queryIn)
+      ]);
+      await this._postgrestDelete('animales', queryIn);
+      return { ok: true };
+    } catch (err) {
+      console.warn('Advertencia purgando fincas en cloud:', err.message);
       return { ok: false, error: err.message };
     }
   }
@@ -2155,9 +2194,9 @@ class SupabaseSyncService {
         this._postgrestDelete('nutricion_animales', 'id=not.is.null'),
         this._postgrestDelete('inversiones_diferidas', 'id=not.is.null'),
         this._postgrestDelete('traslados_animales', 'id=not.is.null'),
-        this._postgrestDelete('operaciones_diarias', 'id=not.is.null'),
-        this._postgrestDelete('animales', 'id=not.is.null')
+        this._postgrestDelete('operaciones_diarias', 'id=neq.SYS_DIRECTORIO_EMPRESAS')
       ]);
+      await this._postgrestDelete('animales', 'id=not.is.null');
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando base de datos total en cloud:', err.message);
@@ -7664,6 +7703,9 @@ class ImportadorExcel {
     this.fincaDestinoId = null;
     this._ultimaFincaActivaGlobal = null;
     this.informeResultados = null;
+    this.modoReemplazo = true; // Por defecto en inventario: reemplazar para garantizar que el predio quede exactamente con el archivo
+    this.especiePredeterminada = null;
+    this._especieFijadaManual = false;
   }
 
   resolverFincaDestino() {
@@ -7693,6 +7735,21 @@ class ImportadorExcel {
     }
 
     return fincas.find((f) => f.id === this.fincaDestinoId) || fincas[0] || null;
+  }
+
+  resolverEspeciePredeterminada() {
+    if (this._especieFijadaManual && this.especiePredeterminada) {
+      return this.especiePredeterminada;
+    }
+    const emp = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
+    const fincas = this.getFincas ? this.getFincas() : [];
+    const f = fincas.find((x) => x.id === this.fincaDestinoId);
+    const nombreEmp = (emp && emp.nombre ? emp.nombre : '').toLowerCase();
+    const nombreF = (f && f.nombre ? f.nombre : '').toLowerCase();
+    const esBufalera = nombreEmp.includes('bufal') || nombreF.includes('bufal') ||
+      ['FIN-1789697106872', 'FIN-1789773477033', 'FIN-1793204645231'].includes(this.fincaDestinoId);
+    this.especiePredeterminada = esBufalera ? 'bufalino' : 'bovino';
+    return this.especiePredeterminada;
   }
 
   init() {
@@ -8443,12 +8500,28 @@ class ImportadorExcel {
       const idxDiasGest = findIdx(['dias_gestacion', 'gestacion', 'dias_prenez', 'prenez'], 15);
       const idxUltParto = findIdx(['fecha_ultimo_parto', 'ultimo_parto', 'fecha_parto', 'parto'], 16);
 
+      const esFilaResumenOTotal = (t) => {
+        const s = String(t || '').trim().toUpperCase();
+        if (!s) return true;
+        return s.startsWith('TOTAL') || s.startsWith('SUMA') || s.startsWith('CANTIDAD') ||
+               s.startsWith('RESUMEN') || s.startsWith('PROMEDIO') || s.includes('TOTAL ANIMALES') ||
+               s.includes('TOTAL EJEMPLARES') || s.includes('TOTAL GENERAL');
+      };
+
+      const especiePred = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
+
       this.registros = lines.slice(1).map((l, lineIdx) => {
         const c = l.split(sep).map((val) => val.trim().replace(/^"|"$/g, ''));
 
         const tag = (c[idxTag] || '').trim();
-        const especieRaw = (c[idxEspecie] || 'vacuno').toLowerCase();
-        const especie = especieRaw.includes('buf') ? 'bufalino' : 'bovino';
+        if (esFilaResumenOTotal(tag)) return null;
+
+        let especie = especiePred;
+        const especieRaw = (c[idxEspecie] || '').trim().toLowerCase();
+        if (especieRaw) {
+          if (especieRaw.includes('buf')) especie = 'bufalino';
+          else if (especieRaw.includes('bov') || especieRaw.includes('vac') || especieRaw.includes('toro') || especieRaw.includes('vaca')) especie = 'bovino';
+        }
         const nombre = (c[idxNombre] || '').trim() || (tag ? `Animal ${tag}` : `Ejemplar ${lineIdx + 1}`);
         const sexoRaw = (c[idxSexo] || 'hembra').toLowerCase();
         const sexo = sexoRaw.includes('macho') || sexoRaw.startsWith('m') ? 'macho' : 'hembra';
@@ -8530,7 +8603,7 @@ class ImportadorExcel {
         }
 
         return reg;
-      }).filter((r) => r.tag !== '');
+      }).filter(Boolean).filter((r) => r.tag !== '');
     }
 
     this.render();
@@ -8572,8 +8645,13 @@ class ImportadorExcel {
 
     if (this.onImportConfirmada) {
       const filasAImportar = [...validos];
+      const especieF = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
+      const modoR = Boolean(this.modoReemplazo);
       this.registros = [];
-      this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal);
+      this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal, {
+        modoReemplazo: modoR,
+        especiePredeterminada: especieF
+      });
     }
   }
 
@@ -8826,6 +8904,37 @@ class ImportadorExcel {
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
               </select>
             </div>
+          </div>
+        </div>
+
+        <!-- BARRA DE CONFIGURACIÓN DE ESPECIE Y MODO DE CARGUE -->
+        <div class="px-4 sm:px-6 pt-3">
+          <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <!-- SELECTOR DE ESPECIE DEL ARCHIVO -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-black uppercase text-slate-800 tracking-wider">Especie del Hato:</span>
+              <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+                <button type="button" id="btn-toggle-esp-bufalino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bufalino' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                  🦬 Bufalino
+                </button>
+                <button type="button" id="btn-toggle-esp-bovino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bovino' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                  🐂 Vacuno / Bovino
+                </button>
+              </div>
+              <span class="text-[11px] text-slate-500 font-semibold">(Se aplica si las filas del Excel no traen columna "especie")</span>
+            </div>
+
+            <!-- MODO DE CARGUE (SOLO PARA INVENTARIO) -->
+            ${this.tipoCargue === 'inventario' ? `
+              <div class="flex items-center gap-2">
+                <label class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-emerald-100/60 transition">
+                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded cursor-pointer">
+                  <span class="text-xs font-black text-emerald-950">
+                    🔄 Reemplazar inventario completo (dejar exactamente los ejemplares de este archivo)
+                  </span>
+                </label>
+              </div>
+            ` : ''}
           </div>
         </div>
 
@@ -9174,6 +9283,34 @@ class ImportadorExcel {
       });
     }
 
+    // Toggle de especie predeterminada
+    const btnBuf = this.container.querySelector('#btn-toggle-esp-bufalino');
+    const btnBov = this.container.querySelector('#btn-toggle-esp-bovino');
+    if (btnBuf) {
+      btnBuf.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.especiePredeterminada = 'bufalino';
+        this._especieFijadaManual = true;
+        this.render();
+      });
+    }
+    if (btnBov) {
+      btnBov.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.especiePredeterminada = 'bovino';
+        this._especieFijadaManual = true;
+        this.render();
+      });
+    }
+
+    // Checkbox modo reemplazo
+    const checkReemplazo = this.container.querySelector('#check-modo-reemplazo');
+    if (checkReemplazo) {
+      checkReemplazo.addEventListener('change', (e) => {
+        this.modoReemplazo = e.target.checked;
+      });
+    }
+
     // Selector finca destino
     const selFinca = this.container.querySelector('#select-finca-importador');
     if (selFinca) {
@@ -9181,6 +9318,9 @@ class ImportadorExcel {
         const nuevaFincaId = e.target.value;
         this.fincaDestinoId = nuevaFincaId;
         this._ultimaFincaActivaGlobal = nuevaFincaId;
+        if (!this._especieFijadaManual) {
+          this.resolverEspeciePredeterminada();
+        }
         if (this.onCambiarFinca) {
           this.onCambiarFinca(nuevaFincaId);
         } else {
@@ -20201,30 +20341,81 @@ class BoviTrackApp {
 
     // 4. ANIMALES: Sincronización inteligente con Supabase Cloud (100% aislada por fincaId)
     if (Array.isArray(datos.animales)) {
-      const eliminadasFincasAnm = new Set(this.state._fincasEliminadas || []);
-      const animalesValidosCloud = datos.animales
-        .filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)))
-        .map((a) => {
-          if (String(a.id || '').startsWith('ANM-179328838') && a.fincaId === 'FIN-1789773477033') {
-            return { ...a, fincaId: 'FIN-1793207707789' };
-          }
-          return a;
-        });
-      const actuales = (this.state.animales || []).filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)));
-      // Protección de seguridad: Si la nube responde vacío pero hay animales locales, no sobreescribir con []
-      if (animalesValidosCloud.length === 0 && actuales.length > 0) {
-        // No sobreescribir animales locales con array vacío de error o consulta en blanco
+      if (this._bloqueoSync) {
+        console.log('[BoviTrack] Sincronización de animales pausada durante operación de purga/cargue masivo.');
       } else {
+        const eliminadasFincasAnm = new Set(this.state._fincasEliminadas || []);
+        const fincasPurgadasMap = { ...(this.state._fincasPurgadas || {}), ...(datos._fincasPurgadas || {}) };
+        this.state._fincasPurgadas = fincasPurgadasMap;
+        const animalesEliminadosSet = new Set([...(this.state._animalesEliminados || []), ...(datos._animalesEliminados || [])]);
+        this.state._animalesEliminados = Array.from(animalesEliminadosSet).slice(-2000);
+
+        const animalesValidosCloud = datos.animales
+          .filter((a) => {
+            if (!a || !a.fincaId) return false;
+            if (eliminadasFincasAnm.has(a.fincaId)) return false;
+            const kTag = `${a.fincaId}__${String(a.identificacionTag || a.numero || '').trim().toUpperCase()}`;
+            if (animalesEliminadosSet.has(a.id) || animalesEliminadosSet.has(kTag)) return false;
+
+            // Protección contra resurrección: Si la finca fue purgada después de la creación del animal en nube, ignorarlo
+            const tsPurga = fincasPurgadasMap[a.fincaId];
+            if (tsPurga) {
+              const crTime = a.creadoEn ? new Date(a.creadoEn).getTime() : (a.creado_en ? new Date(a.creado_en).getTime() : 0);
+              if (crTime && crTime < tsPurga) return false;
+            }
+            return true;
+          })
+          .map((a) => {
+            if (String(a.id || '').startsWith('ANM-179328838') && a.fincaId === 'FIN-1789773477033') {
+              return { ...a, fincaId: 'FIN-1793207707789' };
+            }
+            // NORMALIZACIÓN ESTRICTA DE ESPECIE POR PREDIO / EMPRESA:
+            // Vesubio, Waterloo y Bufalera Gallinazo son 100% BUFALINAS (0 vacunos)
+            const esBufalera = ['FIN-1789697106872', 'FIN-1789773477033', 'FIN-1793204645231'].includes(a.fincaId) ||
+                               (this.state.fincasEmpresaMap && this.state.fincasEmpresaMap[a.fincaId] === 'EMP-01');
+            if (esBufalera && a.especie !== 'bufalino') {
+              return { ...a, especie: 'bufalino' };
+            }
+            // Predios de Vacuno Inversiones son 100% VACUNOS / BOVINOS
+            const esVacunera = ['FIN-1793207707789', 'FIN-1793207761631'].includes(a.fincaId) ||
+                               (this.state.fincasEmpresaMap && this.state.fincasEmpresaMap[a.fincaId] === 'EMP-1793154262914');
+            if (esVacunera && a.especie !== 'bovino') {
+              return { ...a, especie: 'bovino' };
+            }
+            return a;
+          });
+
+        const actuales = (this.state.animales || []).filter((a) => {
+          if (!a || !a.fincaId) return false;
+          if (eliminadasFincasAnm.has(a.fincaId)) return false;
+          const kTag = `${a.fincaId}__${String(a.identificacionTag || a.numero || '').trim().toUpperCase()}`;
+          if (animalesEliminadosSet.has(a.id) || animalesEliminadosSet.has(kTag)) return false;
+          const tsPurga = fincasPurgadasMap[a.fincaId];
+          if (tsPurga) {
+            const crTime = a.creadoEn ? new Date(a.creadoEn).getTime() : 0;
+            if (crTime && crTime < tsPurga) return false;
+          }
+          return true;
+        });
+
+        // Protección de seguridad: Si la nube responde vacío pero hay animales locales válidos y no purgados, preservar
         const getClaveFincaTag = (a) => `${a.fincaId || 'SIN_FINCA'}__${String(a.identificacionTag || a.numero || '').trim().toUpperCase()}`;
         const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || getClaveFincaTag(a)));
         const cloudTags = new Set(animalesValidosCloud.map((a) => getClaveFincaTag(a)));
 
-        // Preservar ejemplares locales recién registrados que aún no se han subido
+        // Preservar ejemplares locales ÚNICAMENTE si fueron creados o modificados en esta sesión recientemente (últimos 10 min)
+        // ¡NUNCA resucitar ejemplares viejos de localStorage que ya fueron purgados en la nube!
+        const modLocales = this.state._animalesModificadosLocalmente || {};
+        const ahora = Date.now();
         const localesPendientes = actuales.filter((a) => {
           if (!a) return false;
           const kId = a.id || getClaveFincaTag(a);
           const kTag = getClaveFincaTag(a);
-          return !cloudIds.has(kId) && !cloudTags.has(kTag);
+          if (cloudIds.has(kId) || cloudTags.has(kTag)) return false;
+          const mod = modLocales[a.id] || modLocales[kTag];
+          const esModReciente = mod && (ahora - (mod.timestamp || 0) < 600000);
+          const esCreadoReciente = a.creadoEn && (ahora - new Date(a.creadoEn).getTime() < 600000);
+          return esModReciente || esCreadoReciente;
         });
 
         const anmLocalesMap = new Map();
@@ -20242,6 +20433,7 @@ class BoviTrackApp {
             if (!aLoc ||
                 aLoc.identificacionTag !== aCloud.identificacionTag ||
                 aLoc.fincaId !== aCloud.fincaId ||
+                aLoc.especie !== aCloud.especie ||
                 aLoc.ultimoPesoKg !== aCloud.ultimoPesoKg ||
                 aLoc.fechaUltimoPesaje !== aCloud.fechaUltimoPesaje ||
                 aLoc.gdpPromedioGDia !== aCloud.gdpPromedioGDia ||
@@ -21325,7 +21517,7 @@ class BoviTrackApp {
       getFincaActiva: () => this.getFincaActiva(),
       getEmpresaActiva: () => this.getEmpresaActiva(),
       onCambiarFinca: (fincaId) => this.setFincaActiva(fincaId),
-      onImportConfirmada: (registrosValidos, targetFincaId, tipoCargue, fechaGlobal) => this.importarEventosMasivosExcel(registrosValidos, targetFincaId, tipoCargue, fechaGlobal)
+      onImportConfirmada: (registrosValidos, targetFincaId, tipoCargue, fechaGlobal, opciones) => this.importarEventosMasivosExcel(registrosValidos, targetFincaId, tipoCargue, fechaGlobal, opciones)
     });
 
     // 8. Módulo de Administración Multi-Finca, Empresas (Multi-Tenant) & Purga
@@ -22754,7 +22946,7 @@ class BoviTrackApp {
     alert(`✓ Ejemplar "${animalActualizado.identificacionTag || animalActualizado.numero || 'Animal'}" actualizado exitosamente.`);
   }
 
-  eliminarAnimal(animalId) {
+  async eliminarAnimal(animalId) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
@@ -22769,6 +22961,14 @@ class BoviTrackApp {
     const realAnimalId = animal ? animal.id : animalId;
     const animalTag = animal ? (animal.identificacionTag || animal.tag || animal.numeroTag || animal.nombre || animalId) : animalId;
     const fincaId = animal ? animal.fincaId : (fincaActivaId || null);
+
+    // Registrar Tombstone para evitar resurrección cruzada o por background sync
+    if (!Array.isArray(this.state._animalesEliminados)) this.state._animalesEliminados = [];
+    if (realAnimalId) this.state._animalesEliminados.push(realAnimalId);
+    if (animalTag && fincaId) this.state._animalesEliminados.push(`${fincaId}__${String(animalTag).trim().toUpperCase()}`);
+    if (this.state._animalesEliminados.length > 5000) {
+      this.state._animalesEliminados = this.state._animalesEliminados.slice(-3000);
+    }
 
     // Eliminar únicamente el ejemplar del predio correspondiente (nunca tocar homónimos de otras fincas)
     this.state.animales = (this.state.animales || []).filter((a) => {
@@ -22800,9 +23000,14 @@ class BoviTrackApp {
       });
     }
 
-    // Eliminar en Supabase Cloud
+    // Eliminar en Supabase Cloud con await y persistencia de tombstone
     if (this.supabase && typeof this.supabase.eliminarAnimalCloud === 'function') {
-      this.supabase.eliminarAnimalCloud(realAnimalId, animalTag, fincaId).catch((err) => console.warn('[BoviTrack] Error eliminando animal en cloud:', err));
+      try {
+        await this.supabase.eliminarAnimalCloud(realAnimalId, animalTag, fincaId);
+        await this.sincronizarDirectorioEmpresasCloud();
+      } catch (err) {
+        console.warn('[BoviTrack] Error eliminando animal en cloud:', err);
+      }
     }
 
     this.guardarEstado();
@@ -22990,28 +23195,106 @@ class BoviTrackApp {
     alert('Costos fijos guardados exitosamente para este predio.');
   }
 
-  purgarBaseDatos() {
+  async sincronizarDirectorioEmpresasCloud() {
+    if (!this.supabase || typeof this.supabase.estaConfigurado !== 'function' || !this.supabase.estaConfigurado()) {
+      return;
+    }
+    try {
+      const fincasEmpresaMap = {};
+      (this.state.fincas || []).forEach((f) => {
+        if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+      });
+      const usuariosEmpresaMap = {};
+      (this.state.usuarios || []).forEach((u) => {
+        if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+      });
+
+      const registroDirectorio = [{
+        id: 'SYS_DIRECTORIO_EMPRESAS',
+        empresa_id: null,
+        fecha: new Date().toISOString().split('T')[0],
+        finca_id: null,
+        finca_nombre: 'SISTEMA',
+        accion: 'SYS_DIRECTORIO_EMPRESAS',
+        modulo: 'sistema_empresas',
+        detalles: {
+          _esSistemaDirectorio: true,
+          empresas: this.state.empresas || [],
+          empresasEliminadas: this.state._empresasEliminadas || [],
+          fincasEliminadas: this.state._fincasEliminadas || [],
+          usuariosEliminados: this.state._usuariosEliminados || [],
+          fincasPurgadas: this.state._fincasPurgadas || {},
+          animalesEliminados: (this.state._animalesEliminados || []).slice(-1000),
+          fincasEmpresaMap,
+          usuariosEmpresaMap
+        },
+        usuario: this.state.usuarioActual ? this.state.usuarioActual.usuario : 'Sistema'
+      }];
+
+      await this.supabase._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000);
+      console.log('✓ Directorio de empresas y tombstones de purga sincronizados en Supabase Cloud.');
+    } catch (err) {
+      console.warn('Advertencia sincronizando directorio en cloud:', err.message);
+    }
+  }
+
+  async purgarBaseDatos() {
     if (this.state.usuarioActual.rol !== 'administrador' && this.state.usuarioActual.rol !== 'superadmin') {
       alert('Operación denegada: Sólo el Administrador o Super Administrador puede purgar la base de datos.');
       return;
     }
 
-    // Vaciar completamente inventario de animales, inversiones, servicios, pesajes, traslados y operaciones
-    this.state.animales = [];
-    this.state.inversiones = [];
-    this.state.servicios = [];
-    this.state.pesajes = [];
-    this.state.traslados = [];
-    this.state.operacionesDiarias = [];
+    const fincasEmpresa = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : (this.state.fincas || []);
+    const idsFincas = new Set(fincasEmpresa.map((f) => f.id));
+    const empActiva = typeof this.getEmpresaActiva === 'function' ? this.getEmpresaActiva() : null;
+    const nombreEmp = empActiva ? empActiva.nombre : 'la empresa activa';
 
-    // Purgar en Supabase Cloud
-    if (this.supabase && typeof this.supabase.purgarBaseDatosTotalCloud === 'function') {
-      this.supabase.purgarBaseDatosTotalCloud().catch((err) => console.warn('[BoviTrack] Error purgando BD en cloud:', err));
+    if (idsFincas.size === 0) {
+      alert('No hay predios configurados en la empresa activa para purgar.');
+      return;
     }
 
+    this._bloqueoSync = true;
+
+    // Registrar tombstones para todas las fincas de la empresa activa
+    if (!this.state._fincasPurgadas) this.state._fincasPurgadas = {};
+    const tsPurga = Date.now();
+    idsFincas.forEach((fid) => {
+      this.state._fincasPurgadas[fid] = tsPurga;
+    });
+
+    const anmPurgados = (this.state.animales || []).filter((a) => idsFincas.has(a.fincaId));
+    if (!Array.isArray(this.state._animalesEliminados)) this.state._animalesEliminados = [];
+    anmPurgados.forEach((a) => {
+      if (a.id) this.state._animalesEliminados.push(a.id);
+      if (a.identificacionTag) this.state._animalesEliminados.push(`${a.fincaId}__${String(a.identificacionTag).trim().toUpperCase()}`);
+    });
+
+    // Vaciar inventario y colecciones operativas ÚNICAMENTE de la empresa activa (aislamiento total multi-empresa)
+    this.state.animales = (this.state.animales || []).filter((a) => !idsFincas.has(a.fincaId));
+    this.state.inversiones = (this.state.inversiones || []).filter((i) => !idsFincas.has(i.fincaId));
+    this.state.servicios = (this.state.servicios || []).filter((s) => !idsFincas.has(s.fincaId));
+    this.state.pesajes = (this.state.pesajes || []).filter((p) => !idsFincas.has(p.fincaId));
+    this.state.traslados = (this.state.traslados || []).filter((t) => !idsFincas.has(t.fincaOrigenId) && !idsFincas.has(t.fincaDestinoId));
+    this.state.operacionesDiarias = (this.state.operacionesDiarias || []).filter((o) => !idsFincas.has(o.fincaId));
+    if (Array.isArray(this.state.nutricion)) {
+      this.state.nutricion = this.state.nutricion.filter((n) => !idsFincas.has(n.fincaId));
+    }
+
+    // Purgar en Supabase Cloud para las fincas de la empresa activa
+    if (this.supabase && typeof this.supabase.purgarFincasCloud === 'function') {
+      try {
+        await this.supabase.purgarFincasCloud(Array.from(idsFincas));
+        await this.sincronizarDirectorioEmpresasCloud();
+      } catch (err) {
+        console.warn('[BoviTrack] Error purgando fincas de empresa en cloud:', err);
+      }
+    }
+
+    this._bloqueoSync = false;
     this.guardarEstado();
 
-    alert('✓ Base de datos reiniciada. Se han eliminado todos los animales (0 ejemplares).');
+    alert(`✓ Base de datos de "${nombreEmp}" reiniciada exitosamente (0 ejemplares en sus predios). Los datos de otras empresas permanecen intactos.`);
 
     if (this.compAnimales) this.compAnimales.render();
     if (this.compCuadricula) {
@@ -23030,18 +23313,35 @@ class BoviTrackApp {
     this.mostrarVistaActiva();
   }
 
-  purgarFinca(fincaId) {
+  async purgarFinca(fincaId, silencioso = false) {
     if (this.state.usuarioActual.rol !== 'administrador' && this.state.usuarioActual.rol !== 'superadmin') {
-      alert('Operación denegada: Sólo el Administrador o Super Administrador puede vaciar el hato de una finca.');
+      if (!silencioso) alert('Operación denegada: Sólo el Administrador o Super Administrador puede vaciar el hato de una finca.');
       return;
     }
 
     const finca = (this.state.fincas || []).find((f) => f.id === fincaId);
     const nombreFinca = finca ? finca.nombre : fincaId;
 
+    this._bloqueoSync = true;
+
     const animalesAntes = (this.state.animales || []).length;
+    const anmFinca = (this.state.animales || []).filter((a) => a.fincaId === fincaId);
     this.state.animales = (this.state.animales || []).filter((a) => a.fincaId !== fincaId);
     const eliminados = animalesAntes - this.state.animales.length;
+
+    // Registrar tombstones
+    if (!this.state._fincasPurgadas) this.state._fincasPurgadas = {};
+    const tsPurga = Date.now();
+    this.state._fincasPurgadas[fincaId] = tsPurga;
+
+    if (!Array.isArray(this.state._animalesEliminados)) this.state._animalesEliminados = [];
+    anmFinca.forEach((a) => {
+      if (a.id) this.state._animalesEliminados.push(a.id);
+      if (a.identificacionTag) this.state._animalesEliminados.push(`${fincaId}__${String(a.identificacionTag).trim().toUpperCase()}`);
+    });
+    if (this.state._animalesEliminados.length > 5000) {
+      this.state._animalesEliminados = this.state._animalesEliminados.slice(-3000);
+    }
 
     if (Array.isArray(this.state.servicios)) {
       this.state.servicios = this.state.servicios.filter((s) => s.fincaId !== fincaId);
@@ -23059,13 +23359,22 @@ class BoviTrackApp {
       this.state.nutricion = this.state.nutricion.filter((n) => n.fincaId !== fincaId);
     }
 
-    // Purgar en Supabase Cloud
+    // Purgar en Supabase Cloud con await y persistencia de tombstone
     if (this.supabase && typeof this.supabase.purgarFincaCloud === 'function') {
-      this.supabase.purgarFincaCloud(fincaId).catch((err) => console.warn('[BoviTrack] Error purgando finca en cloud:', err));
+      try {
+        await this.supabase.purgarFincaCloud(fincaId);
+        await this.sincronizarDirectorioEmpresasCloud();
+      } catch (err) {
+        console.warn('[BoviTrack] Error purgando finca en cloud:', err);
+      }
     }
 
+    this._bloqueoSync = false;
     this.guardarEstado();
-    alert(`✓ Hato de la finca "${nombreFinca}" vaciado exitosamente (${eliminados} animales eliminados).`);
+
+    if (!silencioso) {
+      alert(`✓ Hato de la finca "${nombreFinca}" vaciado exitosamente (${eliminados} animales eliminados).`);
+    }
 
     if (this.compAnimales) this.compAnimales.render();
     if (this.compCuadricula) {
@@ -23660,7 +23969,7 @@ class BoviTrackApp {
     if (this.compReproduccion && typeof this.compReproduccion.render === 'function') this.compReproduccion.render();
   }
 
-  importarEventosMasivosExcel(filasValidas, targetFincaId = null, tipoCargue = 'inventario', fechaGlobal = null) {
+  async importarEventosMasivosExcel(filasValidas, targetFincaId = null, tipoCargue = 'inventario', fechaGlobal = null, opciones = {}) {
     if (this.esUsuarioSoloConsulta()) {
       alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
@@ -23690,6 +23999,23 @@ class BoviTrackApp {
       alert('Error: Debe crear o seleccionar un predio/finca en la empresa activa antes de importar.');
       return;
     }
+
+    // MODO REEMPLAZO TOTAL DE INVENTARIO:
+    // Si se activa para "inventario", vaciar previamente el hato del predio tanto local como en nube
+    const modoReemplazo = Boolean(opciones && opciones.modoReemplazo);
+    if (tipoCargue === 'inventario' && modoReemplazo) {
+      console.log(`[BoviTrack] Modo Reemplazo Total activado para predio ${resolvedFincaId}. Vaciando inventario previo...`);
+      await this.purgarFinca(resolvedFincaId, true /* silencioso */);
+    }
+
+    // Determinar especie forzada según empresa y predio
+    const fObj = (this.state.fincas || []).find((f) => f.id === resolvedFincaId);
+    const empActiva = typeof this.getEmpresaActiva === 'function' ? this.getEmpresaActiva() : null;
+    const esEmpresaBufalera = (empActiva && (empActiva.nombre || '').toLowerCase().includes('bufal')) ||
+                             (fObj && (fObj.nombre || '').toLowerCase().includes('bufal')) ||
+                             ['FIN-1789697106872', 'FIN-1789773477033', 'FIN-1793204645231'].includes(resolvedFincaId) ||
+                             (this.state.fincasEmpresaMap && this.state.fincasEmpresaMap[resolvedFincaId] === 'EMP-01');
+    const especieForzada = esEmpresaBufalera ? 'bufalino' : (opciones.especiePredeterminada || null);
 
     // Asegurar que la finca activa de la sesión y del importador apunten al predio donde se importaron los animales
     this.state.fincaActivaId = resolvedFincaId;
@@ -24279,7 +24605,7 @@ class BoviTrackApp {
             identificacionTag: f.tag,
             numero: f.tag,
             nombreAlias: f.nombre || `Animal ${f.tag}`,
-            especie: f.especie || 'bovino',
+            especie: especieForzada || f.especie || 'bovino',
             raza: f.raza || 'Cruzada',
             sexo: f.sexo || 'hembra',
             categoria: f.categoria || (f.sexo === 'macho' ? 'Novillo de Ceba' : 'Vaca de Ordeño'),
@@ -24297,7 +24623,8 @@ class BoviTrackApp {
           this.state.animales.push(animal);
         } else {
           actualizados++;
-          if (f.especie) animal.especie = f.especie;
+          if (especieForzada) animal.especie = especieForzada;
+          else if (f.especie) animal.especie = f.especie;
           if (f.nombre) animal.nombreAlias = f.nombre;
           if (f.sexo) animal.sexo = f.sexo;
           if (f.raza) animal.raza = f.raza;
@@ -24383,7 +24710,11 @@ class BoviTrackApp {
     }
 
     this.guardarEstado();
-    this.sincronizarConSupabaseDebounced();
+    if (modoReemplazo) {
+      this.sincronizarConSupabase();
+    } else {
+      this.sincronizarConSupabaseDebounced();
+    }
 
     // Re-renderizado total e inmediato de los componentes para visualización reactiva
     if (this.compAnimales) this.compAnimales.render();
