@@ -52,9 +52,15 @@ export class CuadriculaMasiva {
     const cleanTag = tag.trim().toUpperCase();
     const animales = this.getAnimales ? this.getAnimales() : [];
 
+    // Priorizar siempre ejemplares del predio activo antes que homónimos de otra finca
     let match = animales.find(
-      (a) => (a.identificacionTag || a.numero || '').toUpperCase() === cleanTag
+      (a) => !a._estaEnOtraFinca && (a.identificacionTag || a.numero || '').toUpperCase() === cleanTag
     );
+    if (!match) {
+      match = animales.find(
+        (a) => (a.identificacionTag || a.numero || '').toUpperCase() === cleanTag
+      );
+    }
 
     return match || null;
   }

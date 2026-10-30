@@ -178,7 +178,7 @@ for (const pwaFile of pwaFiles) {
   if (src) {
     fs.copyFileSync(src, pwaFile);
     fs.copyFileSync(src, `public/${pwaFile}`);
-    if (!fs.existsSync(`frontend/${pwaFile}`)) fs.copyFileSync(src, `frontend/${pwaFile}`);
+    fs.copyFileSync(src, `frontend/${pwaFile}`);
     if (fs.existsSync('www')) fs.copyFileSync(src, `www/${pwaFile}`);
     const androidPublic = 'android/app/src/main/assets/public';
     if (fs.existsSync(androidPublic)) fs.copyFileSync(src, path.join(androidPublic, pwaFile));

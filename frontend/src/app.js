@@ -217,6 +217,55 @@ class BoviTrackApp {
       });
     }
 
+    // Reparación de cargue cruzado (Oct 2026): Reasignar los 457 bovinos del lote ANM-179328838
+    // cargados por desincronización de selector en FIN-1789773477033 (WATERLOO - BUFALERA INVERSIONES)
+    // a su predio real FIN-1793207707789 (Gallinazo - VACUNO INVERSIONES)
+    const idsAnimalesGallinazo = new Set();
+    const tagsGallinazo = new Set();
+    if (Array.isArray(state.animales)) {
+      state.animales.forEach((a) => {
+        if (a && String(a.id || '').startsWith('ANM-179328838')) {
+          if (a.fincaId === 'FIN-1789773477033') {
+            a.fincaId = 'FIN-1793207707789';
+          }
+          if (a.fincaId === 'FIN-1793207707789') {
+            idsAnimalesGallinazo.add(a.id);
+            if (a.identificacionTag) tagsGallinazo.add(String(a.identificacionTag));
+          }
+        }
+      });
+    }
+    if (idsAnimalesGallinazo.size > 0) {
+      if (Array.isArray(state.pesajes)) {
+        state.pesajes.forEach((p) => {
+          if (!p) return;
+          if (idsAnimalesGallinazo.has(p.animalId) ||
+              String(p.animalId || '').startsWith('ANM-179328838') ||
+              (p.fincaId === 'FIN-1789773477033' && tagsGallinazo.has(String(p.tag || p.animalTag || '')))) {
+            p.fincaId = 'FIN-1793207707789';
+            if (typeof p.id === 'string' && p.id.startsWith('PES-FIN-1789773477033-')) {
+              p.id = p.id.replace('PES-FIN-1789773477033-', 'PES-FIN-1793207707789-');
+            }
+          }
+        });
+      }
+      if (Array.isArray(state.operacionesDiarias)) {
+        state.operacionesDiarias.forEach((op) => {
+          if (!op) return;
+          if (idsAnimalesGallinazo.has(op.animalId) ||
+              String(op.animalId || '').startsWith('ANM-179328838') ||
+              (op.fincaId === 'FIN-1789773477033' && tagsGallinazo.has(String(op.tag || op.animalTag || '')))) {
+            op.fincaId = 'FIN-1793207707789';
+            op.fincaNombre = 'Gallinazo';
+            op.empresaId = 'EMP-1793154262914';
+            if (typeof op.id === 'string' && op.id.startsWith('ACT-PES-FIN-1789773477033-')) {
+              op.id = op.id.replace('ACT-PES-FIN-1789773477033-', 'ACT-PES-FIN-1793207707789-');
+            }
+          }
+        });
+      }
+    }
+
     if (Array.isArray(state.usuarios)) {
       // Eliminar superadmin antiguo para que SOLO quede anuardavid
       state.usuarios = state.usuarios.filter((u) => u.usuario !== 'superadmin' && u.id !== 'USR-00');
@@ -281,6 +330,20 @@ class BoviTrackApp {
   guardarEstado() {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
+      // Mantener sincronizada la empresaActivaId dentro de la sesión autenticada
+      // para que una recarga de página nunca revierta a una empresa anterior
+      if (this.state && this.state.usuarioActual && this.state.empresaActivaId) {
+        try {
+          const rawSes = localStorage.getItem(this.sessionKey);
+          if (rawSes) {
+            const ses = JSON.parse(rawSes);
+            if (ses && ses.empresaId !== this.state.empresaActivaId) {
+              ses.empresaId = this.state.empresaActivaId;
+              localStorage.setItem(this.sessionKey, JSON.stringify(ses));
+            }
+          }
+        } catch (_) {}
+      }
     }
     this.actualizarContadorAlertas();
     this.sincronizarConSupabaseDebounced();
@@ -558,33 +621,46 @@ class BoviTrackApp {
       }
     }
 
-    // 4. ANIMALES: Sincronización inteligente con Supabase Cloud
+    // 4. ANIMALES: Sincronización inteligente con Supabase Cloud (100% aislada por fincaId)
     if (Array.isArray(datos.animales)) {
       const eliminadasFincasAnm = new Set(this.state._fincasEliminadas || []);
-      const animalesValidosCloud = datos.animales.filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)));
+      const animalesValidosCloud = datos.animales
+        .filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)))
+        .map((a) => {
+          if (String(a.id || '').startsWith('ANM-179328838') && a.fincaId === 'FIN-1789773477033') {
+            return { ...a, fincaId: 'FIN-1793207707789' };
+          }
+          return a;
+        });
       const actuales = (this.state.animales || []).filter((a) => a && (!a.fincaId || !eliminadasFincasAnm.has(a.fincaId)));
       // Protección de seguridad: Si la nube responde vacío pero hay animales locales, no sobreescribir con []
       if (animalesValidosCloud.length === 0 && actuales.length > 0) {
         // No sobreescribir animales locales con array vacío de error o consulta en blanco
       } else {
-        const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || `${a.fincaId}_${a.identificacionTag}`));
-        const cloudTags = new Set(animalesValidosCloud.map((a) => `${a.fincaId}_${a.identificacionTag}`));
+        const getClaveFincaTag = (a) => `${a.fincaId || 'SIN_FINCA'}__${String(a.identificacionTag || a.numero || '').trim().toUpperCase()}`;
+        const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || getClaveFincaTag(a)));
+        const cloudTags = new Set(animalesValidosCloud.map((a) => getClaveFincaTag(a)));
 
         // Preservar ejemplares locales recién registrados que aún no se han subido
         const localesPendientes = actuales.filter((a) => {
           if (!a) return false;
-          const kId = a.id || `${a.fincaId}_${a.identificacionTag}`;
-          const kTag = `${a.fincaId}_${a.identificacionTag}`;
+          const kId = a.id || getClaveFincaTag(a);
+          const kTag = getClaveFincaTag(a);
           return !cloudIds.has(kId) && !cloudTags.has(kTag);
         });
 
-        const anmLocalesMap = new Map(actuales.map((a) => [a.id || a.identificacionTag, a]));
+        const anmLocalesMap = new Map();
+        actuales.forEach((a) => {
+          if (!a) return;
+          if (a.id) anmLocalesMap.set(a.id, a);
+          anmLocalesMap.set(getClaveFincaTag(a), a);
+        });
         const listaFinalAnimales = [...animalesValidosCloud, ...localesPendientes];
 
         let anmCambiaron = (this.state.animales || []).length !== listaFinalAnimales.length;
         if (!anmCambiaron) {
           for (const aCloud of animalesValidosCloud) {
-            const aLoc = anmLocalesMap.get(aCloud.id || aCloud.identificacionTag);
+            const aLoc = (aCloud.id && anmLocalesMap.get(aCloud.id)) || anmLocalesMap.get(getClaveFincaTag(aCloud));
             if (!aLoc ||
                 aLoc.identificacionTag !== aCloud.identificacionTag ||
                 aLoc.fincaId !== aCloud.fincaId ||
@@ -640,6 +716,42 @@ class BoviTrackApp {
     }
 
     // 6. COLECCIONES OPERATIVAS Y REPRODUCTIVAS (Fusión bidireccional inteligente sin pérdida de datos)
+    // Asegurar normalización previa de lote Gallinazo (ANM-179328838) en pesajes/operaciones locales antes de fusionar
+    const tagsGallinazoSync = new Set(
+      (this.state.animales || [])
+        .filter((a) => a && (String(a.id || '').startsWith('ANM-179328838') || a.fincaId === 'FIN-1793207707789'))
+        .map((a) => String(a.identificacionTag || ''))
+        .filter(Boolean)
+    );
+    if (tagsGallinazoSync.size > 0) {
+      if (Array.isArray(this.state.pesajes)) {
+        this.state.pesajes.forEach((p) => {
+          if (!p) return;
+          if (String(p.animalId || '').startsWith('ANM-179328838') ||
+              (p.fincaId === 'FIN-1789773477033' && tagsGallinazoSync.has(String(p.tag || p.animalTag || '')))) {
+            p.fincaId = 'FIN-1793207707789';
+            if (typeof p.id === 'string' && p.id.startsWith('PES-FIN-1789773477033-')) {
+              p.id = p.id.replace('PES-FIN-1789773477033-', 'PES-FIN-1793207707789-');
+            }
+          }
+        });
+      }
+      if (Array.isArray(this.state.operacionesDiarias)) {
+        this.state.operacionesDiarias.forEach((op) => {
+          if (!op) return;
+          if (String(op.animalId || '').startsWith('ANM-179328838') ||
+              (op.fincaId === 'FIN-1789773477033' && tagsGallinazoSync.has(String(op.tag || op.animalTag || '')))) {
+            op.fincaId = 'FIN-1793207707789';
+            op.fincaNombre = 'Gallinazo';
+            op.empresaId = 'EMP-1793154262914';
+            if (typeof op.id === 'string' && op.id.startsWith('ACT-PES-FIN-1789773477033-')) {
+              op.id = op.id.replace('ACT-PES-FIN-1789773477033-', 'ACT-PES-FIN-1793207707789-');
+            }
+          }
+        });
+      }
+    }
+
     const eliminadasFincasSet = new Set(this.state._fincasEliminadas || []);
     const fusionarColeccion = (key, nuevasFilasCloud) => {
       if (!Array.isArray(nuevasFilasCloud)) return;
@@ -696,11 +808,13 @@ class BoviTrackApp {
         this.compCuadricula.cargarFilasDesdeInventario();
       }
 
-      // Si el usuario está escribiendo activamente en un campo de texto, evitar interrumpirlo
+      // Si el usuario está escribiendo activamente o tiene una previsualización de Excel abierta, evitar interrumpirlo
       const usuarioEscribiendo = typeof document !== 'undefined' && document.activeElement &&
-        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT');
+      const importandoExcelActivo = this.vistaActiva === 'excel' && this.compExcel &&
+        Array.isArray(this.compExcel.registros) && this.compExcel.registros.length > 0;
 
-      if (!usuarioEscribiendo) {
+      if (!usuarioEscribiendo && !importandoExcelActivo) {
         this.mostrarVistaActiva();
         this.actualizarContadorAlertas();
       }
@@ -1006,10 +1120,16 @@ class BoviTrackApp {
         if (user.rol !== 'superadmin') {
           this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId;
         } else {
-          if (sesion.empresaId && sesion.empresaId !== 'todas') {
-            this.state.empresaActivaId = sesion.empresaId;
-          } else if (user.empresaId) {
-            this.state.empresaActivaId = user.empresaId;
+          // Para superadmin, respetar la empresaActivaId guardada en el estado si es válida,
+          // o usar la de la sesión como respaldo
+          const empEstadoValida = this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' &&
+            (this.state.empresas || []).some((e) => e.id === this.state.empresaActivaId);
+          if (!empEstadoValida) {
+            if (sesion.empresaId && sesion.empresaId !== 'todas') {
+              this.state.empresaActivaId = sesion.empresaId;
+            } else if (user.empresaId) {
+              this.state.empresaActivaId = user.empresaId;
+            }
           }
         }
 
@@ -1625,6 +1745,7 @@ class BoviTrackApp {
       containerId: 'pantalla-excel',
       getFincas: () => this.getFincasEmpresa(),
       getFincaActiva: () => this.getFincaActiva(),
+      getEmpresaActiva: () => this.getEmpresaActiva(),
       onCambiarFinca: (fincaId) => this.setFincaActiva(fincaId),
       onImportConfirmada: (registrosValidos, targetFincaId, tipoCargue, fechaGlobal) => this.importarEventosMasivosExcel(registrosValidos, targetFincaId, tipoCargue, fechaGlobal)
     });
@@ -2058,6 +2179,10 @@ class BoviTrackApp {
     } else if (!fincasEmpresa.some((f) => f.id === this.state.fincaActivaId)) {
       this.state.fincaActivaId = fincasEmpresa[0].id;
     }
+    if (this.compExcel) {
+      this.compExcel.fincaDestinoId = this.state.fincaActivaId;
+      this.compExcel._ultimaFincaActivaGlobal = this.state.fincaActivaId;
+    }
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compCuadricula) this.compCuadricula.cargarFilasDesdeInventario();
@@ -2113,6 +2238,10 @@ class BoviTrackApp {
     this.state.empresaActivaId = empresa.id;
     const fincasNuevaEmpresa = (this.state.fincas || []).filter((f) => f.empresaId === empresa.id);
     this.state.fincaActivaId = fincasNuevaEmpresa.length > 0 ? fincasNuevaEmpresa[0].id : null;
+    if (this.compExcel) {
+      this.compExcel.fincaDestinoId = this.state.fincaActivaId;
+      this.compExcel._ultimaFincaActivaGlobal = this.state.fincaActivaId;
+    }
 
     this.guardarEstado();
     this.actualizarHeader();
@@ -2243,8 +2372,7 @@ class BoviTrackApp {
     }
     let activa = fincas.find((f) => f.id === this.state.fincaActivaId);
     if (!activa) {
-      const conAnimales = fincas.find((f) => (this.state.animales || []).some((a) => a.fincaId === f.id));
-      activa = conAnimales || fincas[0];
+      activa = fincas[0];
       this.state.fincaActivaId = activa.id;
     }
     return activa || null;
@@ -2347,6 +2475,10 @@ class BoviTrackApp {
       this.state.empresaActivaId = finca.empresaId;
     }
     this.state.fincaActivaId = finca.id;
+    if (this.compExcel) {
+      this.compExcel.fincaDestinoId = finca.id;
+      this.compExcel._ultimaFincaActivaGlobal = finca.id;
+    }
 
     this.guardarEstado();
     this.actualizarHeader();
@@ -2374,10 +2506,15 @@ class BoviTrackApp {
     if (finca.empresaId && this.state.empresaActivaId !== finca.empresaId && this.state.empresaActivaId !== 'todas') {
       this.state.empresaActivaId = finca.empresaId;
     }
+    if (this.compExcel) {
+      this.compExcel.fincaDestinoId = finca.id;
+      this.compExcel._ultimaFincaActivaGlobal = finca.id;
+    }
     this.guardarEstado();
     this.actualizarHeader();
     if (this.compCuadricula) this.compCuadricula.cargarFilasDesdeInventario();
     if (this.compDashboard) this.compDashboard.render();
+    if (typeof this.refrescarVistas === 'function') this.refrescarVistas();
     this.mostrarVistaActiva();
   }
 
@@ -2761,7 +2898,11 @@ class BoviTrackApp {
   }
 
   abrirFichaAnimal(animalId) {
-    const animal = this.state.animales.find((a) => a.id === animalId);
+    const fActiva = this.getFincaActiva();
+    const fincaActivaId = fActiva ? fActiva.id : this.state.fincaActivaId;
+    const animal = this.state.animales.find((a) => a.id === animalId) ||
+      this.state.animales.find((a) => a.fincaId === fincaActivaId && a.identificacionTag === animalId) ||
+      this.state.animales.find((a) => a.identificacionTag === animalId);
     if (!animal) return;
 
     const fincaMap = new Map((this.state.fincas || []).map((f) => [f.id, f.nombre]));
@@ -2804,11 +2945,12 @@ class BoviTrackApp {
       });
     }
 
-    // Integrar partos registrados en operacionesDiarias
+    // Integrar partos registrados en operacionesDiarias (delimitados estrictamente al predio del ejemplar)
     if (Array.isArray(this.state.operacionesDiarias)) {
       const aTagUpper = String(aTag || '').trim().toUpperCase();
       this.state.operacionesDiarias.forEach((op) => {
         if (op && (op.accion === 'partos' || op.accion === 'parto')) {
+          if (op.fincaId && animal.fincaId && op.fincaId !== animal.fincaId && op.animalId !== animal.id) return;
           const opTag = String(op.tag || op.animalTag || '').trim().toUpperCase();
           const opId = String(op.animalId || '').trim();
           if ((aTagUpper && opTag === aTagUpper) || (animal.id && opId === String(animal.id).trim())) {
@@ -2833,11 +2975,12 @@ class BoviTrackApp {
       });
     }
 
-    // Integrar crías nacidas registradas en el inventario que tengan a esta hembra como madre
+    // Integrar crías nacidas registradas en el inventario del mismo predio que tengan a esta hembra como madre
     if (Array.isArray(this.state.animales)) {
       const aTagUpper = String(aTag || '').trim().toUpperCase();
       this.state.animales.forEach((cria) => {
         if (!cria) return;
+        if (cria.fincaId && animal.fincaId && cria.fincaId !== animal.fincaId) return;
         const cMadreTag = String(cria.madreTag || cria.madre || '').trim().toUpperCase();
         const cTagUpper = String(cria.identificacionTag || cria.numero || '').trim().toUpperCase();
         if (cMadreTag && aTagUpper && cMadreTag === aTagUpper && cTagUpper !== aTagUpper) {
@@ -2882,9 +3025,13 @@ class BoviTrackApp {
       }
     }
 
-    // 2. Historial de pesajes completo
+    // 2. Historial de pesajes completo (aislado por animalId o fincaId + tag)
     const pesajes = (this.state.pesajes || []).filter(
-      (p) => p && (p.animalId === animal.id || p.tag === animal.identificacionTag || p.animalTag === animal.identificacionTag)
+      (p) => p && (
+        p.animalId === animal.id ||
+        ((!p.fincaId || !animal.fincaId || p.fincaId === animal.fincaId) &&
+         (p.tag === animal.identificacionTag || p.animalTag === animal.identificacionTag))
+      )
     );
     if (pesajes.length === 0 && animal.ultimoPesoKg) {
       pesajes.push({
@@ -2901,9 +3048,9 @@ class BoviTrackApp {
 
     const servicios = (this.state.servicios || []).filter(
       (s) => s && (
-        s.fincaId === animal.fincaId ||
         s.animalId === animal.id ||
-        String(s.tag || s.animalTag || '').trim().toUpperCase() === String(aTag || '').trim().toUpperCase()
+        ((!s.fincaId || !animal.fincaId || s.fincaId === animal.fincaId) &&
+         String(s.tag || s.animalTag || '').trim().toUpperCase() === String(aTag || '').trim().toUpperCase())
       )
     );
     this.compFicha.mostrar(animal, partos, pesajes, servicios);
@@ -2966,11 +3113,11 @@ class BoviTrackApp {
         this.state.animales[idx].gdpPromedioGDia = animalActualizado.gdpPromedioGDia ? parseFloat(animalActualizado.gdpPromedioGDia) : null;
       }
 
-      // Registrar en pesajes y operacionesDiarias si no existe ya para esta fecha y peso
+      // Registrar en pesajes y operacionesDiarias si no existe ya para esta fecha y peso en su predio
       if (!Array.isArray(this.state.pesajes)) this.state.pesajes = [];
       const anm = this.state.animales[idx];
       const yaRegistradoHoy = this.state.pesajes.some(
-        (p) => (p.animalId === anm.id || p.tag === anm.identificacionTag) && p.fecha === fechaPesaje && Number(p.peso || p.pesoNuevo) === nuevoPeso
+        (p) => p && (p.animalId === anm.id || (p.fincaId === anm.fincaId && p.tag === anm.identificacionTag)) && p.fecha === fechaPesaje && Number(p.peso || p.pesoNuevo) === nuevoPeso
       );
 
       if (!yaRegistradoHoy) {
@@ -3035,23 +3182,44 @@ class BoviTrackApp {
       return;
     }
 
-    // Capturar datos del animal antes de eliminarlo para el cloud delete
-    const animal = (this.state.animales || []).find((a) => a.id === animalId || a.identificacionTag === animalId);
+    // Capturar datos del animal antes de eliminarlo para el cloud delete (priorizando la finca activa)
+    const fActiva = this.getFincaActiva();
+    const fincaActivaId = fActiva ? fActiva.id : this.state.fincaActivaId;
+    const animal = (this.state.animales || []).find((a) => a.id === animalId) ||
+      (this.state.animales || []).find((a) => a.fincaId === fincaActivaId && a.identificacionTag === animalId) ||
+      (this.state.animales || []).find((a) => a.identificacionTag === animalId);
     const realAnimalId = animal ? animal.id : animalId;
     const animalTag = animal ? (animal.identificacionTag || animal.tag || animal.numeroTag || animal.nombre || animalId) : animalId;
-    const fincaId = animal ? animal.fincaId : (this.state.fincaActivaId || null);
+    const fincaId = animal ? animal.fincaId : (fincaActivaId || null);
 
-    this.state.animales = (this.state.animales || []).filter((a) => a.id !== realAnimalId && a.identificacionTag !== animalTag);
+    // Eliminar únicamente el ejemplar del predio correspondiente (nunca tocar homónimos de otras fincas)
+    this.state.animales = (this.state.animales || []).filter((a) => {
+      if (a.id === realAnimalId) return false;
+      if (a.identificacionTag === animalTag && (!fincaId || !a.fincaId || a.fincaId === fincaId)) return false;
+      return true;
+    });
 
-    // Limpiar pesajes, servicios y nutrición asociados al animal
+    // Limpiar pesajes, servicios y nutrición asociados al animal en su predio
     if (Array.isArray(this.state.pesajes)) {
-      this.state.pesajes = this.state.pesajes.filter((p) => p.animalId !== realAnimalId && p.tag !== animalTag && p.animalTag !== animalTag);
+      this.state.pesajes = this.state.pesajes.filter((p) => {
+        if (p.animalId === realAnimalId) return false;
+        if ((p.tag === animalTag || p.animalTag === animalTag) && (!fincaId || !p.fincaId || p.fincaId === fincaId)) return false;
+        return true;
+      });
     }
     if (Array.isArray(this.state.servicios)) {
-      this.state.servicios = this.state.servicios.filter((s) => s.animalId !== realAnimalId && s.tag !== animalTag && s.animalTag !== animalTag);
+      this.state.servicios = this.state.servicios.filter((s) => {
+        if (s.animalId === realAnimalId) return false;
+        if ((s.tag === animalTag || s.animalTag === animalTag) && (!fincaId || !s.fincaId || s.fincaId === fincaId)) return false;
+        return true;
+      });
     }
     if (Array.isArray(this.state.nutricion)) {
-      this.state.nutricion = this.state.nutricion.filter((n) => n.animalId !== realAnimalId && n.tag !== animalTag && n.animalTag !== animalTag);
+      this.state.nutricion = this.state.nutricion.filter((n) => {
+        if (n.animalId === realAnimalId) return false;
+        if ((n.tag === animalTag || n.animalTag === animalTag) && (!fincaId || !n.fincaId || n.fincaId === fincaId)) return false;
+        return true;
+      });
     }
 
     // Eliminar en Supabase Cloud
@@ -3061,7 +3229,7 @@ class BoviTrackApp {
 
     this.guardarEstado();
 
-    this.compAnimales.render();
+    if (this.compAnimales) this.compAnimales.render();
     if (this.compCuadricula) {
       this.compCuadricula.cargarFilasDesdeInventario();
       this.compCuadricula.render();
@@ -3920,21 +4088,54 @@ class BoviTrackApp {
       return;
     }
 
-    // Resolver predio/finca de destino de forma inequívoca
-    const fActiva = this.getFincaActiva();
-    const resolvedFincaId = targetFincaId || this.state.fincaActivaId || (fActiva ? fActiva.id : null) || (this.state.fincas?.[0]?.id || null);
+    // Resolver predio/finca de destino de forma inequívoca dentro de la empresa activa
+    const fincasPermitidas = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : (this.state.fincas || []);
+    const fActiva = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : null;
+    let resolvedFincaId = targetFincaId || this.state.fincaActivaId || (fActiva ? fActiva.id : null);
 
-    if (!resolvedFincaId) {
-      alert('Error: Debe crear o seleccionar un predio/finca antes de importar.');
+    // Garantizar aislamiento Multi-Tenant: el predio destino DEBE pertenecer a la empresa activa
+    if (resolvedFincaId && fincasPermitidas.length > 0 && !fincasPermitidas.some((f) => f.id === resolvedFincaId)) {
+      const fGlobal = (this.state.fincas || []).find((f) => f.id === resolvedFincaId);
+      const empActiva = typeof this.getEmpresaActiva === 'function' ? this.getEmpresaActiva() : null;
+      alert(`⛔ Error de aislamiento: El predio "${fGlobal ? fGlobal.nombre : resolvedFincaId}" no pertenece a la empresa activa "${empActiva ? empActiva.nombre : ''}". Por favor seleccione un predio válido de esta empresa.`);
       return;
     }
 
-    // Asegurar que la finca activa de la sesión apunte al predio donde se importaron los animales
+    if (!resolvedFincaId && fincasPermitidas.length > 0) {
+      resolvedFincaId = fincasPermitidas[0].id;
+    }
+    if (!resolvedFincaId && this.state.fincas?.[0]?.id) {
+      resolvedFincaId = this.state.fincas[0].id;
+    }
+
+    if (!resolvedFincaId) {
+      alert('Error: Debe crear o seleccionar un predio/finca en la empresa activa antes de importar.');
+      return;
+    }
+
+    // Asegurar que la finca activa de la sesión y del importador apunten al predio donde se importaron los animales
     this.state.fincaActivaId = resolvedFincaId;
+    if (this.compExcel) {
+      this.compExcel.fincaDestinoId = resolvedFincaId;
+      this.compExcel._ultimaFincaActivaGlobal = resolvedFincaId;
+    }
     const fincaObj = (this.state.fincas || []).find((f) => f.id === resolvedFincaId);
     const nombreFinca = fincaObj ? fincaObj.nombre : resolvedFincaId;
+    const safeFincaSuffix = String(resolvedFincaId).replace(/[^a-zA-Z0-9]/g, '').slice(-6) || 'FIN';
     const hoy = new Date().toISOString().split('T')[0];
     const fechaSesion = fechaGlobal || hoy;
+
+    // Búsqueda estrictamente aislada dentro del predio destino (con normalización de arete)
+    const buscarAnimalEnPredio = (tagBuscado) => {
+      const tNorm = String(tagBuscado || '').trim().toUpperCase();
+      if (!tNorm) return null;
+      return (this.state.animales || []).find((a) =>
+        a && a.fincaId === resolvedFincaId && (
+          String(a.identificacionTag || '').trim().toUpperCase() === tNorm ||
+          String(a.numero || '').trim().toUpperCase() === tNorm
+        )
+      );
+    };
 
     let importadosNuevos = 0;
     let actualizados = 0;
@@ -3942,9 +4143,7 @@ class BoviTrackApp {
 
     if (tipoCargue === 'pesajes') {
       filasValidas.forEach((f, idx) => {
-        let animal = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
         const fPes = f.fechaPesaje || f.fecha || fechaSesion;
         const pesoNum = parseFloat(f.pesoActual !== undefined && f.pesoActual !== null ? f.pesoActual : f.peso);
         if (isNaN(pesoNum) || pesoNum <= 0) return;
@@ -4010,9 +4209,7 @@ class BoviTrackApp {
       });
     } else if (tipoCargue === 'palpaciones') {
       filasValidas.forEach((f, idx) => {
-        let animal = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
         const fPalp = f.fechaPalpacion || f.fecha || fechaSesion;
         const res = (f.resultadoPalpacion || f.resultado || 'Preñada').trim();
         const diasG = parseInt(f.diasGestacion || 0);
@@ -4055,9 +4252,7 @@ class BoviTrackApp {
       });
     } else if (tipoCargue === 'leche') {
       filasValidas.forEach((f, idx) => {
-        let animal = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
         const fLeche = f.fechaLeche || f.fecha || fechaSesion;
         const litros = parseFloat(f.totalLitros !== undefined && f.totalLitros !== null ? f.totalLitros : (f.litros || 0));
 
@@ -4100,9 +4295,7 @@ class BoviTrackApp {
     } else if (tipoCargue === 'partos') {
       filasValidas.forEach((f, idx) => {
         const mTag = f.madreTag || f.tag;
-        let mother = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === mTag || a.numero === mTag) && a.fincaId === resolvedFincaId
-        );
+        let mother = buscarAnimalEnPredio(mTag);
         const fParto = f.fechaParto || f.fecha || fechaSesion;
         const cTag = f.tagCria || f.criaTag;
         const sexCria = (f.sexoCria || 'macho').toLowerCase();
@@ -4151,14 +4344,12 @@ class BoviTrackApp {
         }
 
         if (cTag) {
-          let criaExistente = (this.state.animales || []).find(
-            (a) => (a.identificacionTag === cTag || a.numero === cTag) && a.fincaId === resolvedFincaId
-          );
+          let criaExistente = buscarAnimalEnPredio(cTag);
           if (!criaExistente) {
             importadosNuevos++;
             const safeTag = String(cTag).replace(/[^a-zA-Z0-9]/g, '');
             const cria = {
-              id: `ANM-${Date.now()}-${idx}-${safeTag}`,
+              id: `ANM-${Date.now()}-${safeFincaSuffix}-${idx}-${safeTag}`,
               fincaId: resolvedFincaId,
               identificacionTag: cTag,
               numero: cTag,
@@ -4196,9 +4387,7 @@ class BoviTrackApp {
       });
     } else if (tipoCargue === 'destete') {
       filasValidas.forEach((f, idx) => {
-        let animal = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
         const fDestete = f.fechaDestete || f.fecha || fechaSesion;
         const pDestete = parseFloat(f.pesoDestete !== undefined && f.pesoDestete !== null ? f.pesoDestete : (f.peso || 0));
         const loteDestino = f.loteDestino || 'Levante';
@@ -4248,9 +4437,7 @@ class BoviTrackApp {
       });
     } else if (tipoCargue === 'labores') {
       filasValidas.forEach((f, idx) => {
-        let animal = (this.state.animales || []).find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
         const fLabor = f.fecha || f.fechaPesaje || f.fechaPalpacion || f.fechaLeche || f.fechaDestete || f.fechaParto || fechaSesion;
 
         if (!animal) {
@@ -4458,14 +4645,12 @@ class BoviTrackApp {
           }
 
           if (cTag) {
-            let criaExistente = (this.state.animales || []).find(
-              (a) => (a.identificacionTag === cTag || a.numero === cTag) && a.fincaId === resolvedFincaId
-            );
+            let criaExistente = buscarAnimalEnPredio(cTag);
             if (!criaExistente) {
               importadosNuevos++;
               const safeTag = String(cTag).replace(/[^a-zA-Z0-9]/g, '');
               const cria = {
-                id: `ANM-${Date.now()}-${idx}-${safeTag}`,
+                id: `ANM-${Date.now()}-${safeFincaSuffix}-${idx}-${safeTag}`,
                 fincaId: resolvedFincaId,
                 identificacionTag: cTag,
                 numero: cTag,
@@ -4505,15 +4690,13 @@ class BoviTrackApp {
     } else {
       // 'inventario' (Cargue general de animales)
       filasValidas.forEach((f, idx) => {
-        let animal = this.state.animales.find(
-          (a) => (a.identificacionTag === f.tag || a.numero === f.tag) && a.fincaId === resolvedFincaId
-        );
+        let animal = buscarAnimalEnPredio(f.tag);
 
         if (!animal) {
           importadosNuevos++;
           const safeTag = String(f.tag || '').replace(/[^a-zA-Z0-9]/g, '');
           animal = {
-            id: `ANM-${Date.now()}-${idx}-${safeTag}`,
+            id: `ANM-${Date.now()}-${safeFincaSuffix}-${idx}-${safeTag}`,
             fincaId: resolvedFincaId,
             identificacionTag: f.tag,
             numero: f.tag,
@@ -4572,7 +4755,12 @@ class BoviTrackApp {
           const fPes = animal.fechaUltimoPesaje || fechaSesion;
           const safeTag = String(animal.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_');
           const idPes = `PES-${resolvedFincaId}-${safeTag}-${fPes}`;
-          const yaExiste = this.state.pesajes.some((p) => p.id === idPes || ((p.animalId === animal.id || p.tag === animal.identificacionTag) && p.fecha === fPes));
+          const yaExiste = this.state.pesajes.some(
+            (p) => p && (
+              p.id === idPes ||
+              (p.fincaId === resolvedFincaId && (p.animalId === animal.id || String(p.tag || p.animalTag || '').trim().toUpperCase() === String(animal.identificacionTag || '').trim().toUpperCase()) && p.fecha === fPes)
+            )
+          );
           if (!yaExiste) {
             this.state.pesajes.push({
               id: idPes,
@@ -4895,11 +5083,7 @@ class BoviTrackApp {
     const selF = document.getElementById('select-finca-nav');
     if (selF) {
       selF.addEventListener('change', (e) => {
-        this.state.fincaActivaId = e.target.value;
-        this.guardarEstado();
-        this.actualizarHeader();
-        this.compCuadricula.cargarFilasDesdeInventario();
-        this.mostrarVistaActiva();
+        this.setFincaActiva(e.target.value);
       });
     }
 

@@ -17,11 +17,12 @@ import { normalizarFechaISO } from '../core/supabaseSync.js';
 import { formatearFecha } from '../core/zootecnia.js';
 
 export class ImportadorExcel {
-  constructor({ containerId, onImportConfirmada, getFincas, getFincaActiva, onCambiarFinca }) {
+  constructor({ containerId, onImportConfirmada, getFincas, getFincaActiva, getEmpresaActiva, onCambiarFinca }) {
     this.container = document.getElementById(containerId);
     this.onImportConfirmada = onImportConfirmada;
     this.getFincas = getFincas || (() => []);
     this.getFincaActiva = getFincaActiva || (() => null);
+    this.getEmpresaActiva = getEmpresaActiva || (() => null);
     this.onCambiarFinca = onCambiarFinca || null;
 
     this.tipoCargue = 'inventario'; // 'inventario' | 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destete'
@@ -29,7 +30,37 @@ export class ImportadorExcel {
     this.aplicarFechaGlobal = true;
     this.registros = [];
     this.fincaDestinoId = null;
+    this._ultimaFincaActivaGlobal = null;
     this.informeResultados = null;
+  }
+
+  resolverFincaDestino() {
+    const fincas = this.getFincas ? this.getFincas() : [];
+    const fActiva = this.getFincaActiva ? this.getFincaActiva() : null;
+
+    if (!Array.isArray(fincas) || fincas.length === 0) {
+      this.fincaDestinoId = null;
+      this._ultimaFincaActivaGlobal = null;
+      return null;
+    }
+
+    // Si la finca activa global cambió (ej. desde la barra superior o al cambiar de empresa), sincronizar de inmediato
+    if (fActiva && fActiva.id && fincas.some((f) => f.id === fActiva.id)) {
+      if (this._ultimaFincaActivaGlobal !== fActiva.id || !this.fincaDestinoId || !fincas.some((f) => f.id === this.fincaDestinoId)) {
+        this.fincaDestinoId = fActiva.id;
+        this._ultimaFincaActivaGlobal = fActiva.id;
+      }
+    }
+
+    // Validar estrictamente que fincaDestinoId pertenezca a las fincas de la empresa activa
+    if (!this.fincaDestinoId || !fincas.some((f) => f.id === this.fincaDestinoId)) {
+      this.fincaDestinoId = (fActiva && fincas.some((f) => f.id === fActiva.id))
+        ? fActiva.id
+        : fincas[0].id;
+      this._ultimaFincaActivaGlobal = this.fincaDestinoId;
+    }
+
+    return fincas.find((f) => f.id === this.fincaDestinoId) || fincas[0] || null;
   }
 
   init() {
@@ -890,15 +921,27 @@ export class ImportadorExcel {
 
     const fincas = this.getFincas ? this.getFincas() : [];
     const fActiva = this.getFincaActiva ? this.getFincaActiva() : null;
-    const targetFincaId = this.fincaDestinoId || (fActiva ? fActiva.id : null) || (fincas[0]?.id || null);
+    const selEl = this.container ? this.container.querySelector('#select-finca-importador') : null;
+    const domFincaId = selEl && selEl.value ? selEl.value : null;
 
-    if (!targetFincaId) {
-      alert('Debes seleccionar un predio o finca antes de confirmar la importación.');
+    const candidateFincaId = domFincaId || this.fincaDestinoId || (fActiva ? fActiva.id : null) || (fincas[0]?.id || null);
+    const fincaConfirmada = fincas.length > 0
+      ? (fincas.find((f) => f.id === candidateFincaId) || null)
+      : (candidateFincaId ? { id: candidateFincaId, nombre: candidateFincaId } : null);
+
+    if (!fincaConfirmada || !fincaConfirmada.id) {
+      alert('Debes seleccionar un predio o finca válida de la empresa activa antes de confirmar la importación.');
       return;
     }
 
+    const targetFincaId = fincaConfirmada.id;
+    this.fincaDestinoId = targetFincaId;
+    this._ultimaFincaActivaGlobal = targetFincaId;
+
     if (this.onImportConfirmada) {
-      this.onImportConfirmada(validos, targetFincaId, this.tipoCargue, this.fechaGlobal);
+      const filasAImportar = [...validos];
+      this.registros = [];
+      this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal);
     }
   }
 
@@ -1050,11 +1093,11 @@ export class ImportadorExcel {
     if (!this.container) return;
 
     const fincas = this.getFincas ? this.getFincas() : [];
-    const fActiva = this.getFincaActiva ? this.getFincaActiva() : null;
-    const targetFincaId = this.fincaDestinoId || (fActiva ? fActiva.id : null) || (fincas[0]?.id || null);
-    if (!this.fincaDestinoId && targetFincaId) {
-      this.fincaDestinoId = targetFincaId;
-    }
+    const fincaDestinoObj = this.resolverFincaDestino();
+    const targetFincaId = fincaDestinoObj ? fincaDestinoObj.id : null;
+    const nombreFincaDestino = fincaDestinoObj ? fincaDestinoObj.nombre : 'Sin Finca Seleccionada';
+    const empActiva = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
+    const nombreEmpresaActiva = empActiva ? empActiva.nombre : '';
 
     const tipoTitulos = {
       labores: '🌟 Hoja Única de Labores de Campo (5 en 1)',
@@ -1145,7 +1188,7 @@ export class ImportadorExcel {
             <div class="flex items-center gap-3 w-full md:w-auto justify-end">
               <div class="text-right hidden sm:block">
                 <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
-                <span class="text-[10px] text-slate-500">Asignación automática</span>
+                <span class="text-[10px] font-bold text-emerald-800">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
               </div>
               <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-black shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
@@ -1161,19 +1204,24 @@ export class ImportadorExcel {
             <span class="text-4xl block mb-2">📊</span>
             <h4 class="font-black text-slate-800 text-sm">Haga clic o arrastre el archivo Excel (.xlsx, .xls) o CSV aquí</h4>
             <p class="text-xs text-slate-500 mt-1">
-              ${tipoTitulos[this.tipoCargue]} • Fecha asignada: <strong class="font-mono text-emerald-800">${formatearFecha(this.fechaGlobal)}</strong>
+              ${tipoTitulos[this.tipoCargue]} • Destino: <strong class="text-emerald-900">${nombreEmpresaActiva ? `${nombreEmpresaActiva} → ` : ''}${nombreFincaDestino}</strong> • Fecha: <strong class="font-mono text-emerald-800">${formatearFecha(this.fechaGlobal)}</strong>
             </p>
           </div>
 
           <!-- PREVISUALIZACIÓN DE REGISTROS -->
           ${this.registros.length > 0 ? `
             <div class="mt-6 space-y-3">
-              <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
-                  <span>📋</span> Previsualización (${this.registros.length} filas analizadas)
-                </h4>
+              <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-emerald-50/80 border border-emerald-300 p-3.5 rounded-2xl">
+                <div>
+                  <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                    <span>📋</span> Previsualización (${this.registros.length} filas analizadas)
+                  </h4>
+                  <p class="text-[11px] text-emerald-900 font-bold mt-0.5">
+                    🎯 Destino exclusivo del cargue: ${nombreEmpresaActiva ? `<span class="uppercase font-black text-indigo-900">🏢 ${nombreEmpresaActiva}</span> → ` : ''}<span class="uppercase font-black text-emerald-800 underline">🏡 ${nombreFincaDestino}</span>
+                  </p>
+                </div>
                 <button id="btn-confirmar-importacion" class="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer">
-                  <span>✓</span> Confirmar e Integrar al Sistema (${this.registros.length})
+                  <span>✓</span> Confirmar e Integrar (${this.registros.length}) en ${nombreFincaDestino}
                 </button>
               </div>
 
@@ -1498,9 +1546,13 @@ export class ImportadorExcel {
     const selFinca = this.container.querySelector('#select-finca-importador');
     if (selFinca) {
       selFinca.addEventListener('change', (e) => {
-        this.fincaDestinoId = e.target.value;
+        const nuevaFincaId = e.target.value;
+        this.fincaDestinoId = nuevaFincaId;
+        this._ultimaFincaActivaGlobal = nuevaFincaId;
         if (this.onCambiarFinca) {
-          this.onCambiarFinca(e.target.value);
+          this.onCambiarFinca(nuevaFincaId);
+        } else {
+          this.render();
         }
       });
     }

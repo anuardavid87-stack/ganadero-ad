@@ -1,8 +1,8 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v3.8.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
+// GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.0.0-offline-tailwind';
+const CACHE_NAME = 'ganadero-ad-v4.1.0-multi-tenant-isolation';
 const CORE_FILES = [
   './',
   './index.html',

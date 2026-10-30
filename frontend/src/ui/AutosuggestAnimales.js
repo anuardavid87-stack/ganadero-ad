@@ -111,6 +111,10 @@ export function buscarCoincidenciasAnimales(animales, query, maxResultados = 8) 
     }
 
     if (coincidenciaEncontrada) {
+      // Priorizar ejemplares del predio activo frente a homónimos de otras fincas
+      if (!a._estaEnOtraFinca) {
+        puntuacion += 250;
+      }
       resultados.push({
         animal: a,
         tag,

@@ -5986,6 +5986,160 @@ test(
   'Exportador de Informes: Genera estructura tabular lista para Excel (.xlsx) con los filtros y cruces activos'
 );
 
+// ============================================================================
+// 55. AISLAMIENTO ESTRICTO MULTI-FINCA Y MULTI-EMPRESA EN CARGA MASIVA EXCEL
+// ============================================================================
+console.log('\n--- 55. Aislamiento Estricto Multi-Finca y Multi-Empresa en Carga Masiva Excel ---');
+
+let empActivaMock = { id: 'EMP-A', nombre: 'BUFALERA INVERSIONES' };
+let fincasEmpresaMock = [
+  { id: 'FIN-WATERLOO', nombre: 'WATERLOO', codigo: 'WAT-01', empresaId: 'EMP-A' },
+  { id: 'FIN-VESUBIO', nombre: 'Vesubio', codigo: 'VES-01', empresaId: 'EMP-A' }
+];
+let fincaActivaMock = fincasEmpresaMock[0];
+let ultimoTargetImportado = null;
+
+const impAislamiento = new ImportadorExcel({
+  containerId: 'pantalla-excel-aislamiento',
+  getFincas: () => fincasEmpresaMock,
+  getFincaActiva: () => fincaActivaMock,
+  getEmpresaActiva: () => empActivaMock,
+  onCambiarFinca: (fid) => {
+    fincaActivaMock = fincasEmpresaMock.find(f => f.id === fid) || fincaActivaMock;
+  },
+  onImportConfirmada: (validos, targetFincaId) => {
+    ultimoTargetImportado = targetFincaId;
+  }
+});
+impAislamiento.container = new MockDomElement('pantalla-excel-aislamiento');
+impAislamiento.render();
+
+test(
+  impAislamiento.fincaDestinoId === 'FIN-WATERLOO',
+  'ImportadorExcel: Inicializa fincaDestinoId con el predio activo de la Empresa A (WATERLOO)'
+);
+
+// Simular cambio de empresa a VACUNO INVERSIONES y finca Gallinazo desde la barra superior
+empActivaMock = { id: 'EMP-B', nombre: 'VACUNO INVERSIONES' };
+fincasEmpresaMock = [
+  { id: 'FIN-GALLINAZO', nombre: 'Gallinazo', codigo: 'GAL-01', empresaId: 'EMP-B' },
+  { id: 'FIN-MANGOS', nombre: 'Los Mangos Vacuno', codigo: 'MAN-01', empresaId: 'EMP-B' }
+];
+fincaActivaMock = fincasEmpresaMock[0];
+impAislamiento.render();
+
+test(
+  impAislamiento.fincaDestinoId === 'FIN-GALLINAZO' &&
+  impAislamiento.container.innerHTML.includes('VACUNO INVERSIONES') &&
+  impAislamiento.container.innerHTML.includes('Gallinazo'),
+  'ImportadorExcel: Al cambiar de empresa o finca, actualiza automáticamente fincaDestinoId a Gallinazo (nunca retiene WATERLOO de la empresa anterior)'
+);
+
+// Simular cambio de finca dentro de la misma empresa (de Gallinazo a Los Mangos Vacuno) en la barra global
+fincaActivaMock = fincasEmpresaMock[1];
+impAislamiento.render();
+test(
+  impAislamiento.fincaDestinoId === 'FIN-MANGOS',
+  'ImportadorExcel: Al cambiar de finca en el selector superior (#select-finca-nav), sincroniza fincaDestinoId al nuevo predio activo'
+);
+
+// Verificar independencia total de inventarios con aretes homónimos ("101", "102") entre dos empresas y fincas en BoviTrackApp
+if (typeof appEmpTest !== 'undefined' && appEmpTest && appEmpTest.state) {
+  const backupEmpresas = [...(appEmpTest.state.empresas || [])];
+  const backupFincas = [...(appEmpTest.state.fincas || [])];
+  const backupAnimales = [...(appEmpTest.state.animales || [])];
+  const backupPesajes = [...(appEmpTest.state.pesajes || [])];
+  appEmpTest.compExcel = new ImportadorExcel({
+    containerId: 'pantalla-excel-app-test',
+    getFincas: () => appEmpTest.getFincasEmpresa(),
+    getFincaActiva: () => appEmpTest.getFincaActiva(),
+    getEmpresaActiva: () => appEmpTest.getEmpresaActiva(),
+    onCambiarFinca: (fid) => appEmpTest.setFincaActiva(fid),
+    onImportConfirmada: (validos, targetFincaId, tipoCargue, fechaGlobal) => appEmpTest.importarEventosMasivosExcel(validos, targetFincaId, tipoCargue, fechaGlobal)
+  });
+  appEmpTest.compExcel.container = new MockDomElement('pantalla-excel-app-test');
+  appEmpTest.esUsuarioSoloConsulta = () => false;
+  appEmpTest.registrarActividadOperacion = () => {};
+
+  appEmpTest.state.empresas = [
+    { id: 'EMP-TEST-1', nombre: 'EMPRESA GANADERA 1', activa: true, tiempoIndefinido: true },
+    { id: 'EMP-TEST-2', nombre: 'EMPRESA GANADERA 2', activa: true, tiempoIndefinido: true }
+  ];
+  appEmpTest.state.fincas = [
+    { id: 'FIN-TEST-1A', nombre: 'Finca Uno A', codigo: 'F1A', empresaId: 'EMP-TEST-1' },
+    { id: 'FIN-TEST-2A', nombre: 'Finca Dos A', codigo: 'F2A', empresaId: 'EMP-TEST-2' }
+  ];
+  appEmpTest.state.animales = [];
+  appEmpTest.state.pesajes = [];
+
+  // 1. Cargar aretes "101" y "102" en Finca Uno A (Empresa 1)
+  appEmpTest.setEmpresaActiva('EMP-TEST-1');
+  appEmpTest.setFincaActiva('FIN-TEST-1A');
+  appEmpTest.importarEventosMasivosExcel([
+    { tag: '101', especie: 'bufalino', nombre: 'Búfala 101 Emp1', sexo: 'hembra', raza: 'Murrah', pesoActual: 480, fechaPesaje: '2026-10-29', valido: true },
+    { tag: '102', especie: 'bufalino', nombre: 'Búfala 102 Emp1', sexo: 'hembra', raza: 'Murrah', pesoActual: 510, fechaPesaje: '2026-10-29', valido: true }
+  ], 'FIN-TEST-1A', 'inventario', '2026-10-29');
+
+  // 2. Cambiar a Empresa 2 -> Finca Dos A y cargar aretes homónimos "101" y "102"
+  appEmpTest.setEmpresaActiva('EMP-TEST-2');
+  appEmpTest.setFincaActiva('FIN-TEST-2A');
+  appEmpTest.importarEventosMasivosExcel([
+    { tag: '101', especie: 'bovino', nombre: 'Vaca 101 Emp2', sexo: 'hembra', raza: 'Brahman', pesoActual: 410, fechaPesaje: '2026-10-29', valido: true },
+    { tag: '102', especie: 'bovino', nombre: 'Vaca 102 Emp2', sexo: 'hembra', raza: 'Gyr', pesoActual: 395, fechaPesaje: '2026-10-29', valido: true }
+  ], 'FIN-TEST-2A', 'inventario', '2026-10-29');
+
+  const anmFinca1 = appEmpTest.state.animales.filter(a => a.fincaId === 'FIN-TEST-1A');
+  const anmFinca2 = appEmpTest.state.animales.filter(a => a.fincaId === 'FIN-TEST-2A');
+  const pesFinca1 = appEmpTest.state.pesajes.filter(p => p.fincaId === 'FIN-TEST-1A');
+  const pesFinca2 = appEmpTest.state.pesajes.filter(p => p.fincaId === 'FIN-TEST-2A');
+
+  test(
+    anmFinca1.length === 2 &&
+    anmFinca2.length === 2 &&
+    anmFinca1[0].especie === 'bufalino' &&
+    anmFinca2[0].especie === 'bovino' &&
+    pesFinca1.length === 2 &&
+    pesFinca2.length === 2 &&
+    appEmpTest.compExcel.fincaDestinoId === 'FIN-TEST-2A',
+    'Aislamiento Multi-Empresa en Carga Masiva: Fincas de distintas empresas con mismos aretes (101, 102) mantienen inventarios y pesajes 100% independientes'
+  );
+
+  // 3. Eliminar animal "101" en Finca 2 y verificar que el animal "101" de Finca 1 sigue intacto
+  const id101Finca2 = anmFinca2.find(a => a.identificacionTag === '101').id;
+  appEmpTest.eliminarAnimal(id101Finca2);
+  test(
+    appEmpTest.state.animales.filter(a => a.fincaId === 'FIN-TEST-1A').length === 2 &&
+    appEmpTest.state.animales.filter(a => a.fincaId === 'FIN-TEST-2A').length === 1 &&
+    appEmpTest.state.pesajes.filter(p => p.fincaId === 'FIN-TEST-1A').length === 2,
+    'Aislamiento en Eliminación: Eliminar ejemplar #101 en Finca 2 nunca elimina ni altera al ejemplar homónimo #101 de Finca 1'
+  );
+
+  // 4. Verificar migración reparadora del lote ANM-179328838 hacia Gallinazo (FIN-1793207707789)
+  const mockStateGallinazo = {
+    empresas: [{ id: 'EMP-1793154262914', nombre: 'VACUNO INVERSIONES', activa: true }],
+    fincas: [{ id: 'FIN-1793207707789', nombre: 'Gallinazo', empresaId: 'EMP-1793154262914' }],
+    animales: [
+      { id: 'ANM-1793288383516-82-2312', fincaId: 'FIN-1789773477033', identificacionTag: '2312', especie: 'bovino' }
+    ],
+    pesajes: [
+      { id: 'PES-FIN-1789773477033-2312-2024-08-19', fincaId: 'FIN-1789773477033', animalId: 'ANM-1793288383516-82-2312', tag: '2312', fecha: '2024-08-19', peso: 269 }
+    ],
+    operacionesDiarias: []
+  };
+  appEmpTest.migrarEstadoMultiTenant(mockStateGallinazo);
+  test(
+    mockStateGallinazo.animales[0].fincaId === 'FIN-1793207707789' &&
+    mockStateGallinazo.pesajes[0].fincaId === 'FIN-1793207707789' &&
+    mockStateGallinazo.pesajes[0].id === 'PES-FIN-1793207707789-2312-2024-08-19',
+    'Migración Reparadora Multi-Tenant: Reasigna automáticamente el lote cruzado ANM-179328838 y sus pesajes al predio Gallinazo (VACUNO INVERSIONES)'
+  );
+
+  appEmpTest.state.empresas = backupEmpresas;
+  appEmpTest.state.fincas = backupFincas;
+  appEmpTest.state.animales = backupAnimales;
+  appEmpTest.state.pesajes = backupPesajes;
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

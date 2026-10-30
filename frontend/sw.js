@@ -1,17 +1,35 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v3.8.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
+// GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v3.8.0-pwa-final';
+const CACHE_NAME = 'ganadero-ad-v4.1.0-multi-tenant-isolation';
 const CORE_FILES = [
-  '/',
-  '/index.html',
-  '/bundle.js',
-  '/manifest.webmanifest',
-  '/icon.svg',
-  '/frontend/public/manifest.webmanifest',
-  '/frontend/public/icon.svg',
-  '/frontend/src/styles.css'
+  './',
+  './index.html',
+  './bundle.js',
+  './tailwind.min.css',
+  './styles.css',
+  './xlsx.full.min.js',
+  './manifest.webmanifest',
+  './icon.png',
+  './icon-192.png',
+  './icon.svg',
+  './favicon.ico',
+  './public/manifest.webmanifest',
+  './public/icon.png',
+  './public/icon-192.png',
+  './public/icon.svg',
+  './public/favicon.ico',
+  './public/tailwind.min.css',
+  './public/styles.css',
+  './public/xlsx.full.min.js',
+  './frontend/tailwind.min.css',
+  './frontend/public/manifest.webmanifest',
+  './frontend/public/icon.png',
+  './frontend/public/icon-192.png',
+  './frontend/public/icon.svg',
+  './frontend/public/favicon.ico',
+  './frontend/src/styles.css'
 ];
 
 self.addEventListener('install', (event) => {
@@ -94,13 +112,17 @@ self.addEventListener('fetch', (event) => {
           .catch(() => {});
         return cached;
       }
-      return fetch(event.request).then((res) => {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
-        }
-        return res;
-      });
+      return fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          return new Response('', { status: 408, statusText: 'Offline' });
+        });
     })
   );
 });

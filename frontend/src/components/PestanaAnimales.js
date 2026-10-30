@@ -127,6 +127,8 @@ export class PestanaAnimales {
           (a.madreTag || a.madre || '').toLowerCase().includes(q) ||
           (a.raza || '').toLowerCase().includes(q)
       );
+      // Priorizar siempre los ejemplares del predio activo antes que coincidencias de otra finca de la empresa
+      lista.sort((a, b) => Number(Boolean(a._estaEnOtraFinca)) - Number(Boolean(b._estaEnOtraFinca)));
     }
 
     this.container.innerHTML = `
