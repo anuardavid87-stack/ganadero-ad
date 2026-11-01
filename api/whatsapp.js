@@ -16,8 +16,8 @@ import {
     procesarWebhookPostWhatsApp
 } from '../frontend/src/core/whatsappCloudService.js';
 
-const DEFAULT_SUPABASE_URL = 'https://tzwxvvfmpqkyfjsmlwzw.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6d3h2dmZtcHFreWZqc21sd3p3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzODAwOTgsImV4cCI6MjA4OTk1NjA5OH0.v9N-p2d3G3x8mC5k7L8nQ9rR4sT6uV1wX2yZ3aB4cD5';
+const DEFAULT_SUPABASE_URL = 'https://jucpxyjzmbthplbvzrsj.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1Y3B4eWp6bWJ0aHBsYnZ6cnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3ODExNjMsImV4cCI6MjEwNTM1NzE2M30.EYCHnq6pUNO3cUtD1fRb7l3k-XBbrGtgYmsxkmNzDsA';
 
 async function obtenerEnvCombinado() {
     const envCombinado = { ...(process.env || {}) };

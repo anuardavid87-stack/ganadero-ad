@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.2.0-whatsapp-ordenos-destete-enter';
+const CACHE_NAME = 'ganadero-ad-v4.2.1-whatsapp-bundle-fix';
 const CORE_FILES = [
   './',
   './index.html',

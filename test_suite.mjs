@@ -6594,6 +6594,34 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     llamadasGraphAPI[1].body.text.body.includes('350 kg'),
     'WhatsApp Cloud Webhook (Comando PESO 045 350): Inserta pesaje en base de datos, actualiza animal y envía confirmación por WhatsApp'
   );
+
+  // 57.6: Verificación de renderizado de la pestaña visual "WhatsApp API" en ModuloAdmin
+  const adminWaTest = new ModuloAdmin({
+    containerId: 'admin-wa-test',
+    getFincas: () => [fincaConfigOrdeno],
+    getFincaActiva: () => fincaConfigOrdeno,
+    getUsuarios: () => [],
+    getRolActual: () => 'superadmin',
+    getUsuarioActual: () => ({ id: 'U-1', usuario: 'anuardavid', rol: 'superadmin' }),
+    getEmpresas: () => [{ id: 'EMP-1', nombre: 'VACUNO INVERSIONES' }],
+    getEmpresaActiva: () => ({ id: 'EMP-1', nombre: 'VACUNO INVERSIONES' }),
+    getAnimales: () => animalesMangaTest,
+    getTodosLosAnimales: () => animalesMangaTest
+  });
+  adminWaTest.container = new MockDomElement('admin-wa-test');
+  adminWaTest.seccion = 'whatsapp';
+  adminWaTest.render();
+  const htmlAdminWa = adminWaTest.container.innerHTML;
+
+  test(
+    htmlAdminWa.includes('id="form-whatsapp-cloud-config"') &&
+    htmlAdminWa.includes('id="wa-phone-id"') &&
+    htmlAdminWa.includes('id="wa-access-token"') &&
+    htmlAdminWa.includes('id="wa-verify-token"') &&
+    htmlAdminWa.includes('id="wa-authorized-numbers"') &&
+    htmlAdminWa.includes('id="form-simulador-whatsapp"'),
+    'ModuloAdmin (Pestaña WhatsApp API): Renderiza formulario de credenciales Meta, Whitelist y Simulador interactivo en pantalla'
+  );
 }
 
 console.log(`\n=====================================================================`);

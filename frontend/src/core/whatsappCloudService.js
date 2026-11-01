@@ -14,7 +14,8 @@
  * ============================================================================
  */
 
-const DEFAULT_SUPABASE_URL = 'https://rrhpEWwJ5-supabase-placeholder.supabase.co';
+const WA_DEFAULT_SUPABASE_URL = 'https://jucpxyjzmbthplbvzrsj.supabase.co';
+const WA_DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1Y3B4eWp6bWJ0aHBsYnZ6cnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3ODExNjMsImV4cCI6MjEwNTM1NzE2M30.EYCHnq6pUNO3cUtD1fRb7l3k-XBbrGtgYmsxkmNzDsA';
 const WHATSAPP_STORAGE_KEY = 'bovitrack_whatsapp_cloud_config_v1';
 
 /**
@@ -262,13 +263,13 @@ export function crearAdaptadorBaseDatosSupabase(config = {}) {
   const supabaseUrl = (
     config.supabaseUrl ||
     (typeof process !== 'undefined' && process.env && (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) ||
-    'https://tzwxvvfmpqkyfjsmlwzw.supabase.co'
+    WA_DEFAULT_SUPABASE_URL
   ).replace(/\/+$/, '');
 
   const supabaseKey = (
     config.supabaseKey ||
     (typeof process !== 'undefined' && process.env && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) ||
-    ''
+    WA_DEFAULT_SUPABASE_KEY
   ).trim();
 
   const fetchFn = config.fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);

@@ -16,6 +16,7 @@ const files = [
   'frontend/src/core/supabaseSync.js',
   'frontend/src/core/nutricionIA.js',
   'frontend/src/core/exportadorBackup.js',
+  'frontend/src/core/whatsappCloudService.js',
   'frontend/src/ui/AutosuggestAnimales.js',
   'frontend/src/components/FichaAnimal.js',
   'frontend/src/components/PanelAlertas.js',
