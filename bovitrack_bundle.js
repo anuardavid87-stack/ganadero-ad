@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-01T19:40:11.556Z
+ * Generado automáticamente: 2026-11-01T19:46:28.359Z
  */
 (function() {
   "use strict";
@@ -3989,16 +3989,26 @@ async function enviarMensajeWhatsApp(numeroDestino, texto, opciones = {}) {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
     const destinatario = normalizarNumeroTelefono(numeroDestino);
 
-    const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: destinatario,
-      type: 'text',
-      text: {
-        preview_url: false,
-        body: String(texto || '')
-      }
-    };
+    const payload = opciones.usarPlantillaHelloWorld
+      ? {
+          messaging_product: 'whatsapp',
+          to: destinatario,
+          type: 'template',
+          template: {
+            name: opciones.nombrePlantilla || 'hello_world',
+            language: { code: opciones.idiomaPlantilla || 'en_US' }
+          }
+        }
+      : {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: destinatario,
+          type: 'text',
+          text: {
+            preview_url: false,
+            body: String(texto || '')
+          }
+        };
 
     const response = await fetchFn(url, {
       method: 'POST',
@@ -14296,12 +14306,27 @@ END $$;
         };
 
         const resCmd = await procesarComandoWhatsApp(textoComando, dbLocalAdapter, remitente);
+
+        let notaEnvioReal = '';
+        if (cfg.phoneNumberId && cfg.accessToken) {
+          const resReal = await enviarMensajeWhatsApp(remitente, resCmd.respuestaTexto, {
+            phoneNumberId: cfg.phoneNumberId,
+            accessToken: cfg.accessToken
+          });
+          if (resReal.ok) {
+            const msgId = resReal.data?.messages?.[0]?.id || 'OK';
+            notaEnvioReal = `\n\n📤 [Enviado a WhatsApp Real +${remitente} | ID: ${msgId}]`;
+          } else {
+            notaEnvioReal = `\n\n⚠️ [No se pudo enviar a WhatsApp Real: ${resReal.error}]`;
+          }
+        }
+
         this.whatsappHistorialSimulador.unshift({
           hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           remitente,
           entrante: textoComando,
           autorizado: true,
-          respuesta: resCmd.respuestaTexto
+          respuesta: resCmd.respuestaTexto + notaEnvioReal
         });
         this.render();
       });
@@ -14343,14 +14368,52 @@ END $$;
         });
 
         if (resEnvio.ok) {
+          const wamid = resEnvio.data?.messages?.[0]?.id || '';
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Mensaje enviado exitosamente a +${destino} mediante Meta Graph API v17.0.`
+            mensaje: `✅ Petición aceptada por Meta Graph API v17.0 para +${destino}${wamid ? ` (ID: ${wamid})` : ''}. Recuerda: en Meta WhatsApp API, si aún no le has escrito desde tu celular al número del bot en las últimas 24h, usa primero el botón "👋 1° Abrir Ventana (hello_world)" o escríbele "Hola" desde tu WhatsApp al número de prueba de Meta.`
           };
         } else {
           this.whatsappFeedback = {
             tipo: 'error',
             mensaje: `❌ Error de Meta API: ${resEnvio.error || 'Verifica tu Token y Phone Number ID.'}`
+          };
+        }
+        this.render();
+      });
+    }
+
+    const btnEnviarPlantillaWA = this.container.querySelector('#btn-wa-enviar-plantilla');
+    if (btnEnviarPlantillaWA) {
+      btnEnviarPlantillaWA.addEventListener('click', async () => {
+        const destino = (this.container.querySelector('#wa-real-destino')?.value || '').trim();
+        const cfg = obtenerConfigWhatsAppLocal();
+
+        if (!cfg.phoneNumberId || !cfg.accessToken) {
+          this.whatsappFeedback = {
+            tipo: 'error',
+            mensaje: '⚠️ Primero ingresa y guarda tu WHATSAPP_PHONE_NUMBER_ID y WHATSAPP_ACCESS_TOKEN arriba.'
+          };
+          this.render();
+          return;
+        }
+
+        const resPlantilla = await enviarMensajeWhatsApp(destino, '', {
+          phoneNumberId: cfg.phoneNumberId,
+          accessToken: cfg.accessToken,
+          usarPlantillaHelloWorld: true
+        });
+
+        if (resPlantilla.ok) {
+          const wamid = resPlantilla.data?.messages?.[0]?.id || '';
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Plantilla oficial "hello_world" enviada a +${destino}${wamid ? ` (ID: ${wamid})` : ''}. ¡Revisa tu WhatsApp! Cuando te llegue, respóndele cualquier mensaje (ej. "INFO 80") para dejar abierta la ventana de 24 horas de texto libre.`
+          };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'error',
+            mensaje: `❌ Error enviando plantilla hello_world: ${resPlantilla.error}`
           };
         }
         this.render();
@@ -14514,15 +14577,24 @@ END $$;
             </div>
 
             <!-- ENVÍO DE MENSAJE SALIENTE REAL VÍA META GRAPH API -->
-            <form id="form-envio-real-whatsapp" class="pt-3 border-t border-slate-200 space-y-2">
+            <form id="form-envio-real-whatsapp" class="pt-3 border-t border-slate-200 space-y-2.5">
               <label class="block text-xs font-black text-slate-800">
                 📤 3. Probar Envío Saliente Real (<code>enviarMensajeWhatsApp</code> a Meta API v17.0):
               </label>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                <strong>💡 ¿Por qué dice "Enviado" y no llega al celular? (Regla de 24h de Meta):</strong><br>
+                Meta bloquea la entrega de texto libre si tu celular (<code>+${primerTelAutorizado}</code>) no le ha escrito primero al número del Bot en las últimas 24 horas. Haz clic primero en <strong>"👋 1° Abrir Ventana (hello_world)"</strong> o escríbele un mensaje desde tu WhatsApp al número de prueba de Meta.
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input type="text" id="wa-real-destino" value="${primerTelAutorizado}" placeholder="Número destino (ej. 57300...)" class="px-3 py-2 bg-white text-xs font-mono rounded-lg border border-slate-300 outline-none">
                 <input type="text" id="wa-real-texto" value="Hola desde Ganadero AD" placeholder="Mensaje a enviar..." class="px-3 py-2 bg-white text-xs rounded-lg border border-slate-300 outline-none">
-                <button type="submit" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-lg cursor-pointer transition">
-                  🚀 Enviar a WhatsApp Real
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" id="btn-wa-enviar-plantilla" class="px-3 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition shadow">
+                  👋 1° Abrir Ventana (Plantilla hello_world)
+                </button>
+                <button type="submit" class="px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-lg cursor-pointer transition shadow">
+                  🚀 2° Enviar Texto Libre a WhatsApp
                 </button>
               </div>
             </form>

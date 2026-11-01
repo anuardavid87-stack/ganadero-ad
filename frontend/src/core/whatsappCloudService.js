@@ -203,16 +203,26 @@ export async function enviarMensajeWhatsApp(numeroDestino, texto, opciones = {})
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
     const destinatario = normalizarNumeroTelefono(numeroDestino);
 
-    const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: destinatario,
-      type: 'text',
-      text: {
-        preview_url: false,
-        body: String(texto || '')
-      }
-    };
+    const payload = opciones.usarPlantillaHelloWorld
+      ? {
+          messaging_product: 'whatsapp',
+          to: destinatario,
+          type: 'template',
+          template: {
+            name: opciones.nombrePlantilla || 'hello_world',
+            language: { code: opciones.idiomaPlantilla || 'en_US' }
+          }
+        }
+      : {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: destinatario,
+          type: 'text',
+          text: {
+            preview_url: false,
+            body: String(texto || '')
+          }
+        };
 
     const response = await fetchFn(url, {
       method: 'POST',
