@@ -513,7 +513,10 @@ export class FichaAnimal {
                         } else if (ev.tipo === 'destete') {
                           badgeTipo = 'bg-orange-100 text-orange-800 border border-orange-200';
                           tituloTipo = '🌾 Destete';
-                          detalleEv = `Destete completado ${ev.pesoDestete ? `• Peso: <strong>${ev.pesoDestete} kg</strong>` : ''} ${ev.loteDestino ? `• Asignado a: <strong>${ev.loteDestino}</strong>` : ''}`;
+                          const pTern = ev.pesoTernero || ev.pesoDestete || 0;
+                          const pVaca = ev.pesoMadre || ev.pesoVaca || 0;
+                          const relTxt = (ev.madreTag || ev.criaTag) ? `• Madre: <strong>${ev.madreTag || 'S/D'}</strong> ↔ Cría: <strong>${ev.criaTag || 'S/D'}</strong>` : '';
+                          detalleEv = `Destete completado ${pTern ? `• Peso Ternero: <strong>${pTern} kg</strong>` : ''} ${pVaca ? `• Peso Vaca: <strong>${pVaca} kg</strong>` : ''} ${relTxt} ${ev.loteDestino ? `• Lote: <strong>${ev.loteDestino}</strong>` : ''}`;
                         } else if (ev.tipo === 'parto') {
                           badgeTipo = 'bg-amber-100 text-amber-800 border border-amber-200';
                           tituloTipo = '🍼 Parto';

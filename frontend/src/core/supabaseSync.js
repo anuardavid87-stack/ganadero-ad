@@ -538,8 +538,14 @@ export class SupabaseSyncService {
         }
 
         const fincasEmpresaMap = {};
+        const fincasOrdenosMap = {};
         (appState.fincas || []).forEach(f => {
-          if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          if (f && f.id) {
+            if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+            if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
+              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+            }
+          }
         });
         const usuariosEmpresaMap = {};
         (appState.usuarios || []).forEach(u => {
@@ -562,6 +568,7 @@ export class SupabaseSyncService {
             fincasPurgadas: appState._fincasPurgadas || {},
             animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
+            fincasOrdenosMap,
             usuariosEmpresaMap
           },
           usuario: 'Sistema'
@@ -997,6 +1004,15 @@ export class SupabaseSyncService {
         } else {
           fincas.forEach(f => {
             if (!f.empresaId) f.empresaId = 'EMP-01';
+          });
+        }
+        if (det.fincasOrdenosMap && typeof det.fincasOrdenosMap === 'object') {
+          fincas.forEach(f => {
+            if (det.fincasOrdenosMap[f.id] !== undefined) {
+              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 1 ? 1 : 2;
+              f.numeroOrdenos = numOrd;
+              f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+            }
           });
         }
         if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {

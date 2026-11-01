@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-10-30T21:51:59.175Z
+ * Generado automáticamente: 2026-11-01T18:16:22.883Z
  */
 (function() {
   "use strict";
@@ -1165,8 +1165,14 @@ class SupabaseSyncService {
         }
 
         const fincasEmpresaMap = {};
+        const fincasOrdenosMap = {};
         (appState.fincas || []).forEach(f => {
-          if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          if (f && f.id) {
+            if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+            if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
+              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+            }
+          }
         });
         const usuariosEmpresaMap = {};
         (appState.usuarios || []).forEach(u => {
@@ -1189,6 +1195,7 @@ class SupabaseSyncService {
             fincasPurgadas: appState._fincasPurgadas || {},
             animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
+            fincasOrdenosMap,
             usuariosEmpresaMap
           },
           usuario: 'Sistema'
@@ -1624,6 +1631,15 @@ class SupabaseSyncService {
         } else {
           fincas.forEach(f => {
             if (!f.empresaId) f.empresaId = 'EMP-01';
+          });
+        }
+        if (det.fincasOrdenosMap && typeof det.fincasOrdenosMap === 'object') {
+          fincas.forEach(f => {
+            if (det.fincasOrdenosMap[f.id] !== undefined) {
+              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 1 ? 1 : 2;
+              f.numeroOrdenos = numOrd;
+              f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+            }
           });
         }
         if (det.usuariosEmpresaMap && typeof det.usuariosEmpresaMap === 'object') {
@@ -4214,10 +4230,16 @@ function conectarAutosuggestAnimales({
     } else if (e.key === 'Enter') {
       if (indiceActivo >= 0 && indiceActivo < coincidenciasActuales.length) {
         e.preventDefault();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
         seleccionar(coincidenciasActuales[indiceActivo]);
       } else if (coincidenciasActuales.length > 0) {
         e.preventDefault();
-        seleccionar(coincidenciasActuales[0]);
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        const qNorm = normalizarTextoBusqueda(el.value || '');
+        const exactMatch = coincidenciasActuales.find(
+          (a) => normalizarTextoBusqueda(a.identificacionTag || a.numero || a.tag || '') === qNorm
+        );
+        seleccionar(exactMatch || coincidenciasActuales[0]);
       }
     } else if (e.key === 'Escape') {
       dropMenu.classList.add('hidden');
@@ -4756,7 +4778,10 @@ class FichaAnimal {
                         } else if (ev.tipo === 'destete') {
                           badgeTipo = 'bg-orange-100 text-orange-800 border border-orange-200';
                           tituloTipo = '🌾 Destete';
-                          detalleEv = `Destete completado ${ev.pesoDestete ? `• Peso: <strong>${ev.pesoDestete} kg</strong>` : ''} ${ev.loteDestino ? `• Asignado a: <strong>${ev.loteDestino}</strong>` : ''}`;
+                          const pTern = ev.pesoTernero || ev.pesoDestete || 0;
+                          const pVaca = ev.pesoMadre || ev.pesoVaca || 0;
+                          const relTxt = (ev.madreTag || ev.criaTag) ? `• Madre: <strong>${ev.madreTag || 'S/D'}</strong> ↔ Cría: <strong>${ev.criaTag || 'S/D'}</strong>` : '';
+                          detalleEv = `Destete completado ${pTern ? `• Peso Ternero: <strong>${pTern} kg</strong>` : ''} ${pVaca ? `• Peso Vaca: <strong>${pVaca} kg</strong>` : ''} ${relTxt} ${ev.loteDestino ? `• Lote: <strong>${ev.loteDestino}</strong>` : ''}`;
                         } else if (ev.tipo === 'parto') {
                           badgeTipo = 'bg-amber-100 text-amber-800 border border-amber-200';
                           tituloTipo = '🍼 Parto';
@@ -9404,6 +9429,7 @@ class ModuloAdmin {
     onCrearFinca,
     onEliminarFinca,
     onActualizarPrecios,
+    onActualizarOrdenoFinca,
     onGuardarCostos,
     onCrearInversion,
     onEliminarInversion,
@@ -9461,6 +9487,7 @@ class ModuloAdmin {
     this.onCrearFinca = onCrearFinca;
     this.onEliminarFinca = onEliminarFinca;
     this.onActualizarPrecios = onActualizarPrecios;
+    this.onActualizarOrdenoFinca = onActualizarOrdenoFinca;
     this.onGuardarCostos = onGuardarCostos;
     this.onCrearInversion = onCrearInversion;
     this.onEliminarInversion = onEliminarInversion;
@@ -9894,10 +9921,22 @@ class ModuloAdmin {
                                   </div>
                                 </div>
 
-                                <div class="text-[10px] text-slate-500 mt-2.5 font-mono flex justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div class="text-[10px] text-slate-500 mt-2.5 font-mono flex flex-wrap justify-between items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                   <span>Leche: <strong>$${f.precioLecheLitro || 2450}/L</strong></span>
                                   <span>Carne: <strong>$${f.precioCarneKgPie || 8900}/kg</strong></span>
+                                  <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+                                    ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? '🥛 Un Ordeño (1 Casilla)' : '🥛🥛 Doble Ordeño (2 Casillas)'}
+                                  </span>
                                 </div>
+                                ${!esConsultor ? `
+                                <div class="mt-2 flex items-center justify-between gap-2 bg-emerald-50/60 px-2.5 py-1.5 rounded-xl border border-emerald-200 text-[11px]">
+                                  <label class="font-bold text-emerald-950 whitespace-nowrap">🥛 Ordeño Finca:</label>
+                                  <select class="select-ordeno-finca-card flex-1 px-2 py-1 rounded-lg border border-emerald-300 bg-white font-bold text-emerald-950 outline-none cursor-pointer" data-finca-id="${f.id}">
+                                    <option value="1" ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla)</option>
+                                    <option value="2" ${(Number(f.numeroOrdenos) !== 1 && f.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas)</option>
+                                  </select>
+                                </div>
+                                ` : ''}
                               </div>
 
                               <div class="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -10354,9 +10393,17 @@ class ModuloAdmin {
                   <input type="number" id="input-carne" ${esConsultor ? 'disabled' : ''} value="${finca.precioCarneKgPie || 8900}" class="w-full px-3 py-2 font-mono font-bold rounded-xl border border-slate-300 outline-none focus:border-purple-600 bg-white">
                 </div>
 
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1">🥛 Modalidad de Ordeño en la Finca:</label>
+                  <select id="input-numero-ordenos" ${esConsultor ? 'disabled' : ''} class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none focus:border-purple-600 bg-white">
+                    <option value="1" ${(Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla en Pesaje de Leche)</option>
+                    <option value="2" ${(Number(finca.numeroOrdenos) !== 1 && finca.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas: Mañana y Tarde)</option>
+                  </select>
+                </div>
+
                 ${!esConsultor ? `
                   <button type="submit" class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-bold rounded-xl shadow transition cursor-pointer">
-                    Actualizar Precios (${finca.nombre})
+                    Actualizar Precios y Ordeño (${finca.nombre})
                   </button>
                 ` : '<div class="text-[11px] text-slate-400 py-1 text-center">Solo lectura</div>'}
               </form>
@@ -11289,6 +11336,14 @@ class ModuloAdmin {
               </div>
             </div>
 
+            <div class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <label class="block font-black text-emerald-950 mb-1">🥛 Modalidad de Ordeño en la Finca *:</label>
+              <select id="finca-numero-ordenos" class="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white outline-none font-bold text-emerald-950 focus:border-emerald-600">
+                <option value="1">🥛 Un Ordeño Diario (1 Casilla en Pesaje de Leche)</option>
+                <option value="2" selected>🥛🥛 Doble Ordeño Diario (2 Casillas: Turno Mañana y Tarde)</option>
+              </select>
+            </div>
+
             <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
               <button type="button" id="btn-cancelar-crear-finca" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer">
                 Cancelar
@@ -12110,6 +12165,8 @@ END $$;
         const ubicacion = document.getElementById('finca-ubicacion')?.value.trim() || 'Colombia';
         const leche = parseFloat(document.getElementById('finca-precio-leche')?.value) || 2450;
         const carne = parseFloat(document.getElementById('finca-precio-carne')?.value) || 8900;
+        const numeroOrdenos = parseInt(document.getElementById('finca-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
+        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
 
         if (!nombre || isNaN(area) || area <= 0) {
           alert('Por favor ingresa un nombre válido y un área en hectáreas mayor a cero.');
@@ -12125,13 +12182,35 @@ END $$;
             ubicacion,
             areaHa: area,
             precioLecheLitro: leche,
-            precioCarneKgPie: carne
+            precioCarneKgPie: carne,
+            numeroOrdenos,
+            tipoOrdeno
           });
         }
         this.modalCrearFincaAbierto = false;
         this.render();
       });
     }
+
+    this.container.querySelectorAll('.select-ordeno-finca-card').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const fid = e.currentTarget.getAttribute('data-finca-id');
+        const numOrd = parseInt(e.currentTarget.value || '2', 10) === 1 ? 1 : 2;
+        if (this.onActualizarOrdenoFinca) {
+          this.onActualizarOrdenoFinca(fid, numOrd);
+        } else if (this.onActualizarPrecios) {
+          const fincaItem = (this.getTodasLasFincas ? this.getTodasLasFincas() : []).find((x) => x.id === fid);
+          this.onActualizarPrecios({
+            leche: fincaItem?.precioLecheLitro || 2450,
+            carne: fincaItem?.precioCarneKgPie || 8900,
+            numeroOrdenos: numOrd,
+            tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+            fincaId: fid
+          });
+        }
+        this.render();
+      });
+    });
 
     this.container.querySelectorAll('.btn-activar-finca').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -12852,8 +12931,10 @@ END $$;
         const targetFincaId = inputL?.getAttribute('data-finca-id') || this.fincaFinanzasSeleccionada;
         const leche = parseFloat(inputL?.value) || 2450;
         const carne = parseFloat(document.getElementById('input-carne')?.value) || 8900;
+        const numeroOrdenos = parseInt(document.getElementById('input-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
+        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
         if (this.onActualizarPrecios) {
-          this.onActualizarPrecios({ leche, carne, fincaId: targetFincaId });
+          this.onActualizarPrecios({ leche, carne, numeroOrdenos, tipoOrdeno, fincaId: targetFincaId });
         }
       });
     }
@@ -18660,11 +18741,13 @@ class ModuloNutricion {
 
 
 class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, getAnimales, getLotes, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
+  constructor({ containerId, onGuardarRegistros, onGuardarRegistroIndividual, getAnimales, getLotes, getFincaActiva, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.onGuardarRegistros = onGuardarRegistros;
+    this.onGuardarRegistroIndividual = onGuardarRegistroIndividual || null;
     this.getAnimales = getAnimales;
     this.getLotes = getLotes;
+    this.getFincaActiva = getFincaActiva || null;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
     this.onExtraerAnimal = onExtraerAnimal;
@@ -18674,6 +18757,190 @@ class CuadriculaMasiva {
     this.animalSeleccionado = null;
     this.fechaJornada = new Date().toISOString().split('T')[0];
     this.registrosSesion = []; // Acumulador de la sesión de trabajo en campo
+    this.campoEnfocadoActual = '#input-tag-manga';
+  }
+
+  esUnSoloOrdeno() {
+    const finca = this.getFincaActiva ? this.getFincaActiva() : null;
+    if (!finca) return false;
+    return Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' || Number(finca.ordenos) === 1;
+  }
+
+  resolverRelacionDestete(animal) {
+    if (!animal) {
+      return {
+        esVacaSeleccionada: false,
+        madreObj: null,
+        madreTag: '',
+        criaObj: null,
+        criaTag: '',
+        pesoPrevioMadre: '',
+        pesoPrevioCria: ''
+      };
+    }
+
+    const tag = String(animal.identificacionTag || animal.numero || '').trim();
+    const tagUpper = tag.toUpperCase();
+    const animalesActivos = (this.getAnimales ? this.getAnimales() : []).filter((x) => x && !x._estaEnOtraFinca);
+
+    // Verificar si el ejemplar seleccionado es una vaca/búfala que tiene cría asociada en el inventario
+    const criaAsociada = animalesActivos.find(
+      (x) => String(x.madreTag || x.madre || '').trim().toUpperCase() === tagUpper &&
+             String(x.identificacionTag || x.numero || '').trim().toUpperCase() !== tagUpper
+    );
+    const catLower = String(animal.categoria || '').toLowerCase();
+    const tieneMadreAsignada = Boolean(String(animal.madreTag || animal.madre || '').trim() && String(animal.madreTag || animal.madre || '').trim().toLowerCase() !== 'desconocida');
+    const esCategoriaCria = catLower.includes('terner') || catLower.includes('bucerr') || catLower.includes('cría') || catLower.includes('cria') || catLower.includes('destet');
+    const esCategoriaVaca = (String(animal.sexo || '').toLowerCase() === 'hembra') &&
+      (catLower.includes('vaca') || catLower.includes('búfala') || catLower.includes('bufala') || catLower.includes('ordeño') || catLower.includes('seca') || catLower.includes('vientre')) &&
+      !esCategoriaCria && !tieneMadreAsignada;
+
+    if (criaAsociada || esCategoriaVaca) {
+      let cObj = criaAsociada || null;
+      let cTag = cObj ? String(cObj.identificacionTag || cObj.numero || '').trim() : '';
+      if (!cTag && Array.isArray(animal.partosPrevios) && animal.partosPrevios.length > 0) {
+        const ultParto = animal.partosPrevios[animal.partosPrevios.length - 1];
+        cTag = String(ultParto.tagCria || ultParto.criaTag || '').trim();
+        if (cTag && !cObj) {
+          cObj = animalesActivos.find((x) => String(x.identificacionTag || x.numero || '').trim().toUpperCase() === cTag.toUpperCase()) || null;
+        }
+      }
+      return {
+        esVacaSeleccionada: true,
+        madreObj: animal,
+        madreTag: tag,
+        criaObj: cObj,
+        criaTag: cTag,
+        pesoPrevioMadre: animal.ultimoPesoKg || animal.pesoActual || '',
+        pesoPrevioCria: cObj ? (cObj.ultimoPesoKg || cObj.pesoActual || '') : ''
+      };
+    }
+
+    // Por defecto: El ejemplar seleccionado es el ternero / cría a destetar
+    let mTag = String(animal.madreTag || animal.madre || '').trim();
+    if (mTag.toLowerCase() === 'desconocida' || mTag.toLowerCase() === 'desconocido') {
+      mTag = '';
+    }
+    if (!mTag) {
+      const vacaPorParto = animalesActivos.find(
+        (v) => Array.isArray(v.partosPrevios) && v.partosPrevios.some((p) => String(p.tagCria || p.criaTag || '').trim().toUpperCase() === tagUpper)
+      );
+      if (vacaPorParto) {
+        mTag = String(vacaPorParto.identificacionTag || vacaPorParto.numero || '').trim();
+      }
+    }
+    const mObj = mTag
+      ? (animalesActivos.find((v) => String(v.identificacionTag || v.numero || '').trim().toUpperCase() === mTag.toUpperCase()) || null)
+      : null;
+
+    return {
+      esVacaSeleccionada: false,
+      madreObj: mObj,
+      madreTag: mObj ? String(mObj.identificacionTag || mObj.numero || mTag).trim() : mTag,
+      criaObj: animal,
+      criaTag: tag,
+      pesoPrevioMadre: mObj ? (mObj.ultimoPesoKg || mObj.pesoActual || '') : '',
+      pesoPrevioCria: animal.ultimoPesoKg || animal.pesoActual || ''
+    };
+  }
+
+  obtenerSelectoresNavegablesModulo() {
+    if (!this.animalSeleccionado || this.animalSeleccionado._estaEnOtraFinca) return [];
+
+    if (this.moduloActivo === 'pesajes') {
+      return ['#form-peso-fecha', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas'];
+    } else if (this.moduloActivo === 'palpaciones') {
+      const diagEl = this.container ? this.container.querySelector('#form-diagnostico') : null;
+      const diagVal = diagEl && diagEl.value ? diagEl.value : 'Preñada';
+      if (diagVal === 'Preñada') {
+        return ['#form-palp-fecha', '#form-diagnostico', '#form-dias-preñez', '#form-estructura-ovario'];
+      }
+      return ['#form-palp-fecha', '#form-diagnostico', '#form-estructura-ovario'];
+    } else if (this.moduloActivo === 'leche') {
+      if (this.esUnSoloOrdeno()) {
+        return ['#form-leche-fecha', '#form-leche-am', '#form-leche-notas'];
+      }
+      return ['#form-leche-fecha', '#form-leche-am', '#form-leche-pm', '#form-leche-notas'];
+    } else if (this.moduloActivo === 'partos') {
+      return ['#form-parto-fecha', '#form-parto-sexo', '#form-parto-peso', '#form-parto-tag-cria', '#form-parto-tipo'];
+    } else if (this.moduloActivo === 'destetes') {
+      const rel = this.resolverRelacionDestete(this.animalSeleccionado);
+      const selectorRel = rel.esVacaSeleccionada ? '#form-destete-cria-tag' : '#form-destete-madre-tag';
+      return ['#form-destete-fecha', selectorRel, '#form-destete-peso-madre', '#form-destete-peso', '#form-destete-lote', '#form-destete-obs'];
+    } else if (this.moduloActivo === 'extracciones') {
+      const motEl = this.container ? this.container.querySelector('#form-extraer-motivo') : null;
+      const motVal = motEl && motEl.value ? motEl.value : 'Venta';
+      if (motVal === 'Venta') {
+        return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-comprador', '#form-extraer-valor', '#form-extraer-peso', '#form-extraer-obs'];
+      }
+      return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-causa', '#form-extraer-obs'];
+    } else if (this.moduloActivo === 'servicios') {
+      return ['#form-srv-fecha', '#form-srv-tipo', '#form-srv-reproductor', '#form-srv-tecnico', '#form-srv-protocolo'];
+    }
+    return [];
+  }
+
+  enfocarPrimerCampoFormulario() {
+    const selectores = this.obtenerSelectoresNavegablesModulo();
+    if (selectores.length === 0) return null;
+    const primerSelector = selectores[0];
+    this.campoEnfocadoActual = primerSelector;
+    if (this.container && typeof this.container.querySelector === 'function') {
+      const el = this.container.querySelector(primerSelector);
+      if (el && typeof el.focus === 'function') {
+        el.focus();
+      }
+      setTimeout(() => {
+        if (this.animalSeleccionado && this.container && typeof this.container.querySelector === 'function') {
+          const elAsync = this.container.querySelector(primerSelector);
+          if (elAsync && typeof elAsync.focus === 'function') {
+            elAsync.focus();
+          }
+        }
+      }, 20);
+    }
+    return primerSelector;
+  }
+
+  avanzarConEnterEnFormulario(campoOrigen = null) {
+    const selectores = this.obtenerSelectoresNavegablesModulo();
+    if (selectores.length === 0) return null;
+
+    let selectorActual = null;
+    if (typeof campoOrigen === 'string' && campoOrigen.trim()) {
+      selectorActual = campoOrigen.startsWith('#') ? campoOrigen.trim() : `#${campoOrigen.trim()}`;
+    } else if (campoOrigen && typeof campoOrigen === 'object' && campoOrigen.id) {
+      selectorActual = `#${campoOrigen.id}`;
+    } else if (this.campoEnfocadoActual && selectores.includes(this.campoEnfocadoActual)) {
+      selectorActual = this.campoEnfocadoActual;
+    } else {
+      selectorActual = selectores[0];
+    }
+
+    if (selectorActual === '#btn-agregar-a-sesion') {
+      const ok = this.confirmarRegistroActual();
+      return { accion: ok !== false ? 'guardado' : 'error', campo: this.campoEnfocadoActual };
+    }
+
+    const idx = selectores.indexOf(selectorActual);
+    if (idx >= 0 && idx < selectores.length - 1) {
+      const siguienteSelector = selectores[idx + 1];
+      this.campoEnfocadoActual = siguienteSelector;
+      if (this.container && typeof this.container.querySelector === 'function') {
+        const sigEl = this.container.querySelector(siguienteSelector);
+        if (sigEl) {
+          if (typeof sigEl.focus === 'function') sigEl.focus();
+          if (typeof sigEl.select === 'function' && sigEl.tagName === 'INPUT' && sigEl.type !== 'date') {
+            sigEl.select();
+          }
+        }
+      }
+      return { accion: 'siguiente_campo', campo: siguienteSelector };
+    }
+
+    // Al estar en el último campo (o si no se encontró en la lista), Enter guarda el registro y reinicia el cursor al buscador
+    const ok = this.confirmarRegistroActual();
+    return { accion: ok !== false ? 'guardado' : 'error', campo: this.campoEnfocadoActual };
   }
 
   init() {
@@ -18897,19 +19164,19 @@ class CuadriculaMasiva {
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
-            <input type="date" id="form-peso-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none">
+            <input type="date" id="form-peso-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
             <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Nuevo Peso en Báscula (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" autofocus placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
+            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
             <div id="live-gdp-indicator" class="text-xs font-bold mt-1 text-slate-500"></div>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Condición Corporal:</label>
-            <select id="form-condicion" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none">
+            <select id="form-condicion" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="2.5">2.5 (Delgada)</option>
               <option value="3.0">3.0 (Regular)</option>
               <option value="3.5" selected>3.5 (Óptima)</option>
@@ -18920,7 +19187,7 @@ class CuadriculaMasiva {
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Observaciones / Notas:</label>
-            <input type="text" id="form-peso-notas" placeholder="Báscula, lote ceba..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none">
+            <input type="text" id="form-peso-notas" placeholder="Báscula, lote ceba..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
         </div>
       `;
@@ -18929,12 +19196,12 @@ class CuadriculaMasiva {
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se palpó (Trabajo):</label>
-            <input type="date" id="form-palp-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none">
+            <input type="date" id="form-palp-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Diagnóstico:</label>
-            <select id="form-diagnostico" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none">
+            <select id="form-diagnostico" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="Preñada" selected>🟢 Preñada (Gestante)</option>
               <option value="Vacía">🔴 Vacía (Abierta)</option>
               <option value="Sospechosa">🟡 Sospechosa</option>
@@ -18943,33 +19210,46 @@ class CuadriculaMasiva {
 
           <div id="box-dias-gestacion">
             <label class="block text-xs font-bold text-slate-800 mb-1">Días de Preñez Estimados:</label>
-            <input type="number" inputmode="numeric" id="form-dias-preñez" value="60" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-center rounded-xl border border-slate-300 outline-none">
+            <input type="number" inputmode="numeric" id="form-dias-preñez" value="60" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-center rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Estructura Ovárica / Notas:</label>
-            <input type="text" id="form-estructura-ovario" placeholder="CL activo / Folículo / Dr..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none">
+            <input type="text" id="form-estructura-ovario" placeholder="CL activo / Folículo / Dr..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
         </div>
       `;
     } else if (this.moduloActivo === 'leche') {
+      const unOrdeno = this.esUnSoloOrdeno();
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de pesaje de leche (Trabajo):</label>
-            <input type="date" id="form-leche-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none">
+        <div class="bg-white p-4 rounded-xl border border-emerald-200 space-y-2.5">
+          <div class="flex items-center justify-between border-b border-emerald-100 pb-1.5">
+            <span class="text-[11px] font-black text-emerald-900 flex items-center gap-1.5">
+              <span>${unOrdeno ? '🥛' : '🥛🥛'}</span> Modalidad de Ordeño de la Finca:
+            </span>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black ${unOrdeno ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+              ${unOrdeno ? 'Un Ordeño (1 Casilla)' : 'Doble Ordeño (2 Casillas)'}
+            </span>
           </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Turno Mañana (L):</label>
-            <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border border-slate-300 outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Turno Tarde (L):</label>
-            <input type="number" step="0.1" inputmode="decimal" id="form-leche-pm" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border border-slate-300 outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Notas Ubre / Calidad:</label>
-            <input type="text" id="form-leche-notas" placeholder="Salud ubre / Mastitis..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none">
+          <div class="grid grid-cols-1 ${unOrdeno ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de pesaje de leche (Trabajo):</label>
+              <input type="date" id="form-leche-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">${unOrdeno ? 'Pesaje Único de Leche (L):' : 'Turno Mañana (L):'}</label>
+              <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border-2 border-emerald-400 bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            ${unOrdeno ? '' : `
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">Turno Tarde (L):</label>
+              <input type="number" step="0.1" inputmode="decimal" id="form-leche-pm" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            `}
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">Notas Ubre / Calidad:</label>
+              <input type="text" id="form-leche-notas" placeholder="Salud ubre / Mastitis..." class="w-full px-3 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
           </div>
         </div>
       `;
@@ -18978,26 +19258,26 @@ class CuadriculaMasiva {
         <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que parió (Trabajo):</label>
-            <input type="date" id="form-parto-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+            <input type="date" id="form-parto-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Sexo Cría:</label>
-            <select id="form-parto-sexo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+            <select id="form-parto-sexo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="hembra">♀️ Hembra</option>
               <option value="macho">♂️ Macho</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Peso Cría (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="32" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300">
+            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="32" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Tag Cría Generado:</label>
-            <input type="text" id="form-parto-tag-cria" value="CRIA-${tag}" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold uppercase rounded-xl border border-slate-300">
+            <input type="text" id="form-parto-tag-cria" value="CRIA-${tag}" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold uppercase rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Tipo de Parto:</label>
-            <select id="form-parto-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+            <select id="form-parto-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="Normal">Normal</option>
               <option value="Distócico">Distócico</option>
               <option value="Cesárea">Cesárea</option>
@@ -19006,23 +19286,71 @@ class CuadriculaMasiva {
         </div>
       `;
     } else if (this.moduloActivo === 'destetes') {
+      const rel = this.resolverRelacionDestete(a);
+      const animalesFinca = (this.getAnimales ? this.getAnimales() : []).filter((x) => x && !x._estaEnOtraFinca);
+      const opcionesMadres = animalesFinca
+        .filter((x) => String(x.sexo || 'hembra').toLowerCase() === 'hembra')
+        .map((x) => `<option value="${x.identificacionTag || x.numero}">${x.nombreAlias || x.nombre || ''} (${x.ultimoPesoKg || 0} kg)</option>`)
+        .join('');
+      const opcionesCrias = animalesFinca
+        .map((x) => `<option value="${x.identificacionTag || x.numero}">Madre: ${x.madreTag || 'S/D'} (${x.ultimoPesoKg || 0} kg)</option>`)
+        .join('');
+
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se destetó (Trabajo):</label>
-            <input type="date" id="form-destete-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+        <div class="bg-white p-4 rounded-xl border border-emerald-200 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-2">
+            <span class="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+              <span>🔗</span> Relación Madre ↔ Cría al Destete (Pesaje de Vaca y Ternero)
+            </span>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+              ${rel.esVacaSeleccionada
+                ? `🐄 Madre seleccionada: ${rel.madreTag} ${rel.criaTag ? `→ Cría: ${rel.criaTag}` : '(Vincular Cría)'}`
+                : `🍼 Cría seleccionada: ${rel.criaTag} ${rel.madreTag ? `→ Madre: ${rel.madreTag}` : '(Vincular Madre)'}`}
+            </span>
           </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Peso al Destete (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-destete-peso" value="${a.ultimoPesoKg || ''}" placeholder="Ej. 185" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Lote Destino:</label>
-            <input type="text" id="form-destete-lote" value="Lote Levante" placeholder="Ej. Lote Levante" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">Observaciones:</label>
-            <input type="text" id="form-destete-obs" placeholder="Vacunación al destete, estado..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300">
+
+          <datalist id="datalist-madres-destete">${opcionesMadres}</datalist>
+          <datalist id="datalist-crias-destete">${opcionesCrias}</datalist>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se destetó (Trabajo):</label>
+              <input type="date" id="form-destete-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            ${rel.esVacaSeleccionada ? `
+              <div>
+                <input type="hidden" id="form-destete-madre-tag" value="${rel.madreTag}">
+                <label class="block text-xs font-bold text-slate-800 mb-1">🍼 No. Ternero / Cría (Hijo de ${rel.madreTag}):</label>
+                <input type="text" id="form-destete-cria-tag" list="datalist-crias-destete" value="${rel.criaTag}" placeholder="Ej. CRIA-${rel.madreTag}" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              </div>
+            ` : `
+              <div>
+                <input type="hidden" id="form-destete-cria-tag" value="${rel.criaTag}">
+                <label class="block text-xs font-bold text-slate-800 mb-1">🐄 No. Vaca / Madre (Madre de ${rel.criaTag}):</label>
+                <input type="text" id="form-destete-madre-tag" list="datalist-madres-destete" value="${rel.madreTag}" placeholder="Ej. BV-104 (No. Madre)" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              </div>
+            `}
+
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">⚖️ Peso de la Vaca / Madre (kg):</label>
+              <input type="number" step="0.5" inputmode="decimal" id="form-destete-peso-madre" value="${rel.pesoPrevioMadre || ''}" placeholder="Ej. 460" class="w-full px-3 py-3 sm:py-2 font-mono text-center font-black text-emerald-900 bg-emerald-50/60 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">🍼 Peso del Ternero / Cría al Destete (kg):</label>
+              <input type="number" step="0.5" inputmode="decimal" id="form-destete-peso" value="${rel.pesoPrevioCria || ''}" placeholder="Ej. 185" class="w-full px-3 py-3 sm:py-2 font-mono text-center font-black text-emerald-900 bg-emerald-50/60 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">📍 Lote Destino:</label>
+              <input type="text" id="form-destete-lote" value="Lote Levante" placeholder="Ej. Lote Levante" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-800 mb-1">📝 Observaciones:</label>
+              <input type="text" id="form-destete-obs" placeholder="Vacunación al destete, estado..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
           </div>
         </div>
       `;
@@ -19040,11 +19368,11 @@ class CuadriculaMasiva {
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de Extracción (Trabajo):</label>
-              <input type="date" id="form-extraer-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+              <input type="date" id="form-extraer-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">Motivo de Extracción:</label>
-              <select id="form-extraer-motivo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white">
+              <select id="form-extraer-motivo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white outline-none focus:ring-2 focus:ring-rose-500">
                 <option value="Venta" selected>💰 Venta Comercial</option>
                 <option value="Muerte">☠️ Muerte</option>
                 <option value="Descarte">⚠️ Descarte / Sacrificio</option>
@@ -19052,24 +19380,24 @@ class CuadriculaMasiva {
             </div>
             <div id="col-extraer-comprador">
               <label class="block text-xs font-bold text-slate-800 mb-1">Comprador / Destino:</label>
-              <input type="text" id="form-extraer-comprador" placeholder="Ej. Frigorífico / Juan Pérez" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+              <input type="text" id="form-extraer-comprador" placeholder="Ej. Frigorífico / Juan Pérez" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
             </div>
             <div id="col-extraer-valor">
               <label class="block text-xs font-bold text-slate-800 mb-1">Valor Venta (COP $):</label>
-              <input type="number" id="form-extraer-valor" step="1000" placeholder="Ej. 3500000" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300">
+              <input type="number" id="form-extraer-valor" step="1000" placeholder="Ej. 3500000" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
             </div>
             <div id="col-extraer-peso">
               <label class="block text-xs font-bold text-slate-800 mb-1">Peso de Salida (kg):</label>
-              <input type="number" id="form-extraer-peso" step="0.5" value="${a.ultimoPesoKg || a.pesoActual || ''}" placeholder="Ej. 480" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300">
+              <input type="number" id="form-extraer-peso" step="0.5" value="${a.ultimoPesoKg || a.pesoActual || ''}" placeholder="Ej. 480" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
             </div>
             <div id="col-extraer-muerte" class="hidden sm:col-span-3">
               <label class="block text-xs font-bold text-rose-800 mb-1">Causa / Diagnóstico de Muerte o Descarte:</label>
-              <input type="text" id="form-extraer-causa" placeholder="Ej. Picadura de culebra, Timpanismo, Neumonía, Fractura..." class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-rose-300 bg-rose-50/50">
+              <input type="text" id="form-extraer-causa" placeholder="Ej. Picadura de culebra, Timpanismo, Neumonía, Fractura..." class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-rose-300 bg-rose-50/50 outline-none focus:ring-2 focus:ring-rose-500">
             </div>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Observaciones / Notas:</label>
-            <input type="text" id="form-extraer-obs" placeholder="Detalles adicionales de la extracción de este ejemplar..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300">
+            <input type="text" id="form-extraer-obs" placeholder="Detalles adicionales de la extracción de este ejemplar..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
           </div>
         </div>
       `;
@@ -19078,11 +19406,11 @@ class CuadriculaMasiva {
         <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-indigo-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se sirvió (Trabajo):</label>
-            <input type="date" id="form-srv-fecha" value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300">
+            <input type="date" id="form-srv-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Modalidad:</label>
-            <select id="form-srv-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white">
+            <select id="form-srv-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="inseminacion_artificial" selected>💉 Inseminación Artificial</option>
               <option value="transferencia_embriones">🔬 Transf. Embriones</option>
               <option value="monta_natural">🐂 Servicio con Toro</option>
@@ -19090,15 +19418,15 @@ class CuadriculaMasiva {
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Toro / Pajilla:</label>
-            <input type="text" id="form-srv-reproductor" placeholder="Ej. TORO-08" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300">
+            <input type="text" id="form-srv-reproductor" placeholder="Ej. TORO-08" class="w-full px-2 py-3 sm:py-2 font-mono text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Técnico:</label>
-            <input type="text" id="form-srv-tecnico" placeholder="Inseminador" class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300">
+            <input type="text" id="form-srv-tecnico" placeholder="Inseminador" class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Protocolo:</label>
-            <input type="text" id="form-srv-protocolo" placeholder="IATF" class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300">
+            <input type="text" id="form-srv-protocolo" placeholder="IATF" class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
       `;
@@ -19248,11 +19576,37 @@ class CuadriculaMasiva {
     };
 
     if (inputPeso) {
-      if (typeof inputPeso.focus === 'function') inputPeso.focus();
       inputPeso.addEventListener('input', recalcularLiveGDP);
     }
     if (inputFechaPeso) {
       inputFechaPeso.addEventListener('change', recalcularLiveGDP);
+    }
+
+    // Autocompletar peso previo cuando se digite la Madre o Cría en Destetes
+    const inMadreDestete = this.container.querySelector('#form-destete-madre-tag');
+    const inPesoMadreDestete = this.container.querySelector('#form-destete-peso-madre');
+    if (inMadreDestete && inPesoMadreDestete) {
+      inMadreDestete.addEventListener('change', () => {
+        const tagM = (inMadreDestete.value || '').trim();
+        if (!tagM) return;
+        const mEncontrada = this.buscarAnimalPorTag(tagM);
+        if (mEncontrada && !inPesoMadreDestete.value && (mEncontrada.ultimoPesoKg || mEncontrada.pesoActual)) {
+          inPesoMadreDestete.value = mEncontrada.ultimoPesoKg || mEncontrada.pesoActual;
+        }
+      });
+    }
+
+    const inCriaDestete = this.container.querySelector('#form-destete-cria-tag');
+    const inPesoCriaDestete = this.container.querySelector('#form-destete-peso');
+    if (inCriaDestete && inPesoCriaDestete) {
+      inCriaDestete.addEventListener('change', () => {
+        const tagC = (inCriaDestete.value || '').trim();
+        if (!tagC) return;
+        const cEncontrada = this.buscarAnimalPorTag(tagC);
+        if (cEncontrada && !inPesoCriaDestete.value && (cEncontrada.ultimoPesoKg || cEncontrada.pesoActual)) {
+          inPesoCriaDestete.value = cEncontrada.ultimoPesoKg || cEncontrada.pesoActual;
+        }
+      });
     }
 
     // Sincronizar fecha de trabajo desde el formulario hacia la jornada general
@@ -19317,6 +19671,7 @@ class CuadriculaMasiva {
     const boxDias = this.container.querySelector('#box-dias-gestacion');
     if (diagSelect && boxDias) {
       diagSelect.addEventListener('change', () => {
+        if (!boxDias.style) boxDias.style = {};
         boxDias.style.display = diagSelect.value === 'Preñada' ? 'block' : 'none';
       });
     }
@@ -19350,17 +19705,35 @@ class CuadriculaMasiva {
     if (btnCerrar) {
       btnCerrar.addEventListener('click', () => {
         this.animalSeleccionado = null;
+        this.campoEnfocadoActual = '#input-tag-manga';
         this.renderFormularioIngreso();
+        const inTag = this.container.querySelector('#input-tag-manga');
+        if (inTag && typeof inTag.focus === 'function') inTag.focus();
       });
     }
 
-    // Tecla Enter para confirmar
+    // Rastrear foco en campos navegables y flujo secuencial con tecla Enter sin mouse
+    const selectoresNav = this.obtenerSelectoresNavegablesModulo();
+    selectoresNav.forEach((sel) => {
+      const el = this.container.querySelector(sel);
+      if (el && typeof el.addEventListener === 'function') {
+        el.addEventListener('focus', () => {
+          this.campoEnfocadoActual = sel;
+        });
+      }
+    });
+
+    // Posicionar cursor automáticamente en el primer campo (Fecha) al seleccionar el animal
+    this.enfocarPrimerCampoFormulario();
+
+    // Tecla Enter secuencial: avanza por fecha y demás campos y al final guarda y regresa al buscador
     const contForm = this.container.querySelector('#contenedor-formulario-animal');
     if (contForm) {
       contForm.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          this.confirmarRegistroActual();
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+          this.avanzarConEnterEnFormulario(e.target);
         }
       });
     }
@@ -19368,11 +19741,11 @@ class CuadriculaMasiva {
 
   confirmarRegistroActual() {
     const a = this.animalSeleccionado;
-    if (!a) return;
+    if (!a) return false;
 
     if (a._estaEnOtraFinca) {
       alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
-      return;
+      return false;
     }
 
     const hoy = new Date().toISOString().split('T')[0];
@@ -19413,7 +19786,7 @@ class CuadriculaMasiva {
       const peso = parseFloat(pInput?.value);
       if (isNaN(peso) || peso <= 0) {
         alert('Ingrese un peso válido.');
-        return;
+        return false;
       }
       const pPrev = a.ultimoPesoKg || a.pesoActual || 0;
       const gdpRes = calcularGDPEjemplar({ animal: a, pesoActual: peso, fechaPesaje: fechaEvento });
@@ -19432,11 +19805,13 @@ class CuadriculaMasiva {
       registro.diasGestacion = resultado === 'Preñada' ? diasG : 0;
       registro.estructuraOvario = (this.container.querySelector('#form-estructura-ovario')?.value || '').trim();
     } else if (this.moduloActivo === 'leche') {
+      const unOrdeno = this.esUnSoloOrdeno();
       const am = parseFloat(this.container.querySelector('#form-leche-am')?.value) || 0;
-      const pm = parseFloat(this.container.querySelector('#form-leche-pm')?.value) || 0;
+      const pm = unOrdeno ? 0 : (parseFloat(this.container.querySelector('#form-leche-pm')?.value) || 0);
       registro.litrosManana = am;
       registro.litrosTarde = pm;
       registro.totalLitros = parseFloat((am + pm).toFixed(1));
+      registro.numeroOrdenos = unOrdeno ? 1 : 2;
       registro.notasUbre = (this.container.querySelector('#form-leche-notas')?.value || '').trim();
     } else if (this.moduloActivo === 'partos') {
       registro.fechaParto = fechaEvento;
@@ -19445,11 +19820,27 @@ class CuadriculaMasiva {
       registro.tagCria = this.container.querySelector('#form-parto-tag-cria')?.value || `CRIA-${tag}`;
       registro.tipoParto = this.container.querySelector('#form-parto-tipo')?.value || 'Normal';
     } else if (this.moduloActivo === 'destetes') {
-      const pDestete = parseFloat(this.container.querySelector('#form-destete-peso')?.value) || 0;
+      const rel = this.resolverRelacionDestete(a);
+      const pTerneroRaw = parseFloat(this.container.querySelector('#form-destete-peso')?.value);
+      const pMadreRaw = parseFloat(this.container.querySelector('#form-destete-peso-madre')?.value);
+      const pTernero = !isNaN(pTerneroRaw) && pTerneroRaw > 0 ? pTerneroRaw : (parseFloat(rel.pesoPrevioCria) || 0);
+      const pMadre = !isNaN(pMadreRaw) && pMadreRaw > 0 ? pMadreRaw : (parseFloat(rel.pesoPrevioMadre) || 0);
+
+      const madreTagInput = (this.container.querySelector('#form-destete-madre-tag')?.value || '').trim().toUpperCase();
+      const criaTagInput = (this.container.querySelector('#form-destete-cria-tag')?.value || '').trim().toUpperCase();
+      const madreTagFinal = madreTagInput || (rel.madreTag ? String(rel.madreTag).toUpperCase() : '');
+      const criaTagFinal = criaTagInput || (rel.criaTag ? String(rel.criaTag).toUpperCase() : String(tag).toUpperCase());
+
       const loteDestino = (this.container.querySelector('#form-destete-lote')?.value || 'Lote Levante').trim();
       const obs = (this.container.querySelector('#form-destete-obs')?.value || '').trim();
+
       registro.fechaDestete = fechaEvento;
-      registro.pesoDestete = pDestete;
+      registro.pesoDestete = pTernero;
+      registro.pesoTernero = pTernero;
+      registro.pesoMadre = pMadre;
+      registro.pesoVaca = pMadre;
+      registro.madreTag = madreTagFinal;
+      registro.criaTag = criaTagFinal;
       registro.loteDestino = loteDestino;
       registro.observaciones = obs;
     } else if (this.moduloActivo === 'extracciones') {
@@ -19482,18 +19873,37 @@ class CuadriculaMasiva {
       registro.resultado = 'Pendiente Chequeo';
     }
 
+    // Persistir inmediatamente si hay callback individual configurado
+    if (typeof this.onGuardarRegistroIndividual === 'function') {
+      this.onGuardarRegistroIndividual({
+        modulo: this.moduloActivo,
+        registros: [registro],
+        silencioso: true
+      });
+      registro._persistido = true;
+    }
+
     // Agregar al inicio de la sesión
     this.registrosSesion.unshift(registro);
 
-    // Limpiar selección y preparar para el siguiente
+    // Limpiar selección y preparar para el siguiente animal
     this.animalSeleccionado = null;
+    this.campoEnfocadoActual = '#input-tag-manga';
     this.render();
 
-    // Enfocar input de búsqueda de nuevo
-    setTimeout(() => {
+    // Enfocar input de búsqueda de nuevo para buscar el siguiente animal sin usar el mouse
+    const enfocarBuscador = () => {
+      if (!this.container || typeof this.container.querySelector !== 'function') return;
       const inTag = this.container.querySelector('#input-tag-manga');
-      if (inTag && typeof inTag.focus === 'function') inTag.focus();
-    }, 50);
+      if (inTag) {
+        inTag.value = '';
+        if (typeof inTag.focus === 'function') inTag.focus();
+      }
+    };
+    enfocarBuscador();
+    setTimeout(enfocarBuscador, 30);
+
+    return true;
   }
 
   renderResumenMedicion(r) {
@@ -19503,7 +19913,9 @@ class CuadriculaMasiva {
     } else if (r.modulo === 'palpaciones') {
       return `Diagnóstico: <strong>${r.resultado}</strong> ${r.resultado === 'Preñada' ? `(${r.diasGestacion} días de preñez)` : ''}`;
     } else if (r.modulo === 'destetes') {
-      return `Destete: Peso <strong>${r.pesoDestete || 0} kg</strong> • Lote: <strong>${r.loteDestino || 'Levante'}</strong>`;
+      const relInfo = (r.madreTag || r.criaTag) ? ` • Madre: <strong>${r.madreTag || 'S/D'}</strong> ↔ Cría: <strong>${r.criaTag || r.tag}</strong>` : '';
+      const pesoVacaTxt = r.pesoMadre ? ` • Peso Vaca: <strong>${r.pesoMadre} kg</strong>` : '';
+      return `Destete: Peso Ternero <strong>${r.pesoDestete || 0} kg</strong>${pesoVacaTxt}${relInfo} • Lote: <strong>${r.loteDestino || 'Levante'}</strong>`;
     } else if (r.modulo === 'extracciones') {
       if (r.tipoExtraccion === 'Venta') {
         return `Extracción: <strong>Venta</strong> a <strong>${r.comprador || 'Comprador'}</strong> • $${(r.valorVenta || 0).toLocaleString('es-CO')} (${r.pesoVenta || 0} kg)`;
@@ -19514,6 +19926,9 @@ class CuadriculaMasiva {
       const nomTipo = r.tipoServicio === 'transferencia_embriones' ? '🔬 TE' : (r.tipoServicio === 'monta_natural' ? '🐂 Monta' : '💉 IA');
       return `Servicio: <strong>${nomTipo}</strong> • Toro/Pajilla: <strong>${r.reproductor}</strong> • Téc: ${r.tecnico} (${r.protocolo})`;
     } else if (r.modulo === 'leche') {
+      if (r.numeroOrdenos === 1) {
+        return `Producción (1 Ordeño): <strong>${r.totalLitros} Litros</strong>`;
+      }
       return `Producción: <strong>${r.totalLitros} Litros</strong> (Mañana: ${r.litrosManana}L, Tarde: ${r.litrosTarde}L)`;
     } else if (r.modulo === 'partos') {
       return `Parto: <strong>Cría ${r.tagCria}</strong> (${r.sexoCria === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}, ${r.pesoCria} kg)`;
@@ -20230,6 +20645,10 @@ class BoviTrackApp {
         const empresaProtegida = (modFinca && modFinca.empresaId) ||
           (local && local.empresaId && local.empresaId !== 'EMP-01' && (!fCloud.empresaId || fCloud.empresaId === 'EMP-01') ? local.empresaId : null);
 
+        const numOrdFinal = (protegerPrecios && local && local.numeroOrdenos !== undefined)
+          ? Number(local.numeroOrdenos)
+          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 2);
+
         return {
           ...fCloud,
           empresaId: empresaProtegida || fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
@@ -20239,6 +20658,8 @@ class BoviTrackApp {
           precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
             ? local.precioCarneKgPie
             : fCloud.precioCarneKgPie,
+          numeroOrdenos: numOrdFinal === 1 ? 1 : 2,
+          tipoOrdeno: numOrdFinal === 1 ? 'un_ordeno' : 'doble_ordeno',
           lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
             ? local.lotes
             : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
@@ -21432,7 +21853,9 @@ class BoviTrackApp {
       containerId: 'pantalla-masivo',
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
+      getFincaActiva: () => this.getFincaActiva(),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
+      onGuardarRegistroIndividual: (data) => this.guardarOperacionGrid(data),
       onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
       onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
       onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal),
@@ -21553,6 +21976,7 @@ class BoviTrackApp {
       onCambiarEstadoAccesoEmpresa: (empId, activo) => this.cambiarEstadoAccesoEmpresa(empId, activo),
       calcularVigencia: (emp) => this.calcularVigenciaEmpresa(emp),
       onActualizarPrecios: (params) => this.actualizarPreciosFinca(params),
+      onActualizarOrdenoFinca: (fincaId, numOrd) => this.actualizarOrdenoFinca(fincaId, numOrd),
       onGuardarCostos: (costos, fincaId) => this.guardarCostosFijos(costos, fincaId),
       onCrearInversion: (inv) => {
         if (!inv.fincaId) {
@@ -22208,6 +22632,9 @@ class BoviTrackApp {
     if (!finca.codigo) {
       finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
     }
+    const numOrdFinca = Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+    finca.numeroOrdenos = numOrdFinca;
+    finca.tipoOrdeno = numOrdFinca === 1 ? 'un_ordeno' : 'doble_ordeno';
 
     if (Array.isArray(this.state._fincasEliminadas)) {
       this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
@@ -23123,12 +23550,17 @@ class BoviTrackApp {
     alert('Finca eliminada correctamente.');
   }
 
-  async actualizarPreciosFinca({ leche, carne, fincaId }) {
+  async actualizarPreciosFinca({ leche, carne, numeroOrdenos, tipoOrdeno, fincaId }) {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
+    const numOrd = numeroOrdenos !== undefined
+      ? (Number(numeroOrdenos) === 1 ? 1 : 2)
+      : (tipoOrdeno === 'un_ordeno' ? 1 : (f && Number(f.numeroOrdenos) === 1 ? 1 : 2));
     if (f) {
       f.precioLecheLitro = Number(leche);
       f.precioCarneKgPie = Number(carne);
+      f.numeroOrdenos = numOrd;
+      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -23136,23 +23568,54 @@ class BoviTrackApp {
     this.state._preciosModificadosLocalmente[targetId] = {
       precioLecheLitro: Number(leche),
       precioCarneKgPie: Number(carne),
+      numeroOrdenos: numOrd,
+      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
     if (this.compDashboard) this.compDashboard.render();
     if (this.compAdmin) this.compAdmin.render();
+    if (this.compCuadricula && this.state.fincaActivaId === targetId) this.compCuadricula.render();
 
     // Persistir de inmediato en Supabase Cloud si está conectado
     if (f && this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
       try {
         const payload = [this.supabase.mapearFincaLocalACloud(f)];
         await this.supabase._postgrestUpsert('fincas', payload, 'id', 10000);
-        console.log(`✓ Precios de finca ${f.nombre} (${targetId}) persistidos en Supabase Cloud.`);
+        await this.sincronizarDirectorioEmpresasCloud();
+        console.log(`✓ Precios y modalidad de ordeño de finca ${f.nombre} (${targetId}) persistidos en Supabase Cloud.`);
       } catch (err) {
         console.warn('Aviso sincronizando precios de finca en Supabase:', err.message);
       }
     }
-    alert('Precios de referencia actualizados exitosamente.');
+    alert('Precios de referencia y modalidad de ordeño actualizados exitosamente.');
+  }
+
+  async actualizarOrdenoFinca(fincaId, numeroOrdenos) {
+    const targetId = fincaId || this.state.fincaActivaId;
+    const f = (this.state.fincas || []).find((item) => item.id === targetId);
+    const numOrd = Number(numeroOrdenos) === 1 ? 1 : 2;
+    if (f) {
+      f.numeroOrdenos = numOrd;
+      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+    }
+    if (!this.state._preciosModificadosLocalmente) {
+      this.state._preciosModificadosLocalmente = {};
+    }
+    this.state._preciosModificadosLocalmente[targetId] = {
+      ...(this.state._preciosModificadosLocalmente[targetId] || {}),
+      precioLecheLitro: f ? Number(f.precioLecheLitro || 2450) : 2450,
+      precioCarneKgPie: f ? Number(f.precioCarneKgPie || 8900) : 8900,
+      numeroOrdenos: numOrd,
+      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      timestamp: Date.now()
+    };
+    this.guardarEstado();
+    if (this.compAdmin) this.compAdmin.render();
+    if (this.compCuadricula && this.state.fincaActivaId === targetId) this.compCuadricula.render();
+    if (f && this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
+      this.sincronizarDirectorioEmpresasCloud().catch(() => {});
+    }
   }
 
   async guardarCostosFijos(costos, fincaId) {
@@ -23201,8 +23664,14 @@ class BoviTrackApp {
     }
     try {
       const fincasEmpresaMap = {};
+      const fincasOrdenosMap = {};
       (this.state.fincas || []).forEach((f) => {
-        if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+        if (f && f.id) {
+          if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
+            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+          }
+        }
       });
       const usuariosEmpresaMap = {};
       (this.state.usuarios || []).forEach((u) => {
@@ -23226,6 +23695,7 @@ class BoviTrackApp {
           fincasPurgadas: this.state._fincasPurgadas || {},
           animalesEliminados: (this.state._animalesEliminados || []).slice(-1000),
           fincasEmpresaMap,
+          fincasOrdenosMap,
           usuariosEmpresaMap
         },
         usuario: this.state.usuarioActual ? this.state.usuarioActual.usuario : 'Sistema'
@@ -23686,15 +24156,18 @@ class BoviTrackApp {
     }
   }
 
-  guardarOperacionGrid({ modulo, registros }) {
+  guardarOperacionGrid({ modulo, registros, silencioso = false }) {
     if (this.esUsuarioSoloConsulta()) {
-      alert('Acción denegada: El perfil actual es de sólo consulta.');
+      if (!silencioso) alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
 
     const hoy = new Date().toISOString().split('T')[0];
+    const registrosAProcesar = silencioso
+      ? (registros || [])
+      : (registros || []).filter((r) => !r._persistido);
 
-    registros.forEach((reg) => {
+    registrosAProcesar.forEach((reg) => {
       let animal = this.state.animales.find(
         (a) => a.identificacionTag === reg.tag && a.fincaId === this.state.fincaActivaId
       );
@@ -23875,33 +24348,152 @@ class BoviTrackApp {
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
         });
       } else if (modulo === 'destetes') {
-        const pDest = parseFloat(reg.pesoDestete) || 0;
-        if (pDest > 0) {
-          animal.ultimoPesoKg = pDest;
-          animal.fechaUltimoPesaje = reg.fecha || hoy;
+        const fDest = reg.fecha || reg.fechaDestete || hoy;
+        const pTernero = parseFloat(reg.pesoTernero ?? reg.pesoDestete) || 0;
+        const pMadre = parseFloat(reg.pesoMadre ?? reg.pesoVaca) || 0;
+        const madreTag = String(reg.madreTag || animal.madreTag || animal.madre || '').trim().toUpperCase();
+        const criaTag = String(reg.criaTag || animal.identificacionTag || reg.tag || '').trim().toUpperCase();
+        const loteDest = reg.loteDestino || 'Levante General';
+
+        // Resolver ejemplar cría y ejemplar madre dentro del predio activo
+        let animalCria = null;
+        let animalMadre = null;
+
+        if (criaTag && String(animal.identificacionTag || '').trim().toUpperCase() === criaTag) {
+          animalCria = animal;
+        } else if (criaTag) {
+          animalCria = (this.state.animales || []).find(
+            (x) => x.fincaId === this.state.fincaActivaId && String(x.identificacionTag || x.numero || '').trim().toUpperCase() === criaTag
+          ) || null;
+        }
+        if (!animalCria) animalCria = animal;
+
+        if (madreTag && String(animal.identificacionTag || '').trim().toUpperCase() === madreTag && animal !== animalCria) {
+          animalMadre = animal;
+        } else if (madreTag) {
+          animalMadre = (this.state.animales || []).find(
+            (x) => x.fincaId === this.state.fincaActivaId && String(x.identificacionTag || x.numero || '').trim().toUpperCase() === madreTag
+          ) || null;
+        }
+
+        // Relacionar cría con su madre explícitamente
+        if (madreTag && madreTag !== criaTag) {
+          animalCria.madreTag = madreTag;
+          animalCria.madre = madreTag;
+        }
+
+        // Actualizar peso, lote y categoría de la cría al destete
+        if (pTernero > 0) {
+          const gdpCria = calcularGDPEjemplar({ animal: animalCria, pesoActual: pTernero, fechaPesaje: fDest });
+          if (gdpCria && gdpCria.gdp !== null) animalCria.gdpPromedioGDia = gdpCria.gdp;
+          animalCria.ultimoPesoKg = pTernero;
+          animalCria.pesoDesteteKg = pTernero;
+          animalCria.fechaUltimoPesaje = fDest;
+
+          if (!Array.isArray(this.state.pesajes)) this.state.pesajes = [];
+          const safeTagCria = String(animalCria.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_');
+          const idPesCria = `PES-${this.state.fincaActivaId}-${safeTagCria}-${fDest}`;
+          this.state.pesajes = this.state.pesajes.filter((p) => p.id !== idPesCria);
+          this.state.pesajes.unshift({
+            id: idPesCria,
+            fecha: fDest,
+            hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            fincaId: this.state.fincaActivaId,
+            animalId: animalCria.id,
+            tag: animalCria.identificacionTag,
+            animalTag: animalCria.identificacionTag,
+            nombreAlias: animalCria.nombreAlias,
+            especie: animalCria.especie || 'bovino',
+            raza: animalCria.raza,
+            categoria: animalCria.categoria,
+            lote: loteDest,
+            pesoNuevo: pTernero,
+            peso: pTernero,
+            gdp: animalCria.gdpPromedioGDia ? parseFloat(animalCria.gdpPromedioGDia) : null,
+            responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador',
+            observaciones: `Peso al destete${madreTag ? ` (Madre: ${madreTag})` : ''}`
+          });
         }
         if (reg.loteDestino) {
-          animal.lote = reg.loteDestino;
+          animalCria.lote = reg.loteDestino;
         }
-        animal.categoria = (animal.sexo || '').toLowerCase() === 'macho' ? 'Novillo de Levante' : 'Novilla de Levante';
-        if (!animal.historialEventos) animal.historialEventos = [];
-        animal.historialEventos.unshift({
+        animalCria.categoria = (animalCria.sexo || '').toLowerCase() === 'macho' ? 'Novillo de Levante' : 'Novilla de Levante';
+
+        if (!animalCria.historialEventos) animalCria.historialEventos = [];
+        animalCria.historialEventos.unshift({
           tipo: 'destete',
-          fecha: reg.fecha || hoy,
-          pesoDestete: pDest,
-          loteDestino: reg.loteDestino || 'Levante General',
+          fecha: fDest,
+          pesoDestete: pTernero,
+          pesoTernero: pTernero,
+          pesoMadre: pMadre,
+          pesoVaca: pMadre,
+          madreTag: madreTag || animalCria.madreTag || '',
+          criaTag: animalCria.identificacionTag,
+          loteDestino: loteDest,
           observaciones: reg.observaciones || ''
         });
 
+        // Actualizar peso e historial de la vaca / madre al destete
+        if (animalMadre && animalMadre !== animalCria) {
+          if (pMadre > 0) {
+            const gdpMadre = calcularGDPEjemplar({ animal: animalMadre, pesoActual: pMadre, fechaPesaje: fDest });
+            if (gdpMadre && gdpMadre.gdp !== null) animalMadre.gdpPromedioGDia = gdpMadre.gdp;
+            animalMadre.ultimoPesoKg = pMadre;
+            animalMadre.fechaUltimoPesaje = fDest;
+
+            if (!Array.isArray(this.state.pesajes)) this.state.pesajes = [];
+            const safeTagMadre = String(animalMadre.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_');
+            const idPesMadre = `PES-${this.state.fincaActivaId}-${safeTagMadre}-${fDest}`;
+            this.state.pesajes = this.state.pesajes.filter((p) => p.id !== idPesMadre);
+            this.state.pesajes.unshift({
+              id: idPesMadre,
+              fecha: fDest,
+              hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              fincaId: this.state.fincaActivaId,
+              animalId: animalMadre.id,
+              tag: animalMadre.identificacionTag,
+              animalTag: animalMadre.identificacionTag,
+              nombreAlias: animalMadre.nombreAlias,
+              especie: animalMadre.especie || 'bovino',
+              raza: animalMadre.raza,
+              categoria: animalMadre.categoria,
+              lote: animalMadre.lote,
+              pesoNuevo: pMadre,
+              peso: pMadre,
+              gdp: animalMadre.gdpPromedioGDia ? parseFloat(animalMadre.gdpPromedioGDia) : null,
+              responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador',
+              observaciones: `Peso de vaca al destete de cría ${animalCria.identificacionTag}`
+            });
+          }
+
+          if (!animalMadre.historialEventos) animalMadre.historialEventos = [];
+          animalMadre.historialEventos.unshift({
+            tipo: 'destete',
+            fecha: fDest,
+            pesoDestete: pTernero,
+            pesoTernero: pTernero,
+            pesoMadre: pMadre,
+            pesoVaca: pMadre,
+            madreTag: animalMadre.identificacionTag,
+            criaTag: animalCria.identificacionTag,
+            loteDestino: loteDest,
+            observaciones: `Destete de cría ${animalCria.identificacionTag}${reg.observaciones ? ` • ${reg.observaciones}` : ''}`
+          });
+        }
+
         this.registrarActividadOperacion({
-          fecha: reg.fecha || hoy,
+          fecha: fDest,
           accion: 'destete',
           modulo: 'manejo',
-          tag: animal.identificacionTag,
-          animalId: animal.id,
-          nombreAlias: animal.nombreAlias,
+          tag: animalCria.identificacionTag,
+          animalId: animalCria.id,
+          nombreAlias: animalCria.nombreAlias,
           fincaId: this.state.fincaActivaId,
-          detalle: `Destete en brete: ${pDest ? `${pDest} kg` : ''} • Asignado a lote: ${reg.loteDestino || 'Levante General'}`,
+          peso: pTernero,
+          pesoMadre: pMadre,
+          madreTag: madreTag || '',
+          criaTag: animalCria.identificacionTag,
+          detalle: `Destete en brete: Cría ${animalCria.identificacionTag} (${pTernero} kg)${madreTag ? ` ↔ Madre ${madreTag}` : ''}${pMadre ? ` (Peso Vaca: ${pMadre} kg)` : ''} • Lote: ${loteDest}`,
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
         });
       } else if (modulo === 'extracciones') {
@@ -23952,14 +24544,15 @@ class BoviTrackApp {
     });
 
     this.guardarEstado();
-    alert(`✓ Guardados ${registros.length} registros en la base de datos de campo.`);
-
-    if (this.compCuadricula) {
-      if (typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
-        this.compCuadricula.cargarFilasDesdeInventario();
-      }
-      if (typeof this.compCuadricula.render === 'function') {
-        this.compCuadricula.render();
+    if (!silencioso) {
+      alert(`✓ Guardados ${(registros || []).length} registros en la base de datos de campo.`);
+      if (this.compCuadricula) {
+        if (typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+          this.compCuadricula.cargarFilasDesdeInventario();
+        }
+        if (typeof this.compCuadricula.render === 'function') {
+          this.compCuadricula.render();
+        }
       }
     }
     if (this.compAnimales && typeof this.compAnimales.render === 'function') this.compAnimales.render();

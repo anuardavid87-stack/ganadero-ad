@@ -512,6 +512,10 @@ class BoviTrackApp {
         const empresaProtegida = (modFinca && modFinca.empresaId) ||
           (local && local.empresaId && local.empresaId !== 'EMP-01' && (!fCloud.empresaId || fCloud.empresaId === 'EMP-01') ? local.empresaId : null);
 
+        const numOrdFinal = (protegerPrecios && local && local.numeroOrdenos !== undefined)
+          ? Number(local.numeroOrdenos)
+          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 2);
+
         return {
           ...fCloud,
           empresaId: empresaProtegida || fCloud.empresaId || (local && local.empresaId) || 'EMP-01',
@@ -521,6 +525,8 @@ class BoviTrackApp {
           precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
             ? local.precioCarneKgPie
             : fCloud.precioCarneKgPie,
+          numeroOrdenos: numOrdFinal === 1 ? 1 : 2,
+          tipoOrdeno: numOrdFinal === 1 ? 'un_ordeno' : 'doble_ordeno',
           lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
             ? local.lotes
             : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
@@ -1714,7 +1720,9 @@ class BoviTrackApp {
       containerId: 'pantalla-masivo',
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
+      getFincaActiva: () => this.getFincaActiva(),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
+      onGuardarRegistroIndividual: (data) => this.guardarOperacionGrid(data),
       onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
       onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal),
       onExtraerAnimal: (animal) => this.abrirModalExtraerAnimal(animal),
@@ -1835,6 +1843,7 @@ class BoviTrackApp {
       onCambiarEstadoAccesoEmpresa: (empId, activo) => this.cambiarEstadoAccesoEmpresa(empId, activo),
       calcularVigencia: (emp) => this.calcularVigenciaEmpresa(emp),
       onActualizarPrecios: (params) => this.actualizarPreciosFinca(params),
+      onActualizarOrdenoFinca: (fincaId, numOrd) => this.actualizarOrdenoFinca(fincaId, numOrd),
       onGuardarCostos: (costos, fincaId) => this.guardarCostosFijos(costos, fincaId),
       onCrearInversion: (inv) => {
         if (!inv.fincaId) {
@@ -2490,6 +2499,9 @@ class BoviTrackApp {
     if (!finca.codigo) {
       finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
     }
+    const numOrdFinca = Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+    finca.numeroOrdenos = numOrdFinca;
+    finca.tipoOrdeno = numOrdFinca === 1 ? 'un_ordeno' : 'doble_ordeno';
 
     if (Array.isArray(this.state._fincasEliminadas)) {
       this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
@@ -3405,12 +3417,17 @@ class BoviTrackApp {
     alert('Finca eliminada correctamente.');
   }
 
-  async actualizarPreciosFinca({ leche, carne, fincaId }) {
+  async actualizarPreciosFinca({ leche, carne, numeroOrdenos, tipoOrdeno, fincaId }) {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
+    const numOrd = numeroOrdenos !== undefined
+      ? (Number(numeroOrdenos) === 1 ? 1 : 2)
+      : (tipoOrdeno === 'un_ordeno' ? 1 : (f && Number(f.numeroOrdenos) === 1 ? 1 : 2));
     if (f) {
       f.precioLecheLitro = Number(leche);
       f.precioCarneKgPie = Number(carne);
+      f.numeroOrdenos = numOrd;
+      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -3418,23 +3435,54 @@ class BoviTrackApp {
     this.state._preciosModificadosLocalmente[targetId] = {
       precioLecheLitro: Number(leche),
       precioCarneKgPie: Number(carne),
+      numeroOrdenos: numOrd,
+      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
     if (this.compDashboard) this.compDashboard.render();
     if (this.compAdmin) this.compAdmin.render();
+    if (this.compCuadricula && this.state.fincaActivaId === targetId) this.compCuadricula.render();
 
     // Persistir de inmediato en Supabase Cloud si está conectado
     if (f && this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
       try {
         const payload = [this.supabase.mapearFincaLocalACloud(f)];
         await this.supabase._postgrestUpsert('fincas', payload, 'id', 10000);
-        console.log(`✓ Precios de finca ${f.nombre} (${targetId}) persistidos en Supabase Cloud.`);
+        await this.sincronizarDirectorioEmpresasCloud();
+        console.log(`✓ Precios y modalidad de ordeño de finca ${f.nombre} (${targetId}) persistidos en Supabase Cloud.`);
       } catch (err) {
         console.warn('Aviso sincronizando precios de finca en Supabase:', err.message);
       }
     }
-    alert('Precios de referencia actualizados exitosamente.');
+    alert('Precios de referencia y modalidad de ordeño actualizados exitosamente.');
+  }
+
+  async actualizarOrdenoFinca(fincaId, numeroOrdenos) {
+    const targetId = fincaId || this.state.fincaActivaId;
+    const f = (this.state.fincas || []).find((item) => item.id === targetId);
+    const numOrd = Number(numeroOrdenos) === 1 ? 1 : 2;
+    if (f) {
+      f.numeroOrdenos = numOrd;
+      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+    }
+    if (!this.state._preciosModificadosLocalmente) {
+      this.state._preciosModificadosLocalmente = {};
+    }
+    this.state._preciosModificadosLocalmente[targetId] = {
+      ...(this.state._preciosModificadosLocalmente[targetId] || {}),
+      precioLecheLitro: f ? Number(f.precioLecheLitro || 2450) : 2450,
+      precioCarneKgPie: f ? Number(f.precioCarneKgPie || 8900) : 8900,
+      numeroOrdenos: numOrd,
+      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      timestamp: Date.now()
+    };
+    this.guardarEstado();
+    if (this.compAdmin) this.compAdmin.render();
+    if (this.compCuadricula && this.state.fincaActivaId === targetId) this.compCuadricula.render();
+    if (f && this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
+      this.sincronizarDirectorioEmpresasCloud().catch(() => {});
+    }
   }
 
   async guardarCostosFijos(costos, fincaId) {
@@ -3483,8 +3531,14 @@ class BoviTrackApp {
     }
     try {
       const fincasEmpresaMap = {};
+      const fincasOrdenosMap = {};
       (this.state.fincas || []).forEach((f) => {
-        if (f && f.id && f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+        if (f && f.id) {
+          if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+          if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
+            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+          }
+        }
       });
       const usuariosEmpresaMap = {};
       (this.state.usuarios || []).forEach((u) => {
@@ -3508,6 +3562,7 @@ class BoviTrackApp {
           fincasPurgadas: this.state._fincasPurgadas || {},
           animalesEliminados: (this.state._animalesEliminados || []).slice(-1000),
           fincasEmpresaMap,
+          fincasOrdenosMap,
           usuariosEmpresaMap
         },
         usuario: this.state.usuarioActual ? this.state.usuarioActual.usuario : 'Sistema'
@@ -3968,15 +4023,18 @@ class BoviTrackApp {
     }
   }
 
-  guardarOperacionGrid({ modulo, registros }) {
+  guardarOperacionGrid({ modulo, registros, silencioso = false }) {
     if (this.esUsuarioSoloConsulta()) {
-      alert('Acción denegada: El perfil actual es de sólo consulta.');
+      if (!silencioso) alert('Acción denegada: El perfil actual es de sólo consulta.');
       return;
     }
 
     const hoy = new Date().toISOString().split('T')[0];
+    const registrosAProcesar = silencioso
+      ? (registros || [])
+      : (registros || []).filter((r) => !r._persistido);
 
-    registros.forEach((reg) => {
+    registrosAProcesar.forEach((reg) => {
       let animal = this.state.animales.find(
         (a) => a.identificacionTag === reg.tag && a.fincaId === this.state.fincaActivaId
       );
@@ -4157,33 +4215,152 @@ class BoviTrackApp {
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
         });
       } else if (modulo === 'destetes') {
-        const pDest = parseFloat(reg.pesoDestete) || 0;
-        if (pDest > 0) {
-          animal.ultimoPesoKg = pDest;
-          animal.fechaUltimoPesaje = reg.fecha || hoy;
+        const fDest = reg.fecha || reg.fechaDestete || hoy;
+        const pTernero = parseFloat(reg.pesoTernero ?? reg.pesoDestete) || 0;
+        const pMadre = parseFloat(reg.pesoMadre ?? reg.pesoVaca) || 0;
+        const madreTag = String(reg.madreTag || animal.madreTag || animal.madre || '').trim().toUpperCase();
+        const criaTag = String(reg.criaTag || animal.identificacionTag || reg.tag || '').trim().toUpperCase();
+        const loteDest = reg.loteDestino || 'Levante General';
+
+        // Resolver ejemplar cría y ejemplar madre dentro del predio activo
+        let animalCria = null;
+        let animalMadre = null;
+
+        if (criaTag && String(animal.identificacionTag || '').trim().toUpperCase() === criaTag) {
+          animalCria = animal;
+        } else if (criaTag) {
+          animalCria = (this.state.animales || []).find(
+            (x) => x.fincaId === this.state.fincaActivaId && String(x.identificacionTag || x.numero || '').trim().toUpperCase() === criaTag
+          ) || null;
+        }
+        if (!animalCria) animalCria = animal;
+
+        if (madreTag && String(animal.identificacionTag || '').trim().toUpperCase() === madreTag && animal !== animalCria) {
+          animalMadre = animal;
+        } else if (madreTag) {
+          animalMadre = (this.state.animales || []).find(
+            (x) => x.fincaId === this.state.fincaActivaId && String(x.identificacionTag || x.numero || '').trim().toUpperCase() === madreTag
+          ) || null;
+        }
+
+        // Relacionar cría con su madre explícitamente
+        if (madreTag && madreTag !== criaTag) {
+          animalCria.madreTag = madreTag;
+          animalCria.madre = madreTag;
+        }
+
+        // Actualizar peso, lote y categoría de la cría al destete
+        if (pTernero > 0) {
+          const gdpCria = calcularGDPEjemplar({ animal: animalCria, pesoActual: pTernero, fechaPesaje: fDest });
+          if (gdpCria && gdpCria.gdp !== null) animalCria.gdpPromedioGDia = gdpCria.gdp;
+          animalCria.ultimoPesoKg = pTernero;
+          animalCria.pesoDesteteKg = pTernero;
+          animalCria.fechaUltimoPesaje = fDest;
+
+          if (!Array.isArray(this.state.pesajes)) this.state.pesajes = [];
+          const safeTagCria = String(animalCria.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_');
+          const idPesCria = `PES-${this.state.fincaActivaId}-${safeTagCria}-${fDest}`;
+          this.state.pesajes = this.state.pesajes.filter((p) => p.id !== idPesCria);
+          this.state.pesajes.unshift({
+            id: idPesCria,
+            fecha: fDest,
+            hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            fincaId: this.state.fincaActivaId,
+            animalId: animalCria.id,
+            tag: animalCria.identificacionTag,
+            animalTag: animalCria.identificacionTag,
+            nombreAlias: animalCria.nombreAlias,
+            especie: animalCria.especie || 'bovino',
+            raza: animalCria.raza,
+            categoria: animalCria.categoria,
+            lote: loteDest,
+            pesoNuevo: pTernero,
+            peso: pTernero,
+            gdp: animalCria.gdpPromedioGDia ? parseFloat(animalCria.gdpPromedioGDia) : null,
+            responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador',
+            observaciones: `Peso al destete${madreTag ? ` (Madre: ${madreTag})` : ''}`
+          });
         }
         if (reg.loteDestino) {
-          animal.lote = reg.loteDestino;
+          animalCria.lote = reg.loteDestino;
         }
-        animal.categoria = (animal.sexo || '').toLowerCase() === 'macho' ? 'Novillo de Levante' : 'Novilla de Levante';
-        if (!animal.historialEventos) animal.historialEventos = [];
-        animal.historialEventos.unshift({
+        animalCria.categoria = (animalCria.sexo || '').toLowerCase() === 'macho' ? 'Novillo de Levante' : 'Novilla de Levante';
+
+        if (!animalCria.historialEventos) animalCria.historialEventos = [];
+        animalCria.historialEventos.unshift({
           tipo: 'destete',
-          fecha: reg.fecha || hoy,
-          pesoDestete: pDest,
-          loteDestino: reg.loteDestino || 'Levante General',
+          fecha: fDest,
+          pesoDestete: pTernero,
+          pesoTernero: pTernero,
+          pesoMadre: pMadre,
+          pesoVaca: pMadre,
+          madreTag: madreTag || animalCria.madreTag || '',
+          criaTag: animalCria.identificacionTag,
+          loteDestino: loteDest,
           observaciones: reg.observaciones || ''
         });
 
+        // Actualizar peso e historial de la vaca / madre al destete
+        if (animalMadre && animalMadre !== animalCria) {
+          if (pMadre > 0) {
+            const gdpMadre = calcularGDPEjemplar({ animal: animalMadre, pesoActual: pMadre, fechaPesaje: fDest });
+            if (gdpMadre && gdpMadre.gdp !== null) animalMadre.gdpPromedioGDia = gdpMadre.gdp;
+            animalMadre.ultimoPesoKg = pMadre;
+            animalMadre.fechaUltimoPesaje = fDest;
+
+            if (!Array.isArray(this.state.pesajes)) this.state.pesajes = [];
+            const safeTagMadre = String(animalMadre.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_');
+            const idPesMadre = `PES-${this.state.fincaActivaId}-${safeTagMadre}-${fDest}`;
+            this.state.pesajes = this.state.pesajes.filter((p) => p.id !== idPesMadre);
+            this.state.pesajes.unshift({
+              id: idPesMadre,
+              fecha: fDest,
+              hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              fincaId: this.state.fincaActivaId,
+              animalId: animalMadre.id,
+              tag: animalMadre.identificacionTag,
+              animalTag: animalMadre.identificacionTag,
+              nombreAlias: animalMadre.nombreAlias,
+              especie: animalMadre.especie || 'bovino',
+              raza: animalMadre.raza,
+              categoria: animalMadre.categoria,
+              lote: animalMadre.lote,
+              pesoNuevo: pMadre,
+              peso: pMadre,
+              gdp: animalMadre.gdpPromedioGDia ? parseFloat(animalMadre.gdpPromedioGDia) : null,
+              responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador',
+              observaciones: `Peso de vaca al destete de cría ${animalCria.identificacionTag}`
+            });
+          }
+
+          if (!animalMadre.historialEventos) animalMadre.historialEventos = [];
+          animalMadre.historialEventos.unshift({
+            tipo: 'destete',
+            fecha: fDest,
+            pesoDestete: pTernero,
+            pesoTernero: pTernero,
+            pesoMadre: pMadre,
+            pesoVaca: pMadre,
+            madreTag: animalMadre.identificacionTag,
+            criaTag: animalCria.identificacionTag,
+            loteDestino: loteDest,
+            observaciones: `Destete de cría ${animalCria.identificacionTag}${reg.observaciones ? ` • ${reg.observaciones}` : ''}`
+          });
+        }
+
         this.registrarActividadOperacion({
-          fecha: reg.fecha || hoy,
+          fecha: fDest,
           accion: 'destete',
           modulo: 'manejo',
-          tag: animal.identificacionTag,
-          animalId: animal.id,
-          nombreAlias: animal.nombreAlias,
+          tag: animalCria.identificacionTag,
+          animalId: animalCria.id,
+          nombreAlias: animalCria.nombreAlias,
           fincaId: this.state.fincaActivaId,
-          detalle: `Destete en brete: ${pDest ? `${pDest} kg` : ''} • Asignado a lote: ${reg.loteDestino || 'Levante General'}`,
+          peso: pTernero,
+          pesoMadre: pMadre,
+          madreTag: madreTag || '',
+          criaTag: animalCria.identificacionTag,
+          detalle: `Destete en brete: Cría ${animalCria.identificacionTag} (${pTernero} kg)${madreTag ? ` ↔ Madre ${madreTag}` : ''}${pMadre ? ` (Peso Vaca: ${pMadre} kg)` : ''} • Lote: ${loteDest}`,
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
         });
       } else if (modulo === 'extracciones') {
@@ -4234,14 +4411,15 @@ class BoviTrackApp {
     });
 
     this.guardarEstado();
-    alert(`✓ Guardados ${registros.length} registros en la base de datos de campo.`);
-
-    if (this.compCuadricula) {
-      if (typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
-        this.compCuadricula.cargarFilasDesdeInventario();
-      }
-      if (typeof this.compCuadricula.render === 'function') {
-        this.compCuadricula.render();
+    if (!silencioso) {
+      alert(`✓ Guardados ${(registros || []).length} registros en la base de datos de campo.`);
+      if (this.compCuadricula) {
+        if (typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+          this.compCuadricula.cargarFilasDesdeInventario();
+        }
+        if (typeof this.compCuadricula.render === 'function') {
+          this.compCuadricula.render();
+        }
       }
     }
     if (this.compAnimales && typeof this.compAnimales.render === 'function') this.compAnimales.render();

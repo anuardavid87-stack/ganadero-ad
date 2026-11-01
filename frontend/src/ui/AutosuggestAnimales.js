@@ -444,10 +444,16 @@ export function conectarAutosuggestAnimales({
     } else if (e.key === 'Enter') {
       if (indiceActivo >= 0 && indiceActivo < coincidenciasActuales.length) {
         e.preventDefault();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
         seleccionar(coincidenciasActuales[indiceActivo]);
       } else if (coincidenciasActuales.length > 0) {
         e.preventDefault();
-        seleccionar(coincidenciasActuales[0]);
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        const qNorm = normalizarTextoBusqueda(el.value || '');
+        const exactMatch = coincidenciasActuales.find(
+          (a) => normalizarTextoBusqueda(a.identificacionTag || a.numero || a.tag || '') === qNorm
+        );
+        seleccionar(exactMatch || coincidenciasActuales[0]);
       }
     } else if (e.key === 'Escape') {
       dropMenu.classList.add('hidden');

@@ -6233,6 +6233,369 @@ console.log('\n--- 56. Pruebas de Blindaje contra Fantasmas, Purga Atómica y Es
   );
 }
 
+import {
+  verificarWebhookWhatsApp,
+  verificarNumeroEnWhitelist,
+  enviarMensajeWhatsApp,
+  procesarComandoWhatsApp,
+  procesarWebhookPostWhatsApp
+} from './frontend/src/core/whatsappCloudService.js';
+
+// ============================================================================
+// 57. PRUEBAS DE FLUJO ENTER EN CUADRÍCULA MASIVA, DESTETES CON MADRE+CRÍA,
+//     UN ORDEÑO VS DOBLE ORDEÑO POR FINCA Y WHATSAPP CLOUD API DE META
+// ============================================================================
+console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños y WhatsApp Cloud API ---');
+{
+  const animalesMangaTest = [
+    {
+      id: 'ANM-VACA-045',
+      fincaId: 'FIN-ORD-1',
+      identificacionTag: '045',
+      nombre: 'Reina',
+      especie: 'bufalino',
+      sexo: 'hembra',
+      categoria: 'vaca',
+      estadoReproductivo: 'Preñada',
+      diasGestacion: 120,
+      ultimoPesoKg: 480,
+      fechaUltimoPesaje: '2026-09-01',
+      lote: 'Ordeño 1',
+      pesajes: [],
+      historialEventos: []
+    },
+    {
+      id: 'ANM-CRIA-045C',
+      fincaId: 'FIN-ORD-1',
+      identificacionTag: '045-C',
+      nombre: 'Bucerro 045',
+      especie: 'bufalino',
+      sexo: 'macho',
+      categoria: 'cria',
+      madreTag: '045',
+      ultimoPesoKg: 140,
+      fechaUltimoPesaje: '2026-09-01',
+      lote: 'Crías',
+      pesajes: [],
+      historialEventos: []
+    }
+  ];
+
+  let fincaConfigOrdeno = { id: 'FIN-ORD-1', nombre: 'Hacienda Bufalera', numeroOrdenos: 1 };
+  let ultimoGuardadoIndividual = null;
+
+  const gridEnterTest = new CuadriculaMasiva({
+    containerId: 'grid-enter-test',
+    getAnimales: () => animalesMangaTest,
+    getLotes: () => ['Ordeño 1', 'Levante', 'Crías'],
+    getFincaActiva: () => fincaConfigOrdeno,
+    onGuardarOperacion: () => {},
+    onGuardarRegistroIndividual: (payload) => {
+      ultimoGuardadoIndividual = payload;
+    }
+  });
+  gridEnterTest.container = new MockDomElement('grid-enter-test');
+
+  // 57.1: Secuencia de selectores navegables con Enter en todas las opciones de Cuadrícula Masiva
+  gridEnterTest.animalSeleccionado = animalesMangaTest[0];
+  gridEnterTest.moduloActivo = 'pesajes';
+  const selPesajes = gridEnterTest.obtenerSelectoresNavegablesModulo();
+  gridEnterTest.moduloActivo = 'destetes';
+  const selDestetes = gridEnterTest.obtenerSelectoresNavegablesModulo();
+  gridEnterTest.moduloActivo = 'leche';
+  const selLeche1Ord = gridEnterTest.obtenerSelectoresNavegablesModulo();
+  fincaConfigOrdeno.numeroOrdenos = 2;
+  const selLeche2Ord = gridEnterTest.obtenerSelectoresNavegablesModulo();
+
+  test(
+    selPesajes[0] === '#form-peso-fecha' &&
+    selPesajes.includes('#form-nuevo-peso') &&
+    selDestetes[0] === '#form-destete-fecha' &&
+    selDestetes.includes('#form-destete-peso-madre') &&
+    selDestetes.includes('#form-destete-peso') &&
+    selLeche1Ord.includes('#form-leche-am') &&
+    !selLeche1Ord.includes('#form-leche-pm') &&
+    selLeche2Ord.includes('#form-leche-am') &&
+    selLeche2Ord.includes('#form-leche-pm'),
+    'CuadriculaMasiva (Tecla Enter): Define orden secuencial exacto (Fecha -> Datos -> Guardar) adaptándose a 1 o 2 ordeños'
+  );
+
+  // 57.2: Simulación de avance paso a paso con Enter hasta guardar y devolver cursor a #input-tag-manga
+  gridEnterTest.moduloActivo = 'pesajes';
+  gridEnterTest.animalSeleccionado = animalesMangaTest[0];
+  gridEnterTest.fechaJornada = '2026-10-15';
+
+  const mockInputsMap = {};
+  let focusedSelector = null;
+  ['#form-peso-fecha', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas', '#input-tag-manga'].forEach((sel) => {
+    mockInputsMap[sel] = {
+      id: sel.replace('#', ''),
+      value: sel === '#form-peso-fecha' ? '2026-10-15' : (sel === '#form-nuevo-peso' ? '505' : (sel === '#form-condicion' ? '3.75' : '')),
+      offsetParent: {},
+      focus: () => { focusedSelector = sel; },
+      select: () => {},
+      addEventListener: () => {}
+    };
+  });
+
+  gridEnterTest.container.querySelector = (sel) => mockInputsMap[sel] || new MockDomElement();
+  gridEnterTest.enfocarPrimerCampoFormulario();
+  const primerFocoEsFecha = focusedSelector === '#form-peso-fecha';
+
+  gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-peso-fecha']);
+  const segundoFocoEsPeso = focusedSelector === '#form-nuevo-peso';
+
+  gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-nuevo-peso']);
+  const tercerFocoEsCondicion = focusedSelector === '#form-condicion';
+
+  gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-condicion']);
+  const cuartoFocoEsNotas = focusedSelector === '#form-peso-notas';
+
+  // Enter en el último campo guarda el registro y regresa el cursor a #input-tag-manga
+  gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-peso-notas']);
+
+  test(
+    primerFocoEsFecha &&
+    segundoFocoEsPeso &&
+    tercerFocoEsCondicion &&
+    cuartoFocoEsNotas &&
+    ultimoGuardadoIndividual !== null &&
+    ultimoGuardadoIndividual.registros[0].pesoNuevo === 505,
+    'CuadriculaMasiva (Sin Mouse): Avanza con Enter por Fecha -> Peso -> CC -> Notas y al final guarda automáticamente'
+  );
+
+  // 57.3: Control Leche con 1 Ordeño (1 casilla) vs Doble Ordeño (2 casillas)
+  gridEnterTest.moduloActivo = 'leche';
+  gridEnterTest.animalSeleccionado = animalesMangaTest[0];
+
+  fincaConfigOrdeno.numeroOrdenos = 1;
+  const htmlLecheUnOrdeno = gridEnterTest.obtenerHtmlFormularioIngreso();
+
+  fincaConfigOrdeno.numeroOrdenos = 2;
+  const htmlLecheDobleOrdeno = gridEnterTest.obtenerHtmlFormularioIngreso();
+
+  test(
+    htmlLecheUnOrdeno.includes('id="form-leche-am"') &&
+    !htmlLecheUnOrdeno.includes('id="form-leche-pm"') &&
+    htmlLecheUnOrdeno.includes('Un Ordeño (1 Casilla)') &&
+    htmlLecheDobleOrdeno.includes('id="form-leche-am"') &&
+    htmlLecheDobleOrdeno.includes('id="form-leche-pm"') &&
+    htmlLecheDobleOrdeno.includes('Doble Ordeño (2 Casillas)'),
+    'CuadriculaMasiva (Pesaje de Leche): Muestra 1 casilla en fincas de Un Ordeño y 2 casillas (AM y PM) en fincas de Doble Ordeño'
+  );
+
+  // 57.4: Registro de Destete solicitando Peso de la Vaca + Peso del Ternero + Relación Madre-Cría
+  gridEnterTest.moduloActivo = 'destetes';
+  gridEnterTest.animalSeleccionado = animalesMangaTest[1]; // Seleccionamos la cría 045-C (cuya madre es 045)
+  const htmlDesteteCria = gridEnterTest.obtenerHtmlFormularioIngreso();
+
+  test(
+    htmlDesteteCria.includes('id="form-destete-peso-madre"') &&
+    htmlDesteteCria.includes('id="form-destete-peso"') &&
+    htmlDesteteCria.includes('id="form-destete-madre-tag"') &&
+    htmlDesteteCria.includes('value="045"') &&
+    htmlDesteteCria.includes('value="480"'),
+    'CuadriculaMasiva (Destete): Solicita Peso de la Vaca, Peso del Ternero y vincula automáticamente la Cría con su Madre'
+  );
+
+  // Verificar actualización en BoviTrackApp.guardarOperacionGrid para ambos animales (Vaca y Cría)
+  const appDesteteTest = Object.create(BoviTrackApp.prototype);
+  appDesteteTest.guardarEstado = () => {};
+  appDesteteTest.sincronizarConSupabaseDebounced = () => {};
+  appDesteteTest.renderVistaActual = () => {};
+  appDesteteTest.actualizarHeader = () => {};
+  appDesteteTest.state = {
+    usuarioActual: { id: 'USR-1', rol: 'administrador', nombre: 'Admin' },
+    fincaActivaId: 'FIN-ORD-1',
+    fincas: [{ id: 'FIN-ORD-1', nombre: 'Hacienda Bufalera', numeroOrdenos: 1 }],
+    animales: JSON.parse(JSON.stringify(animalesMangaTest)),
+    pesajes: [],
+    eventos: []
+  };
+
+  appDesteteTest.guardarOperacionGrid({
+    modulo: 'destetes',
+    silencioso: true,
+    registros: [{
+      animalId: 'ANM-CRIA-045C',
+      tag: '045-C',
+      criaTag: '045-C',
+      madreTag: '045',
+      fecha: '2026-10-20',
+      pesoTernero: 185,
+      pesoDestete: 185,
+      pesoMadre: 512,
+      pesoVaca: 512,
+      loteDestino: 'Levante',
+      observaciones: 'Destete exitoso'
+    }]
+  });
+
+  const vacaPostDestete = appDesteteTest.state.animales.find(a => a.identificacionTag === '045');
+  const criaPostDestete = appDesteteTest.state.animales.find(a => a.identificacionTag === '045-C');
+
+  test(
+    criaPostDestete.ultimoPesoKg === 185 &&
+    criaPostDestete.pesoDesteteKg === 185 &&
+    criaPostDestete.madreTag === '045' &&
+    criaPostDestete.lote === 'Levante' &&
+    vacaPostDestete.ultimoPesoKg === 512 &&
+    vacaPostDestete.historialEventos.some(e => e.tipo === 'destete' && e.criaTag === '045-C' && e.pesoTernero === 185),
+    'BoviTrackApp (Destete Madre+Cría): Actualiza peso de la vaca (512 kg), peso del ternero (185 kg) y vincula madre ↔ cría en historial'
+  );
+
+  // 57.5: Integración Bidireccional con API Oficial de WhatsApp Cloud de Meta
+  const envMockWA = {
+    WHATSAPP_VERIFY_TOKEN: 'token_secreto_ganadero_test',
+    WHATSAPP_ACCESS_TOKEN: 'EAAG_MOCK_TOKEN_12345',
+    WHATSAPP_PHONE_NUMBER_ID: '9988776655',
+    WHATSAPP_AUTHORIZED_NUMBERS: '573001112233,573104445566'
+  };
+
+  // GET Verification
+  const verifOk = verificarWebhookWhatsApp({
+    'hub.mode': 'subscribe',
+    'hub.verify_token': 'token_secreto_ganadero_test',
+    'hub.challenge': 'CHALLENGE_META_98765'
+  }, envMockWA);
+
+  const verifFail = verificarWebhookWhatsApp({
+    'hub.mode': 'subscribe',
+    'hub.verify_token': 'token_incorrecto',
+    'hub.challenge': 'CHALLENGE_META_98765'
+  }, envMockWA);
+
+  test(
+    verifOk.status === 200 && verifOk.body === 'CHALLENGE_META_98765' && verifFail.status === 403,
+    'WhatsApp Cloud Webhook (GET): Valida hub.mode, hub.verify_token y retorna hub.challenge en texto plano'
+  );
+
+  // Whitelist verification
+  test(
+    verificarNumeroEnWhitelist('+57 300 111 2233', envMockWA) === true &&
+    verificarNumeroEnWhitelist('573990000000', envMockWA) === false,
+    'WhatsApp Cloud Webhook (Seguridad Whitelist): Autoriza números en whitelist y bloquea remitentes desconocidos'
+  );
+
+  // Mock DB & Fetch para probar comandos INFO, PESO y enviarMensajeWhatsApp
+  const dbAnimalesMock = {
+    '045': {
+      id: 'ANM-VACA-045',
+      finca_id: 'FIN-ORD-1',
+      identificacion_tag: '045',
+      nombre: 'Reina',
+      especie: 'bufalino',
+      estado_reproductivo: 'Preñada',
+      dias_gestacion: 120,
+      ultimo_peso_kg: 480,
+      fecha_ultimo_pesaje: '2026-09-01',
+      lote: 'Ordeño 1'
+    }
+  };
+  const pesajesInsertadosDB = [];
+
+  const dbAdapterMock = {
+    async consultarAnimalPorTag(tag) {
+      return dbAnimalesMock[tag] || null;
+    },
+    async registrarPesoAnimal(tag, pesoKg, fecha) {
+      const animal = dbAnimalesMock[tag];
+      if (!animal) return { exito: false, motivo: 'NO_ENCONTRADO' };
+      const pesoAnterior = animal.ultimo_peso_kg;
+      animal.ultimo_peso_kg = pesoKg;
+      animal.fecha_ultimo_pesaje = fecha;
+      pesajesInsertadosDB.push({ tag, pesoKg, fecha });
+      return { exito: true, animal, pesoAnterior, pesoNuevo: pesoKg, fecha };
+    }
+  };
+
+  const llamadasGraphAPI = [];
+  const mockFetchMeta = async (url, options) => {
+    llamadasGraphAPI.push({ url, options, body: JSON.parse(options.body) });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ messages: [{ id: 'wamid.HBgMNTczMDAxMTEyMjMz' }] })
+    };
+  };
+
+  // Petición POST desde número NO autorizado -> retorna 200 sin ejecutar DB ni enviar WhatsApp
+  const payloadNoAutorizado = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{ from: '573999999999', type: 'text', text: { body: 'INFO 045' } }]
+        }
+      }]
+    }]
+  };
+  const resNoAuth = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
+    env: envMockWA,
+    dbAdapter: dbAdapterMock,
+    fetchImpl: mockFetchMeta
+  });
+
+  test(
+    resNoAuth.status === 200 &&
+    resNoAuth.body.ignored === true &&
+    llamadasGraphAPI.length === 0,
+    'WhatsApp Cloud Webhook (POST Whitelist): Número no autorizado retorna HTTP 200 inmediatamente sin procesar ni enviar mensajes'
+  );
+
+  // Petición POST con comando "INFO 045" desde número autorizado
+  const payloadInfo = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{ from: '573001112233', type: 'text', text: { body: 'INFO 045' } }]
+        }
+      }]
+    }]
+  };
+  const resInfo = await procesarWebhookPostWhatsApp(payloadInfo, {
+    env: envMockWA,
+    dbAdapter: dbAdapterMock,
+    fetchImpl: mockFetchMeta
+  });
+
+  test(
+    resInfo.status === 200 &&
+    llamadasGraphAPI.length === 1 &&
+    llamadasGraphAPI[0].url === 'https://graph.facebook.com/v17.0/9988776655/messages' &&
+    llamadasGraphAPI[0].body.to === '573001112233' &&
+    llamadasGraphAPI[0].body.text.body.includes('045') &&
+    llamadasGraphAPI[0].body.text.body.includes('Preñada'),
+    'WhatsApp Cloud Webhook (Comando INFO 045): Consulta base de datos y responde estado reproductivo vía Graph API v17.0'
+  );
+
+  // Petición POST con comando "PESO 045 350" desde número autorizado
+  const payloadPeso = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{ from: '573001112233', type: 'text', text: { body: 'PESO 045 350' } }]
+        }
+      }]
+    }]
+  };
+  const resPeso = await procesarWebhookPostWhatsApp(payloadPeso, {
+    env: envMockWA,
+    dbAdapter: dbAdapterMock,
+    fetchImpl: mockFetchMeta
+  });
+
+  test(
+    resPeso.status === 200 &&
+    pesajesInsertadosDB.length === 1 &&
+    pesajesInsertadosDB[0].tag === '045' &&
+    pesajesInsertadosDB[0].pesoKg === 350 &&
+    dbAnimalesMock['045'].ultimo_peso_kg === 350 &&
+    llamadasGraphAPI.length === 2 &&
+    llamadasGraphAPI[1].body.text.body.includes('350 kg'),
+    'WhatsApp Cloud Webhook (Comando PESO 045 350): Inserta pesaje en base de datos, actualiza animal y envía confirmación por WhatsApp'
+  );
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

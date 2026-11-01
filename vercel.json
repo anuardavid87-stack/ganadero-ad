@@ -14,7 +14,7 @@
       "destination": "/$1"
     },
     {
-      "source": "/((?!.*\\.[\\w]+$).*)",
+      "source": "/((?!api/|.*\\.[\\w]+$).*)",
       "destination": "/index.html"
     }
   ],
