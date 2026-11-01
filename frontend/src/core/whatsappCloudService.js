@@ -15,6 +15,56 @@
  */
 
 const DEFAULT_SUPABASE_URL = 'https://rrhpEWwJ5-supabase-placeholder.supabase.co';
+const WHATSAPP_STORAGE_KEY = 'bovitrack_whatsapp_cloud_config_v1';
+
+/**
+ * Obtiene la configuración de WhatsApp Cloud API almacenada en el programa (localStorage).
+ */
+export function obtenerConfigWhatsAppLocal() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(WHATSAPP_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          phoneNumberId: String(parsed.phoneNumberId || '').trim(),
+          accessToken: String(parsed.accessToken || '').trim(),
+          verifyToken: String(parsed.verifyToken || 'ganadero_ad_verify_2026').trim(),
+          authorizedNumbers: String(parsed.authorizedNumbers || '573001234567, 573109876543').trim()
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[WhatsApp Config] Error leyendo configuración local:', e);
+  }
+  return {
+    phoneNumberId: '',
+    accessToken: '',
+    verifyToken: 'ganadero_ad_verify_2026',
+    authorizedNumbers: '573001234567, 573109876543'
+  };
+}
+
+/**
+ * Guarda la configuración de WhatsApp Cloud API en el programa (localStorage).
+ */
+export function guardarConfigWhatsAppLocal(cfg = {}) {
+  const clean = {
+    phoneNumberId: String(cfg.phoneNumberId || '').trim(),
+    accessToken: String(cfg.accessToken || '').trim(),
+    verifyToken: String(cfg.verifyToken || 'ganadero_ad_verify_2026').trim(),
+    authorizedNumbers: String(cfg.authorizedNumbers || '').trim(),
+    actualizadoEn: new Date().toISOString()
+  };
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(WHATSAPP_STORAGE_KEY, JSON.stringify(clean));
+    }
+  } catch (e) {
+    console.warn('[WhatsApp Config] Error guardando configuración local:', e);
+  }
+  return clean;
+}
 
 /**
  * Arreglo base de números de teléfono autorizados (Whitelist).

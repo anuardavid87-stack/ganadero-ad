@@ -1721,6 +1721,7 @@ class BoviTrackApp {
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       getFincaActiva: () => this.getFincaActiva(),
+      onActualizarOrdenoFinca: (fincaId, numOrd) => this.actualizarOrdenoFinca(fincaId, numOrd),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
       onGuardarRegistroIndividual: (data) => this.guardarOperacionGrid(data),
       onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
@@ -1903,7 +1904,20 @@ class BoviTrackApp {
         return (this.state.operacionesDiarias || []).filter((o) => o && (!o.fincaId || fIds.has(o.fincaId)));
       },
       onExportarBackupExcel: async () => await this.exportarCopiaSeguridadCompleta('xlsx'),
-      onExportarBackupJSON: async () => await this.exportarCopiaSeguridadCompleta('json')
+      onExportarBackupJSON: async () => await this.exportarCopiaSeguridadCompleta('json'),
+      onRegistrarPesoWhatsAppLocal: ({ tag, pesoKg, fecha }) => {
+        this.guardarOperacionGrid({
+          modulo: 'pesajes',
+          silencioso: true,
+          registros: [{
+            tag: String(tag || '').trim().toUpperCase(),
+            pesoNuevo: Number(pesoKg),
+            fecha: fecha || new Date().toISOString().split('T')[0],
+            condicionCorporal: '3.5',
+            observaciones: 'Pesaje registrado vía WhatsApp Cloud API'
+          }]
+        });
+      }
     });
 
     // 9. Módulo de Reproducción (IA / TE / Monta con Toro)

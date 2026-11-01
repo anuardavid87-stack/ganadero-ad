@@ -17,6 +17,13 @@ import {
   generarInformeHatoGemini,
   obtenerModeloGeminiActivo
 } from '../core/nutricionIA.js';
+import {
+  obtenerConfigWhatsAppLocal,
+  guardarConfigWhatsAppLocal,
+  verificarNumeroEnWhitelist,
+  procesarComandoWhatsApp,
+  enviarMensajeWhatsApp
+} from '../core/whatsappCloudService.js';
 import { formatearFecha } from '../core/zootecnia.js';
 
 export class ModuloAdmin {
@@ -67,6 +74,7 @@ export class ModuloAdmin {
     onPullSupabase,
     onExportarBackupExcel,
     onExportarBackupJSON,
+    onRegistrarPesoWhatsAppLocal,
     getPesajes,
     getOperaciones
   }) {
@@ -93,6 +101,9 @@ export class ModuloAdmin {
 
     this.onExportarBackupExcel = onExportarBackupExcel;
     this.onExportarBackupJSON = onExportarBackupJSON;
+    this.onRegistrarPesoWhatsAppLocal = onRegistrarPesoWhatsAppLocal || null;
+    this.whatsappHistorialSimulador = [];
+    this.whatsappFeedback = null;
 
     this.onSeleccionarEmpresa = onSeleccionarEmpresa;
     this.onSeleccionarFinca = onSeleccionarFinca;
@@ -292,7 +303,7 @@ export class ModuloAdmin {
         </div>
 
         <!-- PESTAÑAS DE NAVEGACIÓN ADMINISTRATIVA -->
-        <div class="grid grid-cols-2 sm:grid-cols-7 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="empresas">
             <span>🏢</span> Empresas & Fincas
           </button>
@@ -301,6 +312,9 @@ export class ModuloAdmin {
           </button>
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="finanzas">
             <span>💰</span> Precios & Costos
+          </button>
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'whatsapp' ? 'bg-gradient-to-r from-emerald-800 to-green-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-400/40' : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'} cursor-pointer" data-sec="whatsapp">
+            <span>💬</span> WhatsApp API
           </button>
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
             <span>✨</span> IA Gemini
@@ -343,6 +357,8 @@ export class ModuloAdmin {
       return this.renderSeccionUsuarios(usuarios, empresas, fincas, esSuperAdmin, esAdmin, esConsultor);
     } else if (this.seccion === 'finanzas') {
       return this.renderSeccionFinanzas(fincas, fincaActiva, costos, inversiones, esAdmin, esConsultor);
+    } else if (this.seccion === 'whatsapp') {
+      return this.renderSeccionWhatsApp(fincaActiva);
     } else if (this.seccion === 'gemini') {
       return this.renderSeccionGemini(fincas, fincaActiva, esAdmin);
     } else if (this.seccion === 'backup') {
@@ -4165,6 +4181,363 @@ END $$;
         }
       });
     }
+
+    // ========================================================================
+    // EVENTOS DE CONFIGURACIÓN Y SIMULADOR BIDIRECCIONAL DE WHATSAPP CLOUD API
+    // ========================================================================
+    const formWhatsAppCfg = this.container.querySelector('#form-whatsapp-cloud-config');
+    if (formWhatsAppCfg) {
+      formWhatsAppCfg.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const phoneNumberId = (this.container.querySelector('#wa-phone-id')?.value || '').trim();
+        const accessToken = (this.container.querySelector('#wa-access-token')?.value || '').trim();
+        const verifyToken = (this.container.querySelector('#wa-verify-token')?.value || 'ganadero_ad_verify_2026').trim();
+        const authorizedNumbers = (this.container.querySelector('#wa-authorized-numbers')?.value || '').trim();
+
+        const guardada = guardarConfigWhatsAppLocal({
+          phoneNumberId,
+          accessToken,
+          verifyToken,
+          authorizedNumbers
+        });
+
+        // También sincronizar en Supabase si el servicio está configurado
+        const supa = this.getSupabaseService ? this.getSupabaseService() : null;
+        if (supa && typeof supa.estaConfigurado === 'function' && supa.estaConfigurado()) {
+          try {
+            await supa._postgrestUpsert('operaciones_diarias', [{
+              id: 'SYS_WHATSAPP_CONFIG',
+              empresa_id: null,
+              fecha: new Date().toISOString().split('T')[0],
+              finca_id: null,
+              finca_nombre: 'SISTEMA',
+              accion: 'SYS_WHATSAPP_CONFIG',
+              modulo: 'whatsapp_cloud',
+              detalles: guardada,
+              usuario: 'Admin'
+            }], 'id', 8000);
+          } catch (err) {
+            console.warn('[WhatsApp Cloud] Aviso sincronizando configuración en Supabase:', err.message);
+          }
+        }
+
+        this.whatsappFeedback = {
+          tipo: 'ok',
+          mensaje: '✅ Configuración de WhatsApp Cloud API (Tokens y Whitelist) guardada exitosamente en el programa.'
+        };
+        this.render();
+      });
+    }
+
+    const btnCopiarWebhookUrl = this.container.querySelector('#btn-copiar-webhook-wa');
+    if (btnCopiarWebhookUrl) {
+      btnCopiarWebhookUrl.addEventListener('click', async () => {
+        const urlEl = this.container.querySelector('#wa-webhook-url-input');
+        const val = urlEl ? urlEl.value : 'https://ganadero-ad.vercel.app/api/whatsapp';
+        try {
+          if (navigator.clipboard) await navigator.clipboard.writeText(val);
+          btnCopiarWebhookUrl.textContent = '✅ URL Copiada';
+          setTimeout(() => { btnCopiarWebhookUrl.textContent = '📋 Copiar URL'; }, 2000);
+        } catch (err) {
+          alert(`URL del Webhook: ${val}`);
+        }
+      });
+    }
+
+    // Simulador en vivo de comandos WhatsApp ("INFO 045" / "PESO 045 350")
+    const formSimuladorWA = this.container.querySelector('#form-simulador-whatsapp');
+    if (formSimuladorWA) {
+      formSimuladorWA.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const remitente = (this.container.querySelector('#wa-sim-remitente')?.value || '').trim();
+        const textoComando = (this.container.querySelector('#wa-sim-mensaje')?.value || '').trim();
+        if (!textoComando) return;
+
+        const cfg = obtenerConfigWhatsAppLocal();
+        const listaWhitelist = String(cfg.authorizedNumbers || '')
+          .split(',')
+          .map((n) => n.replace(/[^\d]/g, '').trim())
+          .filter(Boolean);
+
+        // Validar Whitelist si hay números configurados
+        const autorizado = verificarNumeroEnWhitelist(remitente, listaWhitelist.length > 0 ? listaWhitelist : null);
+        if (!autorizado) {
+          this.whatsappHistorialSimulador.unshift({
+            hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            remitente,
+            entrante: textoComando,
+            autorizado: false,
+            respuesta: '⛔ [Status 200 - Ignorado por Seguridad Whitelist]: El número remitente NO está en la lista de teléfonos autorizados.'
+          });
+          this.render();
+          return;
+        }
+
+        // Adaptador conectado a los animales reales de la finca activa en la app
+        const animalesFinca = this.getAnimales ? this.getAnimales() : [];
+        const todosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : animalesFinca;
+        const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+        const poolBusqueda = fincaAct
+          ? todosAnimales.filter((a) => a && a.fincaId === fincaAct.id)
+          : todosAnimales;
+
+        const dbLocalAdapter = {
+          consultarAnimalPorId: async (idAnimal) => {
+            const buscado = String(idAnimal || '').trim().toUpperCase();
+            return poolBusqueda.find(
+              (a) => String(a.identificacionTag || a.numero || '').trim().toUpperCase() === buscado
+            ) || null;
+          },
+          registrarPesoAnimal: async ({ idAnimal, pesoKg, fecha }) => {
+            const buscado = String(idAnimal || '').trim().toUpperCase();
+            const fechaHoy = fecha || new Date().toISOString().split('T')[0];
+            if (this.onRegistrarPesoWhatsAppLocal) {
+              this.onRegistrarPesoWhatsAppLocal({ tag: buscado, pesoKg, fecha: fechaHoy });
+            }
+            return {
+              ok: true,
+              tag: buscado,
+              pesoKg,
+              fecha: fechaHoy
+            };
+          }
+        };
+
+        const resCmd = await procesarComandoWhatsApp(textoComando, dbLocalAdapter, remitente);
+        this.whatsappHistorialSimulador.unshift({
+          hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          remitente,
+          entrante: textoComando,
+          autorizado: true,
+          respuesta: resCmd.respuestaTexto
+        });
+        this.render();
+      });
+    }
+
+    // Botones rápidos de ejemplo en el simulador ("INFO ..." / "PESO ...")
+    this.container.querySelectorAll('.btn-wa-ejemplo-cmd').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.getAttribute('data-cmd') || '';
+        const inputMsg = this.container.querySelector('#wa-sim-mensaje');
+        if (inputMsg) {
+          inputMsg.value = cmd;
+          inputMsg.focus();
+        }
+      });
+    });
+
+    // Envío de mensaje saliente real hacia Meta Graph API v17.0
+    const formEnvioRealWA = this.container.querySelector('#form-envio-real-whatsapp');
+    if (formEnvioRealWA) {
+      formEnvioRealWA.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const destino = (this.container.querySelector('#wa-real-destino')?.value || '').trim();
+        const texto = (this.container.querySelector('#wa-real-texto')?.value || '').trim();
+        const cfg = obtenerConfigWhatsAppLocal();
+
+        if (!cfg.phoneNumberId || !cfg.accessToken) {
+          this.whatsappFeedback = {
+            tipo: 'error',
+            mensaje: '⚠️ Primero ingresa y guarda tu WHATSAPP_PHONE_NUMBER_ID y WHATSAPP_ACCESS_TOKEN arriba para enviar mensajes reales a Meta API.'
+          };
+          this.render();
+          return;
+        }
+
+        const resEnvio = await enviarMensajeWhatsApp(destino, texto, {
+          phoneNumberId: cfg.phoneNumberId,
+          accessToken: cfg.accessToken
+        });
+
+        if (resEnvio.ok) {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Mensaje enviado exitosamente a +${destino} mediante Meta Graph API v17.0.`
+          };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'error',
+            mensaje: `❌ Error de Meta API: ${resEnvio.error || 'Verifica tu Token y Phone Number ID.'}`
+          };
+        }
+        this.render();
+      });
+    }
+  }
+
+  renderSeccionWhatsApp(fincaActiva) {
+    const cfg = obtenerConfigWhatsAppLocal();
+    const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+      ? window.location.origin
+      : 'https://ganadero-ad.vercel.app';
+    const webhookUrl = `${originUrl}/api/whatsapp`;
+
+    const animalesFinca = (this.getTodosLosAnimales ? this.getTodosLosAnimales() : []).filter(
+      (a) => !fincaActiva || a.fincaId === fincaActiva.id
+    );
+    const primerTagEjemplo = animalesFinca.length > 0
+      ? (animalesFinca[0].identificacionTag || '045')
+      : '045';
+    const primerTelAutorizado = (cfg.authorizedNumbers || '573001234567').split(',')[0].trim() || '573001234567';
+
+    return `
+      <div class="space-y-6">
+        <!-- CABECERA EXPLICATIVA -->
+        <div class="bg-gradient-to-r from-emerald-950 via-green-900 to-slate-900 text-white p-5 rounded-2xl border border-emerald-700 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">💬</span>
+              <h4 class="text-base sm:text-lg font-black">Integración Bidireccional con WhatsApp Cloud API (Meta)</h4>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">Graph API v17.0</span>
+            </div>
+            <p class="text-xs text-emerald-100/90 max-w-2xl">
+              Aquí puedes ingresar tus tokens de Meta, configurar la lista blanca (Whitelist) de teléfonos autorizados y probar los comandos <strong>INFO &lt;ID&gt;</strong> y <strong>PESO &lt;ID&gt; &lt;KG&gt;</strong> directamente con los animales de tu finca activa (<strong>${fincaActiva ? fincaActiva.nombre : 'Todas'}</strong>).
+            </p>
+          </div>
+        </div>
+
+        ${this.whatsappFeedback ? `
+          <div class="p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${this.whatsappFeedback.tipo === 'ok' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'}">
+            <span>${this.whatsappFeedback.mensaje}</span>
+          </div>
+        ` : ''}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- COLUMNA 1: FORMULARIO PARA INGRESAR TOKENS, URL WEBHOOK Y WHITELIST -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <h5 class="text-sm font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2.5">
+              <span>🔑</span> 1. Ingresar Credenciales de Meta & Números Autorizados (Whitelist)
+            </h5>
+
+            <!-- URL DEL WEBHOOK PARA COPIAR EN META DEVELOPERS -->
+            <div class="p-3 bg-white rounded-xl border border-emerald-200 space-y-1.5">
+              <label class="block text-[11px] font-black uppercase text-emerald-900">
+                🌐 URL del Endpoint Webhook (Para pegar en Meta App Dashboard):
+              </label>
+              <div class="flex items-center gap-2">
+                <input type="text" id="wa-webhook-url-input" readonly value="${webhookUrl}" class="w-full px-3 py-2 bg-slate-100 text-slate-800 font-mono text-xs font-bold rounded-lg border border-slate-300 outline-none">
+                <button type="button" id="btn-copiar-webhook-wa" class="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg whitespace-nowrap cursor-pointer transition">
+                  📋 Copiar URL
+                </button>
+              </div>
+              <span class="text-[10px] text-slate-500 block">Soporta verificación <strong>GET</strong> (<code>hub.mode</code>, <code>hub.verify_token</code>, <code>hub.challenge</code>) y recepción de mensajes <strong>POST</strong>.</span>
+            </div>
+
+            <form id="form-whatsapp-cloud-config" class="space-y-3.5">
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">
+                  📱 Phone Number ID (<code>WHATSAPP_PHONE_NUMBER_ID</code>):
+                </label>
+                <input type="text" id="wa-phone-id" value="${cfg.phoneNumberId}" placeholder="Ej. 109876543210987" class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">
+                  🔐 Token de Acceso de Meta (<code>WHATSAPP_ACCESS_TOKEN</code>):
+                </label>
+                <input type="password" id="wa-access-token" value="${cfg.accessToken}" placeholder="EAAGm0PX4ZCpsBA..." class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">
+                  🛡️ Token de Verificación del Webhook (<code>WHATSAPP_VERIFY_TOKEN</code>):
+                </label>
+                <input type="text" id="wa-verify-token" value="${cfg.verifyToken}" placeholder="Ej. ganadero_ad_verify_2026" class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">
+                  ✅ Números de Teléfono Autorizados - Whitelist (Separados por coma):
+                </label>
+                <textarea id="wa-authorized-numbers" rows="2" placeholder="Ej. 573001234567, 573109876543" class="w-full px-3 py-2 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">${cfg.authorizedNumbers}</textarea>
+                <span class="text-[10px] text-slate-500 block mt-0.5">
+                  Si un número NO está en esta lista, el webhook retorna <strong>Status 200</strong> sin ejecutar nada en la base de datos.
+                </span>
+              </div>
+
+              <button type="submit" class="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2">
+                <span>💾</span> Guardar Datos de WhatsApp Cloud API
+              </button>
+            </form>
+          </div>
+
+          <!-- COLUMNA 2: SIMULADOR INTERACTIVO EN VIVO (COMANDOS INFO Y PESO) -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 flex flex-col justify-between">
+            <div class="space-y-4">
+              <h5 class="text-sm font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2.5">
+                <span>🤖</span> 2. Probar Comandos "INFO" y "PESO" en Tiempo Real
+              </h5>
+
+              <p class="text-xs text-slate-600 leading-relaxed">
+                Prueba aquí mismo cómo responde el bot consultando o registrando pesos reales sobre tu inventario de <strong>${fincaActiva ? fincaActiva.nombre : 'tu finca'}</strong> (${animalesFinca.length} animales disponibles):
+              </p>
+
+              <!-- BOTONES RÁPIDOS DE PRUEBA -->
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-bold text-slate-500">Clic para rellenar ejemplo:</span>
+                <button type="button" data-cmd="INFO ${primerTagEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
+                  INFO ${primerTagEjemplo}
+                </button>
+                <button type="button" data-cmd="PESO ${primerTagEjemplo} 350" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
+                  PESO ${primerTagEjemplo} 350
+                </button>
+              </div>
+
+              <form id="form-simulador-whatsapp" class="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">📞 Teléfono Remitente:</label>
+                    <input type="text" id="wa-sim-remitente" value="${primerTelAutorizado}" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 outline-none">
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">💬 Mensaje WhatsApp (INFO o PESO):</label>
+                    <div class="flex gap-2">
+                      <input type="text" id="wa-sim-mensaje" value="INFO ${primerTagEjemplo}" placeholder="Ej. INFO 045 o PESO 045 350" class="w-full px-3 py-2 text-xs font-mono font-black text-emerald-950 bg-emerald-50/60 rounded-lg border-2 border-emerald-400 outline-none">
+                      <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-lg shadow whitespace-nowrap cursor-pointer">
+                        ▶️ Enviar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              <!-- CONSOLA DE RESPUESTAS DEL BOT -->
+              <div class="bg-slate-900 text-slate-100 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-60 overflow-y-auto font-mono text-xs">
+                ${this.whatsappHistorialSimulador.length > 0 ? this.whatsappHistorialSimulador.map((item) => `
+                  <div class="p-2.5 rounded-lg ${item.autorizado ? 'bg-slate-800 border border-emerald-500/40' : 'bg-rose-950/60 border border-rose-500/40'} space-y-1">
+                    <div class="flex justify-between text-[10px] text-slate-400">
+                      <span>📱 De: +${item.remitente}</span>
+                      <span>🕒 ${item.hora}</span>
+                    </div>
+                    <div class="text-emerald-300 font-bold">➔ Recibido: "${item.entrante}"</div>
+                    <div class="text-white whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
+                  </div>
+                `).join('') : `
+                  <div class="text-slate-400 text-center py-4">
+                    Escribe <strong>INFO ${primerTagEjemplo}</strong> o <strong>PESO ${primerTagEjemplo} 350</strong> arriba y presiona <strong>▶️ Enviar</strong> para ver la respuesta del bot en vivo.
+                  </div>
+                `}
+              </div>
+            </div>
+
+            <!-- ENVÍO DE MENSAJE SALIENTE REAL VÍA META GRAPH API -->
+            <form id="form-envio-real-whatsapp" class="pt-3 border-t border-slate-200 space-y-2">
+              <label class="block text-xs font-black text-slate-800">
+                📤 3. Probar Envío Saliente Real (<code>enviarMensajeWhatsApp</code> a Meta API v17.0):
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input type="text" id="wa-real-destino" value="${primerTelAutorizado}" placeholder="Número destino (ej. 57300...)" class="px-3 py-2 bg-white text-xs font-mono rounded-lg border border-slate-300 outline-none">
+                <input type="text" id="wa-real-texto" value="Hola desde Ganadero AD" placeholder="Mensaje a enviar..." class="px-3 py-2 bg-white text-xs rounded-lg border border-slate-300 outline-none">
+                <button type="submit" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-lg cursor-pointer transition">
+                  🚀 Enviar a WhatsApp Real
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   vincularEventosFincasAsignadas(modo) {

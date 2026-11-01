@@ -9,13 +9,14 @@ import { auditarPesajeInput, auditarPalpacionInput, auditarPartoInput } from '..
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, onGuardarRegistroIndividual, getAnimales, getLotes, getFincaActiva, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
+  constructor({ containerId, onGuardarRegistros, onGuardarRegistroIndividual, getAnimales, getLotes, getFincaActiva, onActualizarOrdenoFinca, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
     this.container = document.getElementById(containerId);
     this.onGuardarRegistros = onGuardarRegistros;
     this.onGuardarRegistroIndividual = onGuardarRegistroIndividual || null;
     this.getAnimales = getAnimales;
     this.getLotes = getLotes;
     this.getFincaActiva = getFincaActiva || null;
+    this.onActualizarOrdenoFinca = onActualizarOrdenoFinca || null;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
     this.onExtraerAnimal = onExtraerAnimal;
@@ -278,11 +279,18 @@ export class CuadriculaMasiva {
             <p class="text-xs text-slate-400 mt-0.5">Ingresa el número de cada animal individualmente al pasar por la manga.</p>
           </div>
 
-          <!-- Controles superiores: Fecha en que se hace el trabajo y Filtro rápido de Lote -->
+          <!-- Controles superiores: Fecha en que se hace el trabajo, Ordeños de la Finca y Filtro rápido de Lote -->
           <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
               <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-200 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
               <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha en que se hace el trabajo (pesajes, palpaciones, partos, destetes...)" class="bg-slate-900 border border-slate-600 text-emerald-300 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:border-emerald-400">
+            </div>
+            <div class="flex items-center gap-1.5 bg-slate-800/90 border border-sky-700/80 px-3 py-1.5 rounded-xl shadow-inner" title="Configura si esta finca hace 1 Ordeño (1 casilla) o Doble Ordeño (2 casillas)">
+              <span class="text-xs font-bold text-sky-300 whitespace-nowrap">🥛 Ordeño Finca:</span>
+              <select id="select-ordeno-manga-header" class="bg-slate-900 border border-sky-600 text-sky-300 font-bold text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer">
+                <option value="1" ${this.esUnSoloOrdeno() ? 'selected' : ''}>1 Ordeño (1 Casilla)</option>
+                <option value="2" ${!this.esUnSoloOrdeno() ? 'selected' : ''}>Doble Ordeño (2 Casillas)</option>
+              </select>
             </div>
             <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
               <span class="text-xs font-bold text-slate-300 whitespace-nowrap">📍 Lote:</span>
@@ -319,6 +327,22 @@ export class CuadriculaMasiva {
         <!-- SECCIÓN DE BÚSQUEDA Y CAPTURA UNO A UNO EN MANGA -->
         <div class="p-4 sm:p-5 bg-emerald-50/40 border-b border-emerald-100">
           <div class="max-w-3xl mx-auto space-y-3">
+            <!-- BANNER EXPLICATIVO DEL FLUJO CON TECLA ENTER SIN MOUSE -->
+            <div class="bg-emerald-950 text-emerald-100 px-3.5 py-2.5 rounded-xl border border-emerald-700 shadow-sm flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div class="flex items-center gap-2 font-black text-emerald-300">
+                <span>⌨️</span> MODO RÁPIDO CON TECLA ENTER (SIN USAR MOUSE):
+              </div>
+              <div class="font-mono text-[10px] sm:text-[11px] text-emerald-100 flex flex-wrap items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">1. Digite N° Animal + Enter</span>
+                <span>➔</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">2. Fecha + Enter</span>
+                <span>➔</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">3. Datos + Enter</span>
+                <span>➔</span>
+                <span class="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">4. Enter final Guarda y vuelve aquí</span>
+              </div>
+            </div>
+
             <!-- BUSCADOR RÁPIDO DE ARETE -->
             <div class="flex flex-col sm:flex-row items-center gap-3">
               <div class="relative w-full">
@@ -411,9 +435,88 @@ export class CuadriculaMasiva {
 
   obtenerHtmlFormularioIngreso() {
     if (!this.animalSeleccionado) {
+      const esUnOrd = this.esUnSoloOrdeno();
+      const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+      const nombreFinca = fincaAct ? fincaAct.nombre : 'Finca Activa';
+
+      let vistaPreviaModulo = '';
+      if (this.moduloActivo === 'leche') {
+        vistaPreviaModulo = `
+          <div class="mt-3 p-3.5 bg-sky-50/90 rounded-xl border border-sky-200 text-left space-y-2.5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-xs font-black text-sky-950 flex items-center gap-1.5">
+                  🥛 Configuración de Ordeño para "${nombreFinca}":
+                </span>
+                <p class="text-[11px] text-sky-800">Elige si esta finca trabaja con 1 sola casilla o 2 casillas al pesar leche:</p>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button type="button" data-ordenos="1" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
+                  🥛 Un Ordeño (1 Casilla)
+                </button>
+                <button type="button" data-ordenos="2" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${!esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
+                  🥛🥛 Doble Ordeño (2 Casillas)
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 ${esUnOrd ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2 pt-1 opacity-85">
+              <div class="p-2 bg-white rounded-lg border border-sky-200 text-[11px]">
+                <span class="font-bold text-slate-500 block">1. Fecha (Enter)</span>
+                <span class="font-mono font-black text-slate-800">📅 Fecha Pesaje Leche</span>
+              </div>
+              <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
+                <span class="font-bold text-sky-700 block">2. ${esUnOrd ? 'Casilla Única (Enter)' : 'Primera Casilla (Enter)'}</span>
+                <span class="font-mono font-black text-sky-900">${esUnOrd ? '🥛 Litros del Ordeño (L)' : '🌅 Ordeño Mañana AM (L)'}</span>
+              </div>
+              ${!esUnOrd ? `
+                <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
+                  <span class="font-bold text-sky-700 block">3. Segunda Casilla (Enter)</span>
+                  <span class="font-mono font-black text-sky-900">🌆 Ordeño Tarde PM (L)</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      } else if (this.moduloActivo === 'destetes') {
+        vistaPreviaModulo = `
+          <div class="mt-3 p-3.5 bg-amber-50/90 rounded-xl border border-amber-200 text-left space-y-2">
+            <div class="text-xs font-black text-amber-950 flex items-center gap-1.5">
+              🌾 Formato de Destete Activo (Madre ↔ Cría + Doble Pesaje):
+            </div>
+            <p class="text-[11px] text-amber-900">
+              Al digitar el número de la cría (o de la madre) y presionar <strong>Enter</strong>, el sistema solicitará en orden:
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
+                <span class="font-bold text-amber-700 block">Paso 1 (Enter)</span>
+                <span class="font-black text-slate-900">📅 Fecha del Destete</span>
+              </div>
+              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
+                <span class="font-bold text-amber-700 block">Paso 2 (Enter)</span>
+                <span class="font-black text-slate-900">🔗 Relación Madre ↔ Cría</span>
+              </div>
+              <div class="p-2 bg-white rounded-lg border-2 border-amber-400 text-[11px]">
+                <span class="font-bold text-amber-800 block">Paso 3 (Enter)</span>
+                <span class="font-black text-amber-950">🐄 Peso de la Vaca (kg)</span>
+              </div>
+              <div class="p-2 bg-white rounded-lg border-2 border-emerald-400 text-[11px]">
+                <span class="font-bold text-emerald-800 block">Paso 4 (Enter)</span>
+                <span class="font-black text-emerald-950">🐮 Peso del Ternero (kg)</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       return `
-        <div class="bg-white/80 p-4 rounded-xl border border-dashed border-emerald-300 text-center text-xs text-slate-500">
-          Esperando número de animal en la manga para cargar historial de pesajes y palpaciones...
+        <div class="bg-white/90 p-4 rounded-xl border border-dashed border-emerald-300 text-center text-xs text-slate-600">
+          <div class="font-bold text-slate-700">
+            Esperando número de animal en la manga para cargar historial de pesajes y palpaciones...
+          </div>
+          <div class="text-[11px] text-emerald-700 font-semibold mt-1">
+            💡 Escribe el número del animal arriba y presiona <strong>ENTER</strong> para desplegar las casillas y navegar sin mouse.
+          </div>
+          ${vistaPreviaModulo}
         </div>
       `;
     }
@@ -795,6 +898,26 @@ export class CuadriculaMasiva {
   }
 
   attachEventsFormulario() {
+    if (this.container && typeof this.container.querySelectorAll === 'function') {
+      this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
+        if (typeof btn.addEventListener === 'function' && !btn._ordenoBound) {
+          btn._ordenoBound = true;
+          btn.addEventListener('click', (e) => {
+            const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
+            const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+            if (fincaAct) {
+              fincaAct.numeroOrdenos = numOrd;
+              fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+              if (this.onActualizarOrdenoFinca) {
+                this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
+              }
+            }
+            this.render();
+          });
+        }
+      });
+    }
+
     const a = this.animalSeleccionado;
     if (!a) return;
 
@@ -1299,6 +1422,41 @@ export class CuadriculaMasiva {
     // Cambio de módulo
     this.container.querySelectorAll('.btn-grid-mod').forEach((btn) => {
       btn.addEventListener('click', (e) => this.setModulo(e.currentTarget.getAttribute('data-mod')));
+    });
+
+    // Selector rápido de 1 Ordeño / Doble Ordeño en cabecera de Cuadrícula Masiva
+    const selOrdenoHeader = this.container.querySelector('#select-ordeno-manga-header');
+    if (selOrdenoHeader && typeof selOrdenoHeader.addEventListener === 'function') {
+      selOrdenoHeader.addEventListener('change', (e) => {
+        const numOrd = parseInt(e.target.value, 10) === 1 ? 1 : 2;
+        const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+        if (fincaAct) {
+          fincaAct.numeroOrdenos = numOrd;
+          fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+          if (this.onActualizarOrdenoFinca) {
+            this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
+          }
+        }
+        this.render();
+      });
+    }
+
+    // Botones rápidos de 1 Ordeño / Doble Ordeño en la vista previa de Control Leche
+    this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
+      if (typeof btn.addEventListener === 'function') {
+        btn.addEventListener('click', (e) => {
+          const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
+          const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+          if (fincaAct) {
+            fincaAct.numeroOrdenos = numOrd;
+            fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+            if (this.onActualizarOrdenoFinca) {
+              this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
+            }
+          }
+          this.render();
+        });
+      }
     });
 
     // Búsqueda en manga

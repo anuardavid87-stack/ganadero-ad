@@ -5,13 +5,9 @@
  * Maneja las peticiones GET (Verificación del Webhook de Meta) y POST
  * (Recepción bidireccional de mensajes entrantes desde WhatsApp Cloud API).
  *
- * VARIABLES DE ENTORNO REQUERIDAS (Configurar en Vercel / .env):
- * - WHATSAPP_VERIFY_TOKEN       : Token secreto para verificar el webhook con Meta
- * - WHATSAPP_ACCESS_TOKEN       : Token de acceso permanente de Meta Graph API (Bearer)
- * - WHATSAPP_PHONE_NUMBER_ID    : ID del número de teléfono en WhatsApp Business Cloud
- * - WHATSAPP_AUTHORIZED_NUMBERS : Lista de teléfonos autorizados separados por coma
- * - SUPABASE_URL                : URL del proyecto Supabase (Base de Datos Ganadera)
- * - SUPABASE_ANON_KEY           : Service Role Key o Anon Key de Supabase
+ * Lee las credenciales desde Variables de Entorno (process.env) O automáticamente
+ * desde la configuración guardada dentro del programa en:
+ * ⚙️ Admin -> 💬 WhatsApp API (registro SYS_WHATSAPP_CONFIG en Supabase).
  * ============================================================================
  */
 
@@ -20,13 +16,62 @@ import {
     procesarWebhookPostWhatsApp
 } from '../frontend/src/core/whatsappCloudService.js';
 
+const DEFAULT_SUPABASE_URL = 'https://tzwxvvfmpqkyfjsmlwzw.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6d3h2dmZtcHFreWZqc21sd3p3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzODAwOTgsImV4cCI6MjA4OTk1NjA5OH0.v9N-p2d3G3x8mC5k7L8nQ9rR4sT6uV1wX2yZ3aB4cD5';
+
+async function obtenerEnvCombinado() {
+    const envCombinado = { ...(process.env || {}) };
+    if (envCombinado.WHATSAPP_ACCESS_TOKEN && envCombinado.WHATSAPP_PHONE_NUMBER_ID && envCombinado.WHATSAPP_VERIFY_TOKEN) {
+        return envCombinado;
+    }
+
+    try {
+        const supabaseUrl = (envCombinado.SUPABASE_URL || envCombinado.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/+$/, '');
+        const supabaseKey = envCombinado.SUPABASE_SERVICE_ROLE_KEY || envCombinado.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
+
+        const res = await fetch(`${supabaseUrl}/rest/v1/operaciones_diarias?id=eq.SYS_WHATSAPP_CONFIG&limit=1`, {
+            method: 'GET',
+            headers: {
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (res.ok) {
+            const filas = await res.json();
+            const detalles = filas?.[0]?.detalles;
+            if (detalles && typeof detalles === 'object') {
+                if (!envCombinado.WHATSAPP_PHONE_NUMBER_ID && detalles.phoneNumberId) {
+                    envCombinado.WHATSAPP_PHONE_NUMBER_ID = detalles.phoneNumberId;
+                }
+                if (!envCombinado.WHATSAPP_ACCESS_TOKEN && detalles.accessToken) {
+                    envCombinado.WHATSAPP_ACCESS_TOKEN = detalles.accessToken;
+                }
+                if (!envCombinado.WHATSAPP_VERIFY_TOKEN && detalles.verifyToken) {
+                    envCombinado.WHATSAPP_VERIFY_TOKEN = detalles.verifyToken;
+                }
+                if (!envCombinado.WHATSAPP_AUTHORIZED_NUMBERS && detalles.authorizedNumbers) {
+                    envCombinado.WHATSAPP_AUTHORIZED_NUMBERS = detalles.authorizedNumbers;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[Webhook WhatsApp] No se pudo consultar SYS_WHATSAPP_CONFIG en Supabase:', e.message);
+    }
+
+    return envCombinado;
+}
+
 export default async function handler(req, res) {
     try {
+        const envActivo = await obtenerEnvCombinado();
+
         // --------------------------------------------------------------------
         // 1. MÉTODO GET: Verificación oficial del Webhook de Meta
         // --------------------------------------------------------------------
         if (req.method === 'GET') {
-            const resultado = verificarWebhookWhatsApp(req.query || {}, process.env);
+            const resultado = verificarWebhookWhatsApp(req.query || {}, envActivo);
             res.status(resultado.status).setHeader('Content-Type', 'text/plain; charset=utf-8');
             return res.send(resultado.body);
         }
@@ -36,7 +81,7 @@ export default async function handler(req, res) {
         // --------------------------------------------------------------------
         if (req.method === 'POST') {
             const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-            const resultado = await procesarWebhookPostWhatsApp(payload, { env: process.env });
+            const resultado = await procesarWebhookPostWhatsApp(payload, { env: envActivo });
             return res.status(resultado.status || 200).json(resultado.body);
         }
 
