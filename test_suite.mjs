@@ -14,7 +14,7 @@ import { TablaDinamica } from './frontend/src/components/TablaDinamica.js';
 import { SupabaseSyncService } from './frontend/src/core/supabaseSync.js';
 import { buscarCoincidenciasAnimales, normalizarTextoBusqueda, conectarAutosuggestAnimales } from './frontend/src/ui/AutosuggestAnimales.js';
 import { ImportadorExcel } from './frontend/src/components/ImportadorExcel.js';
-import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista } from './frontend/src/core/nutricionIA.js';
+import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista, evaluarDesarrolloRacial, obtenerCatalogoRazasNutricion, invocarGeminiAPI, generarDiagnosticoNutricionalGemini } from './frontend/src/core/nutricionIA.js';
 import { ModuloNutricion } from './frontend/src/components/ModuloNutricion.js';
 import { ExportadorBackupService } from './frontend/src/core/exportadorBackup.js';
 import { BoviTrackApp, escapeHTML } from './frontend/src/app.js';
@@ -6621,6 +6621,181 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     htmlAdminWa.includes('id="wa-authorized-numbers"') &&
     htmlAdminWa.includes('id="form-simulador-whatsapp"'),
     'ModuloAdmin (Pestaña WhatsApp API): Renderiza formulario de credenciales Meta, Whitelist y Simulador interactivo en pantalla'
+  );
+}
+
+// ============================================================================
+// 58. Catálogo Completo de Razas (Bovinos & Búfalos), Desarrollo Racial Directo, Confirmación de Raza y Failover Gemini IA (HTTP 503)
+// ============================================================================
+console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla de Confirmación y Failover Gemini IA ---');
+{
+  // 58.1: Catálogo completo de razas bovinas y bufalinas con curvas de crecimiento
+  const catalogoRazas = obtenerCatalogoRazasNutricion();
+  const clavesCatalogo = catalogoRazas.map(r => r.clave);
+  test(
+    catalogoRazas.length >= 22 &&
+    clavesCatalogo.includes('brahman') &&
+    clavesCatalogo.includes('gyr') &&
+    clavesCatalogo.includes('guzera') &&
+    clavesCatalogo.includes('nelore') &&
+    clavesCatalogo.includes('girolando') &&
+    clavesCatalogo.includes('normando') &&
+    clavesCatalogo.includes('bon') &&
+    clavesCatalogo.includes('romosinuano') &&
+    clavesCatalogo.includes('holstein') &&
+    clavesCatalogo.includes('jersey') &&
+    clavesCatalogo.includes('angus') &&
+    clavesCatalogo.includes('brangus') &&
+    clavesCatalogo.includes('senepol') &&
+    clavesCatalogo.includes('wagyu') &&
+    clavesCatalogo.includes('bufalo_murrah') &&
+    clavesCatalogo.includes('bufalo_mediterraneo') &&
+    clavesCatalogo.includes('bufalo_jafarabadi') &&
+    clavesCatalogo.includes('bufalo_nili_ravi') &&
+    catalogoRazas.every(r => r.curvaPesoHembraKg && r.curvaPesoMachoKg && r.curvaTallaCm && r.aptitud && r.manejoNutricionalEspecial),
+    `Catálogo de Razas Nutrición IA: Incluye ${catalogoRazas.length} razas bovinas y bufalinas con curvas de peso/talla por edad, aptitud y manejo nutricional`
+  );
+
+  // 58.2: Evaluación directa de desarrollo racial (animal con rezago vs curva de su raza)
+  const desRezago = evaluarDesarrolloRacial({
+    animal: { id: 'ANM-DEV-1', sexo: 'Hembra', fechaNacimiento: '2024-11-04', raza: 'Brahman' },
+    razaTexto: 'Brahman',
+    pesoActual: 260, // a los 24 meses una hembra Brahman espera 440 kg
+    tallaCm: 122,
+    edadMeses: 24,
+    sexo: 'Hembra'
+  });
+
+  test(
+    desRezago.razaClave === 'brahman' &&
+    desRezago.pesoEsperadoRazaKg === 440 &&
+    desRezago.diferenciaPesoKg === -180 &&
+    desRezago.indiceDesarrolloPorc < 78 &&
+    desRezago.estadoDesarrollo === 'rezago_severo' &&
+    desRezago.gdpMetaCorrectivaGDia > 750,
+    'EvaluarDesarrolloRacial: Detecta Rezago Severo de Desarrollo Racial frente a la curva Brahman a 24 meses y eleva la GDP meta correctiva'
+  );
+
+  // 58.3: Evaluación nutricional con raza confirmada Bufalina (Murrah) -> sensibilidad al cobre y plan correctivo
+  const planMurrah = evaluarNutricionAnimal({
+    animal: { id: 'BUF-10', identificacionTag: 'BUF-10', especie: 'bufalino', sexo: 'Hembra', peso: 290, condicionCorporal: 2.75 },
+    razaConfirmada: 'Búfalo Murrah',
+    razaConfirmadaCheck: true,
+    edadMeses: 24,
+    pesoActual: 290,
+    condicionCorporal: 2.75,
+    tallaCm: 128
+  });
+
+  test(
+    planMurrah.razaClave === 'bufalo_murrah' &&
+    planMurrah.razaConfirmada === true &&
+    planMurrah.desarrolloRacial &&
+    planMurrah.desarrolloRacial.especie === 'bufalino' &&
+    planMurrah.sugerenciaSuplementos.some(s => s.nombre.includes('Bufalino') || s.componente.includes('bajo cobre')) &&
+    planMurrah.sugerenciaMedicamentos.some(m => m.nombre.includes('Modificador Orgánico')),
+    'EvaluarNutricionAnimal (Búfalo Murrah Confirmado): Ajusta dieta por rezago de crecimiento, incluye modificador orgánico y núcleo mineral bufalino bajo en cobre'
+  );
+
+  // 58.4: ModuloNutricion renderiza casilla de confirmación de raza, selector de raza y tarjeta de desarrollo racial
+  const animalSinRazaTest = { id: 'ANM-NR-1', identificacionTag: 'NR-01', nombreAlias: 'Sultana', peso: 340, condicionCorporal: 3.0, categoria: 'Novilla', sexo: 'Hembra', raza: '' };
+  const modNutriRaza = new ModuloNutricion({
+    containerId: 'nutri-raza-test',
+    getAnimales: () => [animalSinRazaTest],
+    getFincaActiva: () => ({ id: 'FIN-1', nombre: 'Hacienda El Recreo' }),
+    getNutricion: () => [],
+    onGuardarPlan: () => {}
+  });
+  modNutriRaza.container = new MockDomElement('nutri-raza-test');
+  modNutriRaza.abrirEvaluacionParaAnimal(animalSinRazaTest);
+  const htmlNutriRaza = modNutriRaza.container.innerHTML;
+
+  test(
+    htmlNutriRaza.includes('id="input-nutri-raza"') &&
+    htmlNutriRaza.includes('id="input-nutri-edad-meses"') &&
+    htmlNutriRaza.includes('id="check-nutri-raza-confirmada"') &&
+    htmlNutriRaza.includes('Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo') &&
+    htmlNutriRaza.includes('Sin raza específica en ficha'),
+    'ModuloNutricion: Renderiza selector de raza, casilla de confirmación de raza (con o sin raza previa en ficha) y tarjeta de análisis directo de desarrollo'
+  );
+
+  // 58.5: Sincronización de raza confirmada en la ficha del animal al guardar plan nutricional
+  const appRazaSync = Object.create(BoviTrackApp.prototype);
+  appRazaSync.state = {
+    fincaActivaId: 'FIN-1',
+    animales: [
+      { id: 'ANM-SIN-RAZA', identificacionTag: 'SR-01', fincaId: 'FIN-1', raza: '', especie: 'vacuno', peso: 350 }
+    ],
+    nutricion: []
+  };
+  appRazaSync.guardarEstado = () => {};
+
+  appRazaSync.guardarPlanNutricion({
+    id: 'NUT-TEST-SYNC-1',
+    animalId: 'ANM-SIN-RAZA',
+    tag: 'SR-01',
+    raza: 'Búfalo Murrah',
+    razaClave: 'bufalo_murrah',
+    razaConfirmada: true,
+    sincronizarRazaFicha: true,
+    pesoActualKg: 380,
+    condicionCorporal: 3.5
+  });
+
+  test(
+    appRazaSync.state.animales[0].raza === 'Búfalo Murrah' &&
+    appRazaSync.state.animales[0].especie === 'bufalino' &&
+    appRazaSync.state.nutricion.length === 1 &&
+    appRazaSync.state.nutricion[0].razaConfirmada === true,
+    'BoviTrackApp.guardarPlanNutricion: Al confirmar la raza en Nutrición IA, actualiza automáticamente la raza y especie en la ficha del animal'
+  );
+
+  // 58.6: Failover automático de invocarGeminiAPI ante HTTP 503 ("This model is currently experiencing high demand")
+  const origFetchGemini = globalThis.fetch;
+  const modelosIntentados = [];
+  globalThis.fetch = async (url) => {
+    const matchMod = url.match(/models\/([^:?]+)/);
+    const modName = matchMod ? matchMod[1] : 'unknown';
+    modelosIntentados.push(modName);
+    if (modelosIntentados.length === 1) {
+      return {
+        ok: false,
+        status: 503,
+        json: async () => ({
+          error: {
+            code: 503,
+            message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'
+          }
+        })
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{
+          content: {
+            parts: [{ text: JSON.stringify({ diagnosticoDesarrolloRacial: 'Desarrollo óptimo verificado por IA', recomendacionManejoRaza: 'Pastoreo rotacional', ajusteDietaIA: { forrajeVerdeKg: 38, materiaSecaKg: 10.5, concentradoKg: 1.5, salMineralG: 90, proteinaCrudaPorc: 13.5, aguaLitros: 48, fibraEfectivaMinPorc: 28, relacionForrajeConcentrado: '85:15' }, medicamentoPrioritarioIA: { producto: 'Vitamina ADE', dosis: '5 ml IM', via: 'IM', motivo: 'Mantenimiento' }, vitaminaPrioritariaIA: { producto: 'Sal Mineral 8%', dosis: '90 g/día', via: 'Oral', motivo: 'Sostén' }, alertaSanitariaRaza: 'Ninguna' }) }]
+          }
+        }]
+      })
+    };
+  };
+
+  const respFailover = await invocarGeminiAPI({
+    key: 'AIzaSyTestKeyFailover123456789',
+    body: {
+      contents: [{ parts: [{ text: 'Test failover 503' }] }],
+      generationConfig: { temperature: 0.1 }
+    }
+  });
+  globalThis.fetch = origFetchGemini;
+
+  test(
+    respFailover.ok === true &&
+    modelosIntentados.length === 2 &&
+    respFailover.modelo === modelosIntentados[1],
+    `invocarGeminiAPI (Failover Automático 503): Si el primer modelo devuelve HTTP 503 High Demand (${modelosIntentados[0]}), conmuta automáticamente al siguiente (${respFailover.modelo}) sin fallar`
   );
 }
 

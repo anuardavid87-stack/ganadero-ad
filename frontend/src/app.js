@@ -1985,6 +1985,25 @@ class BoviTrackApp {
     } else {
       this.state.nutricion.unshift(registro);
     }
+
+    // Si se confirmó la raza en el módulo de Nutrición IA, sincronizar también en la ficha del animal
+    if (registro.raza && (registro.razaConfirmada || registro.sincronizarRazaFicha) && Array.isArray(this.state.animales)) {
+      const fincaActivaId = this.state.fincaActivaId;
+      const animalIdx = this.state.animales.findIndex(a => {
+        const aTag = String(a.identificacionTag || a.numero || a.tag || '').toUpperCase();
+        const mismaFinca = !fincaActivaId || !a.fincaId || a.fincaId === fincaActivaId;
+        return aTag === tag && mismaFinca;
+      });
+      if (animalIdx >= 0) {
+        this.state.animales[animalIdx].raza = registro.raza;
+        const rLower = String(registro.raza).toLowerCase();
+        if (rLower.includes('bufal') || rLower.includes('búfal') || rLower.includes('murrah') || rLower.includes('mediterr') || rLower.includes('jafarabadi') || rLower.includes('nili')) {
+          this.state.animales[animalIdx].especie = 'bufalino';
+        }
+        this.state.animales[animalIdx].updatedAt = new Date().toISOString();
+      }
+    }
+
     this.guardarEstado();
   }
 

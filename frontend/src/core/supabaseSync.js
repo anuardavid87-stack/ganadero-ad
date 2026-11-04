@@ -399,7 +399,12 @@ export class SupabaseSyncService {
       frameScore: n.frameScore || (n.sugerenciaDieta && n.sugerenciaDieta.frameScore) || null,
       categoriaFrame: n.categoriaFrame || (n.sugerenciaDieta && n.sugerenciaDieta.categoriaFrame) || null,
       indiceCompacidadKgCm: n.indiceCompacidadKgCm || (n.sugerenciaDieta && n.sugerenciaDieta.indiceCompacidadKgCm) || null,
-      statusCompacidad: n.statusCompacidad || (n.sugerenciaDieta && n.sugerenciaDieta.statusCompacidad) || null
+      statusCompacidad: n.statusCompacidad || (n.sugerenciaDieta && n.sugerenciaDieta.statusCompacidad) || null,
+      razaEvaluada: n.raza || (n.sugerenciaDieta && n.sugerenciaDieta.razaEvaluada) || null,
+      razaConfirmada: n.razaConfirmada !== undefined ? n.razaConfirmada : (n.sugerenciaDieta && n.sugerenciaDieta.razaConfirmada),
+      edadMeses: n.edadMeses || (n.sugerenciaDieta && n.sugerenciaDieta.edadMeses) || null,
+      desarrolloRacial: n.desarrolloRacial || (n.sugerenciaDieta && n.sugerenciaDieta.desarrolloRacial) || null,
+      sugerenciaSuplementos: Array.isArray(n.sugerenciaSuplementos) ? n.sugerenciaSuplementos : (n.sugerenciaDieta && n.sugerenciaDieta.sugerenciaSuplementos) || []
     };
 
     let tallaFrameStr = String(n.tallaFrame || '');
@@ -453,6 +458,10 @@ export class SupabaseSyncService {
       animalId: row.animal_id,
       tag: row.animal_tag,
       animalTag: row.animal_tag,
+      raza: dieta.razaEvaluada || null,
+      razaConfirmada: dieta.razaConfirmada !== undefined ? Boolean(dieta.razaConfirmada) : true,
+      edadMeses: dieta.edadMeses ? Number(dieta.edadMeses) : null,
+      desarrolloRacial: dieta.desarrolloRacial || null,
       fechaAnalisis: row.fecha_analisis,
       etapaProductiva: row.etapa_productiva || 'General',
       tallaFrame: row.talla_frame || '',
@@ -466,6 +475,7 @@ export class SupabaseSyncService {
       gdpEsperadaGDia: row.gdp_esperada_g_dia ? Number(row.gdp_esperada_g_dia) : null,
       sugerenciaDieta: dieta,
       sugerenciaMedicamentos: Array.isArray(row.sugerencia_medicamentos) ? row.sugerencia_medicamentos : [],
+      sugerenciaSuplementos: Array.isArray(dieta.sugerenciaSuplementos) ? dieta.sugerenciaSuplementos : [],
       sugerenciaHormonas: Array.isArray(row.sugerencia_hormonas) ? row.sugerencia_hormonas : [],
       analisisIA: row.analisis_ia || '',
       notas: row.notas || ''

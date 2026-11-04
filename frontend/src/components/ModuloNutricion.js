@@ -11,12 +11,16 @@
 
 import {
   evaluarNutricionAnimal,
+  evaluarDesarrolloRacial,
+  obtenerCatalogoRazasNutricion,
   analizarMorfologiaFotoEfimera,
   resolverPerfilRaza,
   obtenerGeminiApiKey,
   guardarGeminiApiKey,
   probarConexionGemini,
-  eliminarGeminiApiKey
+  eliminarGeminiApiKey,
+  obtenerModeloGeminiActivo,
+  generarDiagnosticoNutricionalGemini
 } from '../core/nutricionIA.js';
 import { conectarAutosuggestAnimales, buscarCoincidenciasAnimales } from '../ui/AutosuggestAnimales.js';
 
@@ -48,6 +52,7 @@ export class ModuloNutricion {
     this.animalSeleccionado = null;
     this.planGenerado = null;
     this.analisisFotoEnCurso = false;
+    this.consultaGeminiEnCurso = false;
     this.mensajeFeedback = null;
     this.tipoFeedback = 'info'; // 'info' | 'exito' | 'error'
     this.filtroEtapa = 'todas';
@@ -79,7 +84,7 @@ export class ModuloNutricion {
         id: reg.animalId || ('ANM-' + tag),
         identificacionTag: tag,
         nombreAlias: reg.nombreAlias || '',
-        raza: reg.raza || 'Comercial',
+        raza: reg.raza || reg.sugerenciaDieta?.razaEvaluada || 'Comercial',
         sexo: 'Hembra',
         peso: reg.pesoActualKg || 420,
         categoria: reg.etapaProductiva || 'General',
@@ -87,6 +92,7 @@ export class ModuloNutricion {
       };
       enrolados.push({
         ...animalData,
+        raza: reg.raza || reg.sugerenciaDieta?.razaEvaluada || animalData.raza || 'Comercial',
         registroNutricion: reg
       });
     });
@@ -157,6 +163,9 @@ export class ModuloNutricion {
       animalId: animal.id,
       tag: animal.identificacionTag || animal.tag,
       animalTag: animal.identificacionTag || animal.tag,
+      raza: planInicial.raza,
+      razaConfirmada: planInicial.razaConfirmada,
+      edadMeses: planInicial.edadMeses,
       fechaAnalisis: new Date().toISOString().split('T')[0],
       etapaProductiva: planInicial.etapaProductiva,
       tallaCm: planInicial.tallaCm,
@@ -168,6 +177,7 @@ export class ModuloNutricion {
       condicionCorporal: planInicial.condicionCorporal,
       pesoActualKg: planInicial.pesoActualKg,
       gdpEsperadaGDia: planInicial.gdpEsperadaGDia,
+      desarrolloRacial: planInicial.desarrolloRacial,
       sugerenciaDieta: planInicial.sugerenciaDieta,
       sugerenciaMedicamentos: planInicial.sugerenciaMedicamentos,
       sugerenciaSuplementos: planInicial.sugerenciaSuplementos,
@@ -212,13 +222,28 @@ export class ModuloNutricion {
     const regGuardado = registros.find(r => String(r.tag || r.animalTag || '').toUpperCase() === String(animal.identificacionTag || animal.tag).toUpperCase());
 
     if (regGuardado) {
+      const razaGuardada = regGuardado.raza || regGuardado.sugerenciaDieta?.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
+      const pesoVal = regGuardado.pesoActualKg || animal.ultimoPesoKg || animal.peso || 450;
+      const tallaVal = regGuardado.tallaCm || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.tallaCm) || (regGuardado.tallaFrame && regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i) ? Number(regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i)[1]) : 135);
+      const edadVal = regGuardado.edadMeses || regGuardado.sugerenciaDieta?.edadMeses || animal.edadMeses || 24;
+      const desRacial = regGuardado.desarrolloRacial || regGuardado.sugerenciaDieta?.desarrolloRacial || evaluarDesarrolloRacial({
+        animal,
+        razaTexto: razaGuardada,
+        pesoActual: pesoVal,
+        tallaCm: tallaVal,
+        edadMeses: edadVal,
+        sexo: animal.sexo || 'hembra'
+      });
+
       this.planGenerado = {
         animalId: animal.id,
         animalTag: animal.identificacionTag || animal.tag,
         nombreAlias: animal.nombreAlias || animal.alias || '',
-        raza: animal.raza || regGuardado.raza || 'Brahman',
-        pesoActualKg: regGuardado.pesoActualKg || animal.peso || 450,
-        tallaCm: regGuardado.tallaCm || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.tallaCm) || (regGuardado.tallaFrame && regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i) ? Number(regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i)[1]) : null),
+        raza: razaGuardada,
+        razaConfirmada: regGuardado.razaConfirmada !== undefined ? regGuardado.razaConfirmada : (regGuardado.sugerenciaDieta?.razaConfirmada !== undefined ? regGuardado.sugerenciaDieta.razaConfirmada : Boolean(animal.raza)),
+        edadMeses: edadVal,
+        pesoActualKg: pesoVal,
+        tallaCm: tallaVal,
         tallaFrame: regGuardado.tallaFrame || 'Medio (Frame 4-6)',
         frameScore: regGuardado.frameScore || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.frameScore) || null,
         categoriaFrame: regGuardado.categoriaFrame || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.categoriaFrame) || '',
@@ -226,7 +251,8 @@ export class ModuloNutricion {
         statusCompacidad: regGuardado.statusCompacidad || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.statusCompacidad) || 'normal',
         condicionCorporal: regGuardado.condicionCorporal || 3.0,
         etapaProductiva: regGuardado.etapaProductiva || 'Vacía / Mantenimiento',
-        gdpEsperadaGDia: regGuardado.gdpEsperadaGDia || 450,
+        gdpEsperadaGDia: regGuardado.gdpEsperadaGDia || desRacial.gdpMetaCorrectivaGDia || 450,
+        desarrolloRacial: desRacial,
         sugerenciaDieta: regGuardado.sugerenciaDieta || {},
         sugerenciaMedicamentos: regGuardado.sugerenciaMedicamentos || [],
         sugerenciaSuplementos: regGuardado.sugerenciaSuplementos || [],
@@ -247,7 +273,7 @@ export class ModuloNutricion {
     this.render();
   }
 
-  calcularPlanDesdeFormulario() {
+  async calcularPlanDesdeFormulario(consultarIAEnVivo = false) {
     if (!this.animalSeleccionado || !this.container) return;
 
     const pesoInput = this.container.querySelector('#input-nutri-peso');
@@ -255,6 +281,9 @@ export class ModuloNutricion {
     const tallaInput = this.container.querySelector('#input-nutri-talla');
     const bcsInput = this.container.querySelector('#input-nutri-bcs');
     const etapaInput = this.container.querySelector('#input-nutri-etapa');
+    const edadInput = this.container.querySelector('#input-nutri-edad-meses');
+    const razaInput = this.container.querySelector('#input-nutri-raza');
+    const checkRazaInput = this.container.querySelector('#check-nutri-raza-confirmada');
     const gdpInput = this.container.querySelector('#input-nutri-gdp');
     const notasInput = this.container.querySelector('#input-nutri-notas');
 
@@ -263,8 +292,15 @@ export class ModuloNutricion {
     const talla = tallaInput ? tallaInput.value : 'Medio (Frame 4-6)';
     const bcs = bcsInput ? Number(bcsInput.value) : 3.0;
     const etapa = etapaInput ? etapaInput.value : 'Vacía / Mantenimiento';
+    const edadMeses = edadInput && edadInput.value ? Number(edadInput.value) : (this.planGenerado?.edadMeses || this.animalSeleccionado.edadMeses || 24);
+    const razaSeleccionada = razaInput && razaInput.value ? razaInput.value : (this.planGenerado?.raza || this.animalSeleccionado.raza || 'Brahman (Cebú)');
+    const razaConfirmadaCheck = checkRazaInput ? Boolean(checkRazaInput.checked) : true;
     const gdp = gdpInput && gdpInput.value ? Number(gdpInput.value) : null;
     const notas = notasInput ? notasInput.value : '';
+
+    if (razaConfirmadaCheck && razaSeleccionada) {
+      this.animalSeleccionado.raza = razaSeleccionada;
+    }
 
     this.planGenerado = evaluarNutricionAnimal({
       animal: this.animalSeleccionado,
@@ -273,9 +309,62 @@ export class ModuloNutricion {
       tallaFrame: talla,
       condicionCorporal: bcs,
       etapaProductiva: etapa,
+      edadMeses,
+      razaConfirmada: razaSeleccionada,
+      razaConfirmadaCheck,
       gdpObjetivoGDia: gdp,
       notas
     });
+
+    // Si se solicitó enriquecimiento con IA Gemini y hay API Key activa, consultar Gemini en tiempo real
+    const apiKey = obtenerGeminiApiKey();
+    if (consultarIAEnVivo && apiKey) {
+      this.consultaGeminiEnCurso = true;
+      this.render();
+      try {
+        const resIA = await generarDiagnosticoNutricionalGemini({
+          planBase: this.planGenerado,
+          animal: this.animalSeleccionado,
+          finca: this.getFincaActiva ? this.getFincaActiva() : null,
+          apiKey
+        });
+        if (resIA.ok && resIA.iaData) {
+          const d = resIA.iaData;
+          if (d.diagnosticoDesarrolloRacialIA) {
+            this.planGenerado.analisisIA = `✨ DIAGNÓSTICO AVANZADO GEMINI IA (${resIA.modelo || 'flash'}) — ${this.planGenerado.raza}:\n${d.diagnosticoDesarrolloRacialIA}\n\n${d.recomendacionDietaPrecisaIA ? '🥗 AJUSTE NUTRICIONAL IA: ' + d.recomendacionDietaPrecisaIA + '\n\n' : ''}${this.planGenerado.analisisIA}`;
+          }
+          if (d.medicamentoPrioritarioIA && d.medicamentoPrioritarioIA.nombre) {
+            this.planGenerado.sugerenciaMedicamentos = [
+              {
+                nombre: `✨ [IA Gemini] ${d.medicamentoPrioritarioIA.nombre}`,
+                tipo: d.medicamentoPrioritarioIA.tipo || 'Prescripción Específica por Raza y Desarrollo',
+                dosis: d.medicamentoPrioritarioIA.dosis || 'Según peso vivo',
+                via: d.medicamentoPrioritarioIA.via || 'Parenteral / Oral',
+                frecuencia: d.medicamentoPrioritarioIA.frecuencia || 'Según evaluación veterinaria',
+                advertenciaRetiro: d.medicamentoPrioritarioIA.advertenciaRetiro || 'Verificar tiempo de retiro oficial.'
+              },
+              ...(this.planGenerado.sugerenciaMedicamentos || [])
+            ];
+          }
+          if (d.vitaminaSuplementoPrioritarioIA && d.vitaminaSuplementoPrioritarioIA.nombre) {
+            this.planGenerado.sugerenciaSuplementos = [
+              {
+                nombre: `✨ [IA Gemini] ${d.vitaminaSuplementoPrioritarioIA.nombre}`,
+                componente: d.vitaminaSuplementoPrioritarioIA.componente || 'Complejo vitamínico-mineral de precisión',
+                objetivo: d.vitaminaSuplementoPrioritarioIA.objetivo || `Optimizar curva de desarrollo de ${this.planGenerado.raza}`,
+                dosisRecomendada: d.vitaminaSuplementoPrioritarioIA.dosisRecomendada || 'Según peso actual',
+                via: d.vitaminaSuplementoPrioritarioIA.via || 'Oral / Intramuscular'
+              },
+              ...(this.planGenerado.sugerenciaSuplementos || [])
+            ];
+          }
+        }
+      } catch (errIA) {
+        console.warn('Aviso al enriquecer plan con Gemini IA:', errIA);
+      } finally {
+        this.consultaGeminiEnCurso = false;
+      }
+    }
 
     // Guardar automáticamente
     const registro = {
@@ -283,6 +372,10 @@ export class ModuloNutricion {
       animalId: this.animalSeleccionado.id,
       tag: this.animalSeleccionado.identificacionTag || this.animalSeleccionado.tag,
       animalTag: this.animalSeleccionado.identificacionTag || this.animalSeleccionado.tag,
+      raza: this.planGenerado.raza,
+      razaConfirmada: this.planGenerado.razaConfirmada,
+      sincronizarRazaFicha: razaConfirmadaCheck,
+      edadMeses: this.planGenerado.edadMeses,
       fechaAnalisis: new Date().toISOString().split('T')[0],
       etapaProductiva: this.planGenerado.etapaProductiva,
       tallaCm: this.planGenerado.tallaCm,
@@ -294,6 +387,7 @@ export class ModuloNutricion {
       condicionCorporal: this.planGenerado.condicionCorporal,
       pesoActualKg: this.planGenerado.pesoActualKg,
       gdpEsperadaGDia: this.planGenerado.gdpEsperadaGDia,
+      desarrolloRacial: this.planGenerado.desarrolloRacial,
       sugerenciaDieta: this.planGenerado.sugerenciaDieta,
       sugerenciaMedicamentos: this.planGenerado.sugerenciaMedicamentos,
       sugerenciaSuplementos: this.planGenerado.sugerenciaSuplementos,
@@ -306,7 +400,7 @@ export class ModuloNutricion {
       this.onGuardarPlan(registro);
     }
 
-    this.mensajeFeedback = `✓ Plan nutricional y biometría de pista actualizados para ${registro.tag} (${this.planGenerado.tallaCm} cm, Frame ${this.planGenerado.frameScore.toFixed(1)}).`;
+    this.mensajeFeedback = `✓ Análisis de desarrollo racial (${this.planGenerado.raza}: ${this.planGenerado.desarrolloRacial?.indiceDesarrolloPorc || 100}% estándar) y plan nutricional IA actualizados para ${registro.tag}.`;
     this.tipoFeedback = 'exito';
     this.render();
   }
@@ -328,7 +422,9 @@ export class ModuloNutricion {
     this.render();
 
     try {
-      const resultadoFoto = await analizarMorfologiaFotoEfimera(file, this.animalSeleccionado);
+      const razaInput = this.container ? this.container.querySelector('#input-nutri-raza') : null;
+      const razaActiva = razaInput ? razaInput.value : (this.planGenerado?.raza || this.animalSeleccionado?.raza || '');
+      const resultadoFoto = await analizarMorfologiaFotoEfimera(file, this.animalSeleccionado, razaActiva);
       this.analisisFotoEnCurso = false;
 
       // Actualizar campos en el modal
@@ -350,7 +446,7 @@ export class ModuloNutricion {
       this.tipoFeedback = 'exito';
 
       // Recalcular plan con los nuevos parámetros estimados
-      this.calcularPlanDesdeFormulario();
+      await this.calcularPlanDesdeFormulario(false);
     } catch (err) {
       this.analisisFotoEnCurso = false;
       this.mensajeFeedback = 'Error analizando la fotografía: ' + err.message;
@@ -688,8 +784,36 @@ export class ModuloNutricion {
     const medicamentos = plan.sugerenciaMedicamentos || [];
     const suplementos = plan.sugerenciaSuplementos || [];
     const hormonas = plan.sugerenciaHormonas || [];
-    const perfil = resolverPerfilRaza(animal.raza);
-    const esBuf = perfil.tipo === 'bufalo';
+    const razaActivaTexto = plan.raza || dieta.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
+    const perfil = resolverPerfilRaza(razaActivaTexto);
+    const esBuf = perfil.tipo === 'bufalo' || perfil.especie === 'bufalino';
+    const catalogoRazas = obtenerCatalogoRazasNutricion();
+    const gruposRazas = {};
+    catalogoRazas.forEach((r) => {
+      const g = r.grupo || 'Otras Razas';
+      if (!gruposRazas[g]) gruposRazas[g] = [];
+      gruposRazas[g].push(r);
+    });
+
+    const tieneRazaEnFicha = Boolean(animal.raza && String(animal.raza).trim() && String(animal.raza).toLowerCase() !== 'comercial');
+    const razaConfirmada = plan.razaConfirmada !== undefined ? Boolean(plan.razaConfirmada) : tieneRazaEnFicha;
+    const des = plan.desarrolloRacial || dieta.desarrolloRacial || evaluarDesarrolloRacial({
+      animal,
+      razaTexto: perfil.nombre,
+      pesoActual: plan.pesoActualKg || animal.ultimoPesoKg || animal.peso || 420,
+      tallaCm: plan.tallaCm || 135,
+      edadMeses: plan.edadMeses || animal.edadMeses || 24,
+      sexo: animal.sexo || 'hembra'
+    });
+    const porcDesarrollo = des.indiceDesarrolloPorc || 100;
+    const colorDesarrollo =
+      des.estadoDesarrollo === 'rezago_severo'
+        ? 'text-rose-400 border-rose-500/40 bg-rose-950/30'
+        : des.estadoDesarrollo === 'rezago_moderado'
+        ? 'text-amber-300 border-amber-500/40 bg-amber-950/30'
+        : des.estadoDesarrollo === 'superior'
+        ? 'text-cyan-300 border-cyan-500/40 bg-cyan-950/30'
+        : 'text-emerald-300 border-emerald-500/40 bg-emerald-950/30';
 
     return `
       <div id="panel-evaluacion-nutricion" class="w-full flex flex-col space-y-4 fade-in">
@@ -702,21 +826,24 @@ export class ModuloNutricion {
         <div class="bg-slate-900 border border-slate-700 w-full rounded-3xl shadow-2xl overflow-hidden flex flex-col">
           
           <!-- PANEL HEADER -->
-          <div class="bg-slate-950 p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div class="bg-slate-950 p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between shrink-0 flex-wrap gap-2">
             <div class="flex items-center gap-3">
               <span class="text-2xl">${esBuf ? '🐃' : '🐄'}</span>
               <div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <h3 class="text-base sm:text-lg font-black text-white font-mono">${animal.identificacionTag || animal.tag}</h3>
                   ${animal.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${animal.nombreAlias}"</span>` : ''}
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">${perfil.nombre}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${razaConfirmada ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                    ${razaConfirmada ? '✓ RAZA CONFIRMADA' : '⚠️ CONFIRMAR RAZA'}
+                  </span>
                 </div>
-                <p class="text-[11px] text-slate-400">Evaluación Nutricional, Zootécnica y Prescripción IA</p>
+                <p class="text-[11px] text-slate-400">Análisis Directo de Desarrollo Racial, Nutrición de Precisión, Medicamentos y Vitaminas con IA</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <button type="button" class="btn-abrir-config-gemini-nutri px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900 text-purple-200 text-xs font-bold border border-purple-500/40 transition flex items-center gap-1.5 cursor-pointer">
-                <span>✨</span> <span class="hidden sm:inline">IA Gemini</span>
+                <span>✨</span> <span class="hidden sm:inline">IA Gemini (${obtenerModeloGeminiActivo()})</span>
               </button>
               <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                 <span>🖨️</span> <span class="hidden sm:inline">Imprimir Ficha</span>
@@ -727,6 +854,154 @@ export class ModuloNutricion {
           <!-- CONTENIDO SCROLLABLE -->
           <div class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
             
+            <!-- SECCIÓN 0: CASILLA DE CONFIRMACIÓN DE RAZA (GANADO Y BÚFALOS) & ANÁLISIS DIRECTO DE DESARROLLO -->
+            <div class="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                <div>
+                  <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                    <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo
+                  </h4>
+                  <p class="text-[11px] text-slate-400 mt-0.5">
+                    Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso y alzada contra el estándar genético de su raza.
+                  </p>
+                </div>
+                <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${tieneRazaEnFicha ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/60 border-amber-500/40 text-amber-300'} shrink-0">
+                  ${tieneRazaEnFicha ? `📋 En Ficha: ${animal.raza}` : '📋 Sin raza específica en ficha (Confírmala abajo)'}
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+                <div class="lg:col-span-5">
+                  <label class="block text-[10px] font-black uppercase text-emerald-400 mb-1">
+                    Raza del Ejemplar (Catálogo Completo Ganado & Búfalos):
+                  </label>
+                  <select
+                    id="input-nutri-raza"
+                    class="w-full bg-slate-950 border border-emerald-500/60 text-white px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
+                  >
+                    ${Object.keys(gruposRazas).map(nombreGrupo => `
+                      <optgroup label="── ${nombreGrupo} ──">
+                        ${gruposRazas[nombreGrupo].map(r => `
+                          <option value="${r.nombre}" ${r.clave === perfil.clave || r.nombre === perfil.nombre ? 'selected' : ''}>
+                            ${r.especie === 'bufalino' ? '🐃' : '🐄'} ${r.nombre} — (${r.aptitud})
+                          </option>
+                        `).join('')}
+                      </optgroup>
+                    `).join('')}
+                  </select>
+                </div>
+
+                <div class="lg:col-span-2">
+                  <label class="block text-[10px] font-black uppercase text-cyan-400 mb-1">
+                    Edad Actual (Meses):
+                  </label>
+                  <input
+                    id="input-nutri-edad-meses"
+                    type="number"
+                    min="1"
+                    max="240"
+                    step="1"
+                    value="${plan.edadMeses || des.edadMesesEvaluada || 24}"
+                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono focus:border-cyan-400 outline-none"
+                  />
+                </div>
+
+                <div class="lg:col-span-5">
+                  <label class="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 cursor-pointer hover:bg-emerald-950/60 transition">
+                    <input
+                      id="check-nutri-raza-confirmada"
+                      type="checkbox"
+                      ${razaConfirmada ? 'checked' : ''}
+                      class="mt-0.5 w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"
+                    />
+                    <span class="text-[11px] leading-snug text-slate-200">
+                      <strong class="text-emerald-300 block">✓ Confirmar Raza para Diagnóstico IA y Guardar en Ficha</strong>
+                      Usa todos los parámetros genéticos de <strong>${perfil.nombre}</strong> para calcular su desarrollo, alimentación, medicamentos y vitaminas.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- CARACTERÍSTICAS DE LA RAZA & COMPARATIVA DIRECTA DE DESARROLLO -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <!-- Tarjeta A: Características Zootécnicas de la Raza -->
+                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+                  <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                    <span class="font-black text-emerald-300 flex items-center gap-1.5">
+                      <span>${esBuf ? '🐃' : '🐄'}</span> Perfil Genético: ${perfil.nombre}
+                    </span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">${perfil.aptitud || 'Doble Propósito'}</span>
+                  </div>
+                  <p class="text-[11px] text-slate-300 leading-relaxed">${perfil.caracteristicas}</p>
+                  <div class="grid grid-cols-4 gap-1.5 pt-1 text-center">
+                    <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Peso Adulto</div>
+                      <div class="text-[11px] font-black text-white font-mono">H:${perfil.pesoAdultoHembraKg} / M:${perfil.pesoAdultoMachoKg}kg</div>
+                    </div>
+                    <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Consumo MS</div>
+                      <div class="text-[11px] font-black text-emerald-400 font-mono">${perfil.consumoMsPorcPV}% PV</div>
+                    </div>
+                    <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Proteína Req.</div>
+                      <div class="text-[11px] font-black text-amber-400 font-mono">${perfil.pcMantenimientoPorc}-${perfil.pcProduccionPorc}% PC</div>
+                    </div>
+                    <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Fósforo / Cu</div>
+                      <div class="text-[11px] font-black ${esBuf ? 'text-rose-400' : 'text-cyan-400'} font-mono">${perfil.fosforoRequeridoPorc}%P ${esBuf ? '(Bajo Cu)' : ''}</div>
+                    </div>
+                  </div>
+                  ${perfil.manejoNutricionalEspecial ? `
+                    <div class="text-[10px] text-emerald-200/90 bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                      💡 <strong>Clave Nutricional de la Raza:</strong> ${perfil.manejoNutricionalEspecial}
+                    </div>
+                  ` : ''}
+                </div>
+
+                <!-- Tarjeta B: Análisis Directo del Desarrollo del Animal vs Estándar Racial -->
+                <div class="p-3.5 rounded-xl border ${colorDesarrollo} space-y-2.5 text-xs">
+                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                    <span class="font-black text-white flex items-center gap-1.5">
+                      <span>📈</span> Desarrollo Directo a los ${des.edadMesesEvaluada} Meses
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-950/90 border border-slate-700">
+                      Índice Racial: ${porcDesarrollo}%
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Peso Actual vs Raza</div>
+                      <div class="text-xs font-black text-white font-mono">${des.pesoActualKg} vs ${des.pesoEsperadoRazaKg} kg</div>
+                      <div class="text-[10px] font-bold ${des.diferenciaPesoKg >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-mono">
+                        ${des.diferenciaPesoKg >= 0 ? `+${des.diferenciaPesoKg} kg` : `${des.diferenciaPesoKg} kg`}
+                      </div>
+                    </div>
+                    <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Talla Actual vs Raza</div>
+                      <div class="text-xs font-black text-emerald-300 font-mono">${des.tallaActualCm} vs ${des.tallaEsperadaRazaCm} cm</div>
+                      <div class="text-[10px] font-bold text-slate-400 font-mono">
+                        ${des.diferenciaTallaCm >= 0 ? `+${des.diferenciaTallaCm} cm` : `${des.diferenciaTallaCm} cm`}
+                      </div>
+                    </div>
+                    <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">Meta GDP Raza</div>
+                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpMetaCorrectivaGDia} g/d</div>
+                      <div class="text-[9px] text-slate-400">Objetivo diario</div>
+                    </div>
+                  </div>
+
+                  <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div class="h-full ${porcDesarrollo < 78 ? 'bg-rose-500' : porcDesarrollo < 90 ? 'bg-amber-500' : 'bg-emerald-500'}" style="width: ${Math.min(100, Math.max(15, porcDesarrollo))}%"></div>
+                  </div>
+
+                  <p class="text-[11px] text-slate-200 leading-relaxed">
+                    <strong>${des.etiquetaDesarrollo}:</strong> ${des.diagnosticoDesarrollo}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- FORMULARIO DE PARÁMETROS DE CAMPO -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
               <div class="flex items-center justify-between">
@@ -840,23 +1115,23 @@ export class ModuloNutricion {
                 </div>
               </div>
 
-              <!-- ZONA DE ESCANEO FOTOGRÁFICO MORFOLÓGICO EFÍMERO -->
+              <!-- ZONA DE ESCANEO FOTOGRÁFICO MORFOLÓGICO EFÍMERO & BOTONES DE ACTUALIZACIÓN IA -->
               <div class="bg-gradient-to-r from-slate-900 to-slate-900/60 p-3.5 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div class="space-y-0.5">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="text-base">📸</span>
-                    <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico con Visión IA</span>
+                    <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico & Diagnóstico Gemini IA</span>
                     <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">100% EFÍMERO</span>
                     <button type="button" class="btn-abrir-config-gemini-nutri text-[10px] font-bold text-purple-300 hover:text-purple-200 underline cursor-pointer">
-                      ${obtenerGeminiApiKey() ? '✨ Conectado a Gemini' : '⚠️ Configurar API Key de Gemini'}
+                      ${obtenerGeminiApiKey() ? `✨ Conectado a Gemini (${obtenerModeloGeminiActivo()})` : '⚠️ Configurar API Key de Gemini'}
                     </button>
                   </div>
                   <p class="text-[10px] text-slate-400">
-                    Sube una foto del ejemplar: la IA analiza contorno dorsal, apófisis y cobertura grasa para estimar BCS y talla en cm. <strong>La foto nunca se guarda en memoria</strong> para no saturar el almacenamiento.
+                    Sube una foto del ejemplar o pulsa <strong>Actualizar Plan IA</strong> para recalcular dieta, medicamentos y vitaminas según su raza confirmada y curva de desarrollo.
                   </p>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-2 shrink-0 flex-wrap">
                   <label class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs flex items-center gap-2 cursor-pointer border border-slate-700 transition">
                     <span>${this.analisisFotoEnCurso ? '⏳' : '📷'}</span>
                     <span>${this.analisisFotoEnCurso ? 'Analizando...' : 'Subir / Tomar Foto'}</span>
@@ -864,10 +1139,11 @@ export class ModuloNutricion {
                   </label>
                   <button
                     id="btn-recalcular-plan"
-                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
+                    ${this.consultaGeminiEnCurso ? 'disabled' : ''}
+                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow transition cursor-pointer ${this.consultaGeminiEnCurso ? 'opacity-60 cursor-wait' : ''}"
                   >
-                    <span>⚡</span>
-                    <span>Actualizar Plan IA</span>
+                    <span>${this.consultaGeminiEnCurso ? '⏳' : '⚡'}</span>
+                    <span>${this.consultaGeminiEnCurso ? 'Consultando IA...' : 'Actualizar Plan IA'}</span>
                   </button>
                 </div>
               </div>
@@ -877,7 +1153,7 @@ export class ModuloNutricion {
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
               <div class="flex items-center justify-between pb-2 border-b border-slate-800">
                 <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
-                  <span>🌾</span> 1. Ración & Dieta Zootécnica de Precisión
+                  <span>🌾</span> 1. Ración & Dieta Zootécnica de Precisión (${perfil.nombre})
                 </h4>
                 <span class="text-[10px] font-mono text-emerald-400 font-bold">GDP Proyectada: +${plan.gdpEsperadaGDia || 450} g/día</span>
               </div>
@@ -1006,9 +1282,9 @@ export class ModuloNutricion {
             <div class="bg-gradient-to-br from-emerald-950/40 via-slate-950 to-slate-950 p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-2">
               <div class="flex items-center gap-2">
                 <span class="text-lg">🤖</span>
-                <h4 class="text-xs sm:text-sm font-black text-emerald-300">Diagnóstico Zootécnico Integral de la Inteligencia Artificial</h4>
+                <h4 class="text-xs sm:text-sm font-black text-emerald-300">Diagnóstico Zootécnico Integral & de Desarrollo Racial (IA)</h4>
               </div>
-              <p class="text-xs text-slate-300 leading-relaxed font-sans">
+              <p class="text-xs text-slate-300 leading-relaxed font-sans whitespace-pre-line">
                 ${plan.analisisIA || 'Análisis no disponible.'}
               </p>
             </div>
@@ -1147,11 +1423,32 @@ export class ModuloNutricion {
         });
       }
 
-      // Botón Recalcular Plan IA
+      // Cambio de Raza, Confirmación de Raza o Edad recalcula inmediatamente el análisis de desarrollo racial
+      const inputRaza = this.container.querySelector('#input-nutri-raza');
+      const checkRaza = this.container.querySelector('#check-nutri-raza-confirmada');
+      const inputEdad = this.container.querySelector('#input-nutri-edad-meses');
+      if (inputRaza) {
+        inputRaza.addEventListener('change', () => {
+          if (checkRaza) checkRaza.checked = true;
+          this.calcularPlanDesdeFormulario(false);
+        });
+      }
+      if (checkRaza) {
+        checkRaza.addEventListener('change', () => {
+          this.calcularPlanDesdeFormulario(false);
+        });
+      }
+      if (inputEdad) {
+        inputEdad.addEventListener('change', () => {
+          this.calcularPlanDesdeFormulario(false);
+        });
+      }
+
+      // Botón Recalcular Plan IA (invoca también Gemini en vivo si tiene API Key)
       const btnRecalcular = this.container.querySelector('#btn-recalcular-plan');
       if (btnRecalcular) {
         btnRecalcular.addEventListener('click', () => {
-          this.calcularPlanDesdeFormulario();
+          this.calcularPlanDesdeFormulario(true);
         });
       }
 
@@ -1168,8 +1465,8 @@ export class ModuloNutricion {
       // Guardar Plan
       const btnGuardarModal = this.container.querySelector('#btn-guardar-plan-modal');
       if (btnGuardarModal) {
-        btnGuardarModal.addEventListener('click', () => {
-          this.calcularPlanDesdeFormulario();
+        btnGuardarModal.addEventListener('click', async () => {
+          await this.calcularPlanDesdeFormulario(false);
           this.modoModalEvaluacion = false;
           this.render();
         });
@@ -1187,6 +1484,7 @@ export class ModuloNutricion {
     // --- EVENTOS MODAL CONFIG GEMINI ---
     this.container.querySelectorAll('.btn-abrir-config-gemini-nutri').forEach((btn) => {
       btn.addEventListener('click', () => {
+        this.geminiFeedback = null;
         this.modalConfigGeminiAbierto = true;
         this.render();
       });
@@ -1195,6 +1493,7 @@ export class ModuloNutricion {
     const btnCerrarModalGemini = this.container.querySelector('#btn-cerrar-modal-config-gemini');
     if (btnCerrarModalGemini) {
       btnCerrarModalGemini.addEventListener('click', () => {
+        this.geminiFeedback = null;
         this.modalConfigGeminiAbierto = false;
         this.render();
       });
@@ -1203,6 +1502,7 @@ export class ModuloNutricion {
     const btnCancelarModalGemini = this.container.querySelector('#btn-cancelar-modal-gemini');
     if (btnCancelarModalGemini) {
       btnCancelarModalGemini.addEventListener('click', () => {
+        this.geminiFeedback = null;
         this.modalConfigGeminiAbierto = false;
         this.render();
       });

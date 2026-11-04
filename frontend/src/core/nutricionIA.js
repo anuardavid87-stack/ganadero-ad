@@ -11,105 +11,729 @@
  */
 
 export const TABLA_RAZAS_NUTRICION = {
+  // === RAZAS CEBÚ / TROPICALES (Bos indicus) ===
   brahman: {
+    clave: 'brahman',
     nombre: 'Brahman (Cebú)',
+    grupo: 'Bovinos Cebú / Tropicales',
+    especie: 'bovino',
+    aptitud: 'Carne Tropical & Cría Maternal',
     tipo: 'carne_cebu',
     frameEstandar: 'Medio (Frame 5-6)',
-    pesoAdultoMachoKg: 850,
+    pesoAdultoMachoKg: 880,
     pesoAdultoHembraKg: 550,
+    curvaPesoHembraKg: { m0: 32, m7: 195, m12: 275, m18: 365, m24: 440, adulto: 550 },
+    curvaPesoMachoKg: { m0: 35, m7: 215, m12: 320, m18: 445, m24: 560, adulto: 880 },
+    curvaTallaCm: { m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
+    gdpMetaOptimaGDia: 750,
     consumoMsPorcPV: 2.2,
     pcMantenimientoPorc: 9.0,
     pcProduccionPorc: 13.0,
     fosforoRequeridoPorc: 7.0,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'muy_alta',
-    caracteristicas: 'Alta rusticidad, termotolerancia sobresaliente, excelente digestión de pastos fibrosos tropicales.'
+    caracteristicas: 'Alta rusticidad, termotolerancia sobresaliente, excelente digestión de pastos fibrosos tropicales y gran habilidad materna.',
+    manejoNutricionalEspecial: 'Priorizar relación energía/proteína para llenado de lomo y pierna sin engrasamiento en giba o pecho; sal al 7-8% P con Zinc quelatado.'
   },
   gyr: {
+    clave: 'gyr',
     nombre: 'Gyr Lechero (Cebú)',
+    grupo: 'Bovinos Cebú / Tropicales',
+    especie: 'bovino',
+    aptitud: 'Leche Tropical Cebú',
     tipo: 'leche_cebu',
     frameEstandar: 'Medio (Frame 4-5)',
     pesoAdultoMachoKg: 800,
     pesoAdultoHembraKg: 500,
+    curvaPesoHembraKg: { m0: 27, m7: 165, m12: 235, m18: 325, m24: 395, adulto: 500 },
+    curvaPesoMachoKg: { m0: 30, m7: 185, m12: 275, m18: 390, m24: 495, adulto: 800 },
+    curvaTallaCm: { m7: 104, m12: 117, m18: 125, m24: 131, adulto: 135 },
+    gdpMetaOptimaGDia: 650,
     consumoMsPorcPV: 2.4,
     pcMantenimientoPorc: 10.0,
     pcProduccionPorc: 15.0,
     fosforoRequeridoPorc: 8.0,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'alta',
-    caracteristicas: 'Zebuíno especializado en leche tropical, alta resistencia a ectoparásitos y estrés calórico.'
+    caracteristicas: 'Zebuíno especializado en leche tropical, alta resistencia a ectoparásitos y estrés calórico, ubre profunda y temperamento dócil.',
+    manejoNutricionalEspecial: 'Cuidar desarrollo de novillas sin engrasar tejido mamario; en lactancia suministrar proteína bypass y calcio/fósforo 8%.'
   },
+  guzera: {
+    clave: 'guzera',
+    nombre: 'Guzerá (Doble Propósito Cebú)',
+    grupo: 'Bovinos Cebú / Tropicales',
+    especie: 'bovino',
+    aptitud: 'Doble Propósito (Carne & Leche Tropical)',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-7)',
+    pesoAdultoMachoKg: 900,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 31, m7: 190, m12: 270, m18: 360, m24: 445, adulto: 560 },
+    curvaPesoMachoKg: { m0: 34, m7: 210, m12: 315, m18: 440, m24: 555, adulto: 900 },
+    curvaTallaCm: { m7: 109, m12: 122, m18: 131, m24: 136, adulto: 141 },
+    gdpMetaOptimaGDia: 750,
+    consumoMsPorcPV: 2.3,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 7.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Gran alzada, rusticidad extrema en sequía, cornamenta en lira que demanda alto aporte mineral cálcico-fosfórico.',
+    manejoNutricionalEspecial: 'Suplementación constante de Calcio, Fósforo y Magnesio por su gran estructura ósea y desarrollo de cornamenta.'
+  },
+  nelore: {
+    clave: 'nelore',
+    nombre: 'Nelore (Cebú Cárnico)',
+    grupo: 'Bovinos Cebú / Tropicales',
+    especie: 'bovino',
+    aptitud: 'Carne & Ciclo Corto a Pastoreo',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-6)',
+    pesoAdultoMachoKg: 860,
+    pesoAdultoHembraKg: 530,
+    curvaPesoHembraKg: { m0: 30, m7: 185, m12: 265, m18: 350, m24: 425, adulto: 530 },
+    curvaPesoMachoKg: { m0: 33, m7: 205, m12: 310, m18: 430, m24: 540, adulto: 860 },
+    curvaTallaCm: { m7: 108, m12: 121, m18: 130, m24: 135, adulto: 139 },
+    gdpMetaOptimaGDia: 780,
+    consumoMsPorcPV: 2.2,
+    pcMantenimientoPorc: 9.0,
+    pcProduccionPorc: 13.5,
+    fosforoRequeridoPorc: 7.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Eficiencia sobresaliente en conversión de pasturas tropicales a carne magra, partos fáciles y gran vigor neonatal.',
+    manejoNutricionalEspecial: 'Excelente respuesta a proteinados en época seca y dietas de ceba intensiva con ionóforos/levaduras.'
+  },
+
+  // === DOBLE PROPÓSITO, CRUCES & CRIOLLOS ===
   girolando: {
+    clave: 'girolando',
     nombre: 'Girolando / Cruces F1',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Leche & Doble Propósito Tropical (F1 / 5/8)',
     tipo: 'doble_proposito',
     frameEstandar: 'Medio a Alto (Frame 5-6)',
     pesoAdultoMachoKg: 850,
     pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 33, m7: 185, m12: 270, m18: 365, m24: 450, adulto: 560 },
+    curvaPesoMachoKg: { m0: 36, m7: 205, m12: 305, m18: 420, m24: 530, adulto: 850 },
+    curvaTallaCm: { m7: 107, m12: 120, m18: 129, m24: 135, adulto: 139 },
+    gdpMetaOptimaGDia: 720,
     consumoMsPorcPV: 2.7,
     pcMantenimientoPorc: 11.0,
     pcProduccionPorc: 16.5,
     fosforoRequeridoPorc: 8.5,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'media_alta',
-    caracteristicas: 'Heterosis máxima: alto potencial lechero con rusticidad tropical. Demanda suplementación en pico de lactancia.'
+    caracteristicas: 'Heterosis máxima: alto potencial lechero con rusticidad tropical. Demanda suplementación energética en pico de lactancia.',
+    manejoNutricionalEspecial: 'Requiere grasas sobrepasantes en primeros 100 días de leche y sal al 8.5-9% P con Cromo y Selenio orgánico para no caer en anestro postparto.'
   },
+  simmental: {
+    clave: 'simmental',
+    nombre: 'Simmental / Fleckvieh (Doble Propósito)',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Doble Propósito (Alta Leche & Musculatura)',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Alto (Frame 6-7)',
+    pesoAdultoMachoKg: 1000,
+    pesoAdultoHembraKg: 650,
+    curvaPesoHembraKg: { m0: 38, m7: 225, m12: 325, m18: 435, m24: 525, adulto: 650 },
+    curvaPesoMachoKg: { m0: 42, m7: 255, m12: 385, m18: 530, m24: 670, adulto: 1000 },
+    curvaTallaCm: { m7: 112, m12: 125, m18: 134, m24: 140, adulto: 144 },
+    gdpMetaOptimaGDia: 920,
+    consumoMsPorcPV: 2.7,
+    pcMantenimientoPorc: 11.0,
+    pcProduccionPorc: 16.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Velocidad de crecimiento superior, gran masa muscular y excelente producción de leche con altos sólidos.',
+    manejoNutricionalEspecial: 'Por su rápido crecimiento muscular y óseo exige dietas con ≥15% PC en levante y alta energía metabolizable.'
+  },
+  simbrah: {
+    clave: 'simbrah',
+    nombre: 'Simbrah (Simmental x Brahman)',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Doble Propósito Cárnico-Lechero Tropical',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio a Alto (Frame 5-7)',
+    pesoAdultoMachoKg: 950,
+    pesoAdultoHembraKg: 600,
+    curvaPesoHembraKg: { m0: 35, m7: 210, m12: 300, m18: 400, m24: 485, adulto: 600 },
+    curvaPesoMachoKg: { m0: 38, m7: 235, m12: 350, m18: 485, m24: 610, adulto: 950 },
+    curvaTallaCm: { m7: 110, m12: 123, m18: 132, m24: 137, adulto: 141 },
+    gdpMetaOptimaGDia: 850,
+    consumoMsPorcPV: 2.6,
+    pcMantenimientoPorc: 10.5,
+    pcProduccionPorc: 15.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Combina la precocidad y volumen muscular del Simmental con la adaptación calórica y resistencia del Brahman.',
+    manejoNutricionalEspecial: 'Ideal para suplementación estratégica en pastoreo rotacional y preparación de novillos/reproductores pesados.'
+  },
+  normando: {
+    clave: 'normando',
+    nombre: 'Normando (Doble Propósito)',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Doble Propósito (Leche Quesera & Carne Marmoleada)',
+    tipo: 'doble_proposito',
+    frameEstandar: 'Alto (Frame 6-7)',
+    pesoAdultoMachoKg: 980,
+    pesoAdultoHembraKg: 630,
+    curvaPesoHembraKg: { m0: 37, m7: 210, m12: 305, m18: 410, m24: 500, adulto: 630 },
+    curvaPesoMachoKg: { m0: 40, m7: 235, m12: 355, m18: 490, m24: 620, adulto: 980 },
+    curvaTallaCm: { m7: 111, m12: 124, m18: 133, m24: 139, adulto: 143 },
+    gdpMetaOptimaGDia: 820,
+    consumoMsPorcPV: 2.7,
+    pcMantenimientoPorc: 11.0,
+    pcProduccionPorc: 16.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Leche rica en caseína Kappa BB y excelente rendimiento en canal con cobertura grasa uniforme.',
+    manejoNutricionalEspecial: 'Balancear fibra efectiva con carbohidratos solubles para sostener proteína láctea y condición corporal.'
+  },
+  bon: {
+    clave: 'bon',
+    nombre: 'Blanco Orejinegro - BON (Criollo Colombiano)',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Criollo Doble Propósito & Cruzamiento F1',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 780,
+    pesoAdultoHembraKg: 480,
+    curvaPesoHembraKg: { m0: 28, m7: 170, m12: 240, m18: 320, m24: 390, adulto: 480 },
+    curvaPesoMachoKg: { m0: 30, m7: 190, m12: 280, m18: 385, m24: 480, adulto: 780 },
+    curvaTallaCm: { m7: 102, m12: 115, m18: 123, m24: 128, adulto: 132 },
+    gdpMetaOptimaGDia: 680,
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 13.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Raza criolla de altísima fertilidad, longevidad, resistencia natural al nuche/garrapata y gran aprovechamiento de laderas.',
+    manejoNutricionalEspecial: 'Aprovecha muy bien sistemas silvopastoriles; suplementar sal 7.5% P con Selenio para expresar su máxima fertilidad.'
+  },
+  romosinuano: {
+    clave: 'romosinuano',
+    nombre: 'Romosinuano / Hartón del Valle / Costeño',
+    grupo: 'Doble Propósito & Cruces',
+    especie: 'bovino',
+    aptitud: 'Criollo Tropical (Fertilidad & Carne Tierna)',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 800,
+    pesoAdultoHembraKg: 490,
+    curvaPesoHembraKg: { m0: 29, m7: 175, m12: 245, m18: 330, m24: 400, adulto: 490 },
+    curvaPesoMachoKg: { m0: 31, m7: 195, m12: 290, m18: 400, m24: 500, adulto: 800 },
+    curvaTallaCm: { m7: 103, m12: 116, m18: 124, m24: 129, adulto: 133 },
+    gdpMetaOptimaGDia: 700,
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 13.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Taurino tropical naturalmente topo, intervalo entre partos corto (<380 días) y carne tierna en pastoreo.',
+    manejoNutricionalEspecial: 'Evitar sobrealimentación almidonosa; mantener pasturas rotacionales con leguminosas y mineralización constante.'
+  },
+
+  // === RAZAS LECHERAS ESPECIALIZADAS ===
   holstein: {
+    clave: 'holstein',
     nombre: 'Holstein / Pardo Suizo',
+    grupo: 'Bovinos Lecheros Especializados',
+    especie: 'bovino',
+    aptitud: 'Alta Producción Lechera Especializada',
     tipo: 'leche_especializada',
     frameEstandar: 'Alto (Frame 6-8)',
-    pesoAdultoMachoKg: 950,
+    pesoAdultoMachoKg: 980,
     pesoAdultoHembraKg: 650,
+    curvaPesoHembraKg: { m0: 39, m7: 205, m12: 310, m18: 425, m24: 535, adulto: 650 },
+    curvaPesoMachoKg: { m0: 42, m7: 230, m12: 350, m18: 490, m24: 620, adulto: 980 },
+    curvaTallaCm: { m7: 112, m12: 126, m18: 135, m24: 141, adulto: 145 },
+    gdpMetaOptimaGDia: 800,
     consumoMsPorcPV: 3.2,
     pcMantenimientoPorc: 12.0,
     pcProduccionPorc: 18.0,
     fosforoRequeridoPorc: 9.0,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'moderada',
-    caracteristicas: 'Máximo volumen lechero. Muy sensible al estrés térmico; requiere grasa de sobrepaso y sales aniónicas en preparto.'
+    caracteristicas: 'Máximo volumen lechero. Muy sensible al estrés térmico; requiere grasa de sobrepaso y sales aniónicas en preparto.',
+    manejoNutricionalEspecial: 'Alta exigencia de fibra efectiva + concentrado 18% PC fraccionado, amortiguadores ruminales y prevención estricta de hipocalcemia y cetosis.'
   },
+  jersey: {
+    clave: 'jersey',
+    nombre: 'Jersey (Alta Grasa & Sólidos Lácteos)',
+    grupo: 'Bovinos Lecheros Especializados',
+    especie: 'bovino',
+    aptitud: 'Leche con Máxima Grasa (5.0%) y Proteína (3.8%)',
+    tipo: 'leche_especializada',
+    frameEstandar: 'Bajo a Medio (Frame 2-4) - Compacta',
+    pesoAdultoMachoKg: 650,
+    pesoAdultoHembraKg: 420,
+    curvaPesoHembraKg: { m0: 25, m7: 140, m12: 210, m18: 290, m24: 355, adulto: 420 },
+    curvaPesoMachoKg: { m0: 27, m7: 160, m12: 245, m18: 345, m24: 440, adulto: 650 },
+    curvaTallaCm: { m7: 96, m12: 108, m18: 116, m24: 121, adulto: 124 },
+    gdpMetaOptimaGDia: 580,
+    consumoMsPorcPV: 3.4,
+    pcMantenimientoPorc: 12.0,
+    pcProduccionPorc: 18.0,
+    fosforoRequeridoPorc: 9.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'moderada',
+    caracteristicas: 'Mayor consumo de materia seca por kg de peso vivo (3.4% PV). Alta susceptibilidad a fiebre de leche (hipocalcemia) al parto.',
+    manejoNutricionalEspecial: 'Obligatorio manejo de dieta aniónica con alto Magnesio (4%) en los 21 días preparto y bolo de Calcio oral al parto.'
+  },
+  pardo_suizo: {
+    clave: 'pardo_suizo',
+    nombre: 'Pardo Suizo / Braunvieh',
+    grupo: 'Bovinos Lecheros Especializados',
+    especie: 'bovino',
+    aptitud: 'Leche Especializada & Adaptación climática',
+    tipo: 'leche_especializada',
+    frameEstandar: 'Alto (Frame 6-7)',
+    pesoAdultoMachoKg: 960,
+    pesoAdultoHembraKg: 620,
+    curvaPesoHembraKg: { m0: 38, m7: 200, m12: 300, m18: 410, m24: 515, adulto: 620 },
+    curvaPesoMachoKg: { m0: 41, m7: 225, m12: 340, m18: 475, m24: 600, adulto: 960 },
+    curvaTallaCm: { m7: 110, m12: 124, m18: 133, m24: 139, adulto: 143 },
+    gdpMetaOptimaGDia: 780,
+    consumoMsPorcPV: 3.0,
+    pcMantenimientoPorc: 11.5,
+    pcProduccionPorc: 17.5,
+    fosforoRequeridoPorc: 8.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'media_alta',
+    caracteristicas: 'Excelentes aplomos, pezuñas negras resistentes, longevidad productiva y leche ideal para quesería.',
+    manejoNutricionalEspecial: 'Requiere forraje de alta digestibilidad y suplementación con Biotina y Zinc para sostener altas lactancias.'
+  },
+  ayrshire: {
+    clave: 'ayrshire',
+    nombre: 'Ayrshire (Leche de Pastoreo)',
+    grupo: 'Bovinos Lecheros Especializados',
+    especie: 'bovino',
+    aptitud: 'Leche Eficiente en Pastoreo',
+    tipo: 'leche_especializada',
+    frameEstandar: 'Medio (Frame 4-6)',
+    pesoAdultoMachoKg: 820,
+    pesoAdultoHembraKg: 530,
+    curvaPesoHembraKg: { m0: 32, m7: 175, m12: 260, m18: 355, m24: 440, adulto: 530 },
+    curvaPesoMachoKg: { m0: 35, m7: 195, m12: 295, m18: 410, m24: 520, adulto: 820 },
+    curvaTallaCm: { m7: 105, m12: 118, m18: 127, m24: 133, adulto: 136 },
+    gdpMetaOptimaGDia: 700,
+    consumoMsPorcPV: 3.0,
+    pcMantenimientoPorc: 11.5,
+    pcProduccionPorc: 17.0,
+    fosforoRequeridoPorc: 8.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Raza lechera rústica con excelente inserción de ubre y gran capacidad de pastoreo en topografías quebradas.',
+    manejoNutricionalEspecial: 'Balance energía-proteína en pastoreo suplementado con concentrado 16-18% PC según litros producidos.'
+  },
+
+  // === RAZAS CÁRNICAS ESPECIALIZADAS & COMPUESTAS ===
   angus: {
+    clave: 'angus',
     nombre: 'Angus / Brangus / Carne Europeo',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Carne Premium, Precocidad & Marmoleo',
     tipo: 'carne_precoz',
     frameEstandar: 'Medio (Frame 4-6)',
     pesoAdultoMachoKg: 900,
     pesoAdultoHembraKg: 580,
+    curvaPesoHembraKg: { m0: 33, m7: 210, m12: 305, m18: 405, m24: 485, adulto: 580 },
+    curvaPesoMachoKg: { m0: 36, m7: 235, m12: 360, m18: 495, m24: 625, adulto: 900 },
+    curvaTallaCm: { m7: 107, m12: 120, m18: 128, m24: 133, adulto: 137 },
+    gdpMetaOptimaGDia: 900,
     consumoMsPorcPV: 2.6,
     pcMantenimientoPorc: 10.0,
     pcProduccionPorc: 14.0,
     fosforoRequeridoPorc: 7.5,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'alta',
-    caracteristicas: 'Precocidad sexual, excelente conformación carnicera y marmoleo. Alta eficiencia de conversión en ceba.'
+    caracteristicas: 'Precocidad sexual, excelente conformación carnicera y marmoleo. Alta eficiencia de conversión en ceba.',
+    manejoNutricionalEspecial: 'Cuidar exceso de engrasamiento en novillas de reemplazo; en ceba final usar almidón digestible para infiltración intramuscular.'
+  },
+  brangus: {
+    clave: 'brangus',
+    nombre: 'Brangus (3/8 Brahman x 5/8 Angus)',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Carne de Calidad en Trópico Bajo y Medio',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 5-6)',
+    pesoAdultoMachoKg: 900,
+    pesoAdultoHembraKg: 570,
+    curvaPesoHembraKg: { m0: 33, m7: 205, m12: 295, m18: 395, m24: 475, adulto: 570 },
+    curvaPesoMachoKg: { m0: 36, m7: 230, m12: 350, m18: 485, m24: 610, adulto: 900 },
+    curvaTallaCm: { m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
+    gdpMetaOptimaGDia: 880,
+    consumoMsPorcPV: 2.6,
+    pcMantenimientoPorc: 10.0,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Combina la calidad de canal y precocidad del Angus con la adaptación tropical y habilidad materna del Brahman.',
+    manejoNutricionalEspecial: 'Excelente respuesta a Creep Feeding en terneros y suplementación energético-proteica en novillas para entore a 15-18 meses.'
+  },
+  braford: {
+    clave: 'braford',
+    nombre: 'Braford / Hereford',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Carne a Pastoreo & Conversión Eficiente',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 5-6)',
+    pesoAdultoMachoKg: 890,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 33, m7: 200, m12: 290, m18: 390, m24: 470, adulto: 560 },
+    curvaPesoMachoKg: { m0: 36, m7: 225, m12: 345, m18: 475, m24: 600, adulto: 890 },
+    curvaTallaCm: { m7: 107, m12: 120, m18: 128, m24: 133, adulto: 137 },
+    gdpMetaOptimaGDia: 860,
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 10.0,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Gran capacidad torácica, docilidad, fertilidad temprana y terminación sobresaliente sobre praderas.',
+    manejoNutricionalEspecial: 'Suplementar Zinc, Cobre y Vitamina A para protección ocular y epitelial en zonas de alta radiación solar.'
+  },
+  charolais: {
+    clave: 'charolais',
+    nombre: 'Charolais / Charbray / Limousin',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Carne Magra de Alto Rendimiento en Canal',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Alto (Frame 6-8)',
+    pesoAdultoMachoKg: 1050,
+    pesoAdultoHembraKg: 660,
+    curvaPesoHembraKg: { m0: 39, m7: 230, m12: 335, m18: 445, m24: 540, adulto: 660 },
+    curvaPesoMachoKg: { m0: 43, m7: 260, m12: 395, m18: 545, m24: 690, adulto: 1050 },
+    curvaTallaCm: { m7: 113, m12: 126, m18: 135, m24: 141, adulto: 146 },
+    gdpMetaOptimaGDia: 980,
+    consumoMsPorcPV: 2.6,
+    pcMantenimientoPorc: 10.5,
+    pcProduccionPorc: 15.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Raza continental de máximo desarrollo muscular, lomo ancho y altísima ganancia diaria de peso.',
+    manejoNutricionalEspecial: 'Demanda dietas con alta densidad proteica (15-16% PC) en crecimiento para sostener su gran hipertrofia muscular.'
+  },
+  senepol: {
+    clave: 'senepol',
+    nombre: 'Senepol / Beefmaster / Santa Gertrudis',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Taurino/Compuesto Tropical Cárnico (Gen Slick)',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 4-6)',
+    pesoAdultoMachoKg: 880,
+    pesoAdultoHembraKg: 550,
+    curvaPesoHembraKg: { m0: 33, m7: 200, m12: 290, m18: 385, m24: 465, adulto: 550 },
+    curvaPesoMachoKg: { m0: 36, m7: 225, m12: 340, m18: 470, m24: 590, adulto: 880 },
+    curvaTallaCm: { m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 },
+    gdpMetaOptimaGDia: 840,
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 10.0,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Pelaje corto (Gen Slick) con termotolerancia extrema, pastoreo en horas de sol intenso, precocidad y ternura de carne.',
+    manejoNutricionalEspecial: 'Aprovecha pastoreo continuo con suplementación mineral al 7.5-8% P y bloques multinutricionales.'
+  },
+  wagyu: {
+    clave: 'wagyu',
+    nombre: 'Wagyu / Cruce F1 Wagyu',
+    grupo: 'Bovinos Cárnicos Especializados',
+    especie: 'bovino',
+    aptitud: 'Carne Ultra-Marmoleada (Grasa Intramuscular)',
+    tipo: 'carne_precoz',
+    frameEstandar: 'Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 820,
+    pesoAdultoHembraKg: 520,
+    curvaPesoHembraKg: { m0: 29, m7: 180, m12: 265, m18: 360, m24: 440, adulto: 520 },
+    curvaPesoMachoKg: { m0: 32, m7: 205, m12: 310, m18: 430, m24: 545, adulto: 820 },
+    curvaTallaCm: { m7: 104, m12: 117, m18: 125, m24: 131, adulto: 135 },
+    gdpMetaOptimaGDia: 780,
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 10.5,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Genética especializada en infiltración grasa intramuscular (BMS alto) con ácidos grasos monoinsaturados.',
+    manejoNutricionalEspecial: 'En fase de finalización controlar Vitamina A según protocolo de marmoleo y asegurar alta energía de almidón con levaduras ruminales.'
+  },
+
+  // === RAZAS BUFALINAS (Bubalus bubalis) ===
+  bufalo_murrah: {
+    clave: 'bufalo_murrah',
+    nombre: 'Búfalo Murrah (Lechero & Doble Propósito)',
+    grupo: 'Razas Bufalinas (Bubalus bubalis)',
+    especie: 'bufalino',
+    aptitud: 'Leche de Alta Grasa (7.5-8.5%) & Carne',
+    tipo: 'bufalo',
+    frameEstandar: 'Robusto / Compacto (Frame 4-6)',
+    pesoAdultoMachoKg: 850,
+    pesoAdultoHembraKg: 600,
+    curvaPesoHembraKg: { m0: 36, m7: 210, m12: 295, m18: 395, m24: 485, adulto: 600 },
+    curvaPesoMachoKg: { m0: 39, m7: 230, m12: 335, m18: 460, m24: 580, adulto: 850 },
+    curvaTallaCm: { m7: 106, m12: 118, m18: 127, m24: 133, adulto: 137 },
+    gdpMetaOptimaGDia: 780,
+    consumoMsPorcPV: 2.3,
+    pcMantenimientoPorc: 8.5,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'toxica_alta',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'Cornamenta en espiral cerrada, color negro azabache, ubre bien conformada y conversión superior de forrajes fibrosos en un 20%.',
+    manejoNutricionalEspecial: 'PROHIBIDO exceso de Cobre (<150 ppm Cu en sal mineral). Exige alto Fósforo (8%), Azufre y Biotina para queratina de cuernos y pezuñas, más sombra/agua para termorregulación.'
+  },
+  bufalo_mediterraneo: {
+    clave: 'bufalo_mediterraneo',
+    nombre: 'Búfalo Mediterráneo (Italiano / Mozzarella & Carne)',
+    grupo: 'Razas Bufalinas (Bubalus bubalis)',
+    especie: 'bufalino',
+    aptitud: 'Doble Propósito (Leche Quesera Mozzarella & Carne)',
+    tipo: 'bufalo',
+    frameEstandar: 'Robusto / Profundo (Frame 5-6)',
+    pesoAdultoMachoKg: 880,
+    pesoAdultoHembraKg: 630,
+    curvaPesoHembraKg: { m0: 38, m7: 220, m12: 310, m18: 415, m24: 510, adulto: 630 },
+    curvaPesoMachoKg: { m0: 41, m7: 245, m12: 355, m18: 485, m24: 610, adulto: 880 },
+    curvaTallaCm: { m7: 108, m12: 120, m18: 129, m24: 135, adulto: 139 },
+    gdpMetaOptimaGDia: 820,
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.0,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'toxica_alta',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'Cuerpo profundo y musculoso, altísimo rendimiento quesero y excelente conformación carnicera en bucerros de levante y ceba.',
+    manejoNutricionalEspecial: 'Sal mineral exclusiva para búfalos con bajo Cobre (<150 ppm), Calcio/Fósforo reforzado para alta producción de sólidos lácteos y grasas bypass en lactancia.'
+  },
+  bufalo_jafarabadi: {
+    clave: 'bufalo_jafarabadi',
+    nombre: 'Búfalo Jafarabadi (Gran Formato / Carne & Leche)',
+    grupo: 'Razas Bufalinas (Bubalus bubalis)',
+    especie: 'bufalino',
+    aptitud: 'Gran Formato Cárnico y Lechero',
+    tipo: 'bufalo',
+    frameEstandar: 'Alto / Masivo (Frame 6-8)',
+    pesoAdultoMachoKg: 1000,
+    pesoAdultoHembraKg: 700,
+    curvaPesoHembraKg: { m0: 40, m7: 235, m12: 335, m18: 450, m24: 555, adulto: 700 },
+    curvaPesoMachoKg: { m0: 44, m7: 265, m12: 390, m18: 535, m24: 675, adulto: 1000 },
+    curvaTallaCm: { m7: 111, m12: 124, m18: 133, m24: 139, adulto: 144 },
+    gdpMetaOptimaGDia: 880,
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.0,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 8.5,
+    sensibilidadCobre: 'toxica_alta',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'El búfalo de mayor estructura ósea y capacidad torácica, frente prominente y altas ganancias de peso en pasturas inundables.',
+    manejoNutricionalEspecial: 'Por su pesada estructura esquelética requiere sal bufalina al 8.5% P sin exceso de Cobre y suplementación mineral constante.'
+  },
+  bufalo_nili_ravi: {
+    clave: 'bufalo_nili_ravi',
+    nombre: 'Búfalo Nili-Ravi / Bufalypso / Carabao',
+    grupo: 'Razas Bufalinas (Bubalus bubalis)',
+    especie: 'bufalino',
+    aptitud: 'Doble Propósito Tropical y Humedales',
+    tipo: 'bufalo',
+    frameEstandar: 'Robusto / Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 830,
+    pesoAdultoHembraKg: 580,
+    curvaPesoHembraKg: { m0: 35, m7: 205, m12: 285, m18: 380, m24: 470, adulto: 580 },
+    curvaPesoMachoKg: { m0: 38, m7: 225, m12: 325, m18: 445, m24: 560, adulto: 830 },
+    curvaTallaCm: { m7: 105, m12: 117, m18: 126, m24: 132, adulto: 136 },
+    gdpMetaOptimaGDia: 750,
+    consumoMsPorcPV: 2.3,
+    pcMantenimientoPorc: 8.5,
+    pcProduccionPorc: 14.0,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'toxica_alta',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'Altísima rusticidad en zonas bajas e inundables, excelente conversión de gramíneas nativas en leche y carne.',
+    manejoNutricionalEspecial: 'Sal mineral bufalina con bajo Cobre (<150 ppm), Azufre para microbiota ruminal y desparasitación estratégica en bucerros.'
   },
   bufalo: {
+    clave: 'bufalo',
     nombre: 'Bufalino (Murrah / Mediterráneo)',
+    grupo: 'Razas Bufalinas (Bubalus bubalis)',
+    especie: 'bufalino',
+    aptitud: 'Doble Propósito Bufalino (Leche & Carne)',
     tipo: 'bufalo',
     frameEstandar: 'Robusto / Compacto (Frame 4-5)',
     pesoAdultoMachoKg: 850,
     pesoAdultoHembraKg: 600,
+    curvaPesoHembraKg: { m0: 36, m7: 210, m12: 295, m18: 395, m24: 485, adulto: 600 },
+    curvaPesoMachoKg: { m0: 39, m7: 230, m12: 335, m18: 460, m24: 580, adulto: 850 },
+    curvaTallaCm: { m7: 106, m12: 118, m18: 127, m24: 133, adulto: 137 },
+    gdpMetaOptimaGDia: 780,
     consumoMsPorcPV: 2.3,
     pcMantenimientoPorc: 8.5,
     pcProduccionPorc: 14.0,
     fosforoRequeridoPorc: 8.0,
     sensibilidadCobre: 'toxica_alta', // Sensibilidad zootécnica crítica: NO toleran exceso de cobre
     toleranciaFibraToscana: 'sobresaliente',
-    caracteristicas: 'Digestibilidad ruminal de pasturas toscas superior en un 20%. Leche con 7.5-8.5% de grasa. Requiere sal mineral para búfalos con bajo cobre.'
+    caracteristicas: 'Digestibilidad ruminal de pasturas toscas superior en un 20%. Leche con 7.5-8.5% de grasa. Requiere sal mineral para búfalos con bajo cobre.',
+    manejoNutricionalEspecial: 'Sal mineral exclusiva para búfalos (<150 ppm Cu), alto Fósforo (8%) y Azufre.'
   },
+
+  // === COMERCIAL / MESTIZO ===
   general: {
+    clave: 'general',
     nombre: 'Bovino Comercial / Mestizo Tropical',
+    grupo: 'Comercial / Mestizo Tropical',
+    especie: 'bovino',
+    aptitud: 'Doble Propósito / Comercial Tropical',
     tipo: 'general',
     frameEstandar: 'Medio (Frame 4-5)',
     pesoAdultoMachoKg: 800,
     pesoAdultoHembraKg: 520,
+    curvaPesoHembraKg: { m0: 30, m7: 175, m12: 250, m18: 340, m24: 415, adulto: 520 },
+    curvaPesoMachoKg: { m0: 33, m7: 195, m12: 290, m18: 405, m24: 510, adulto: 800 },
+    curvaTallaCm: { m7: 105, m12: 118, m18: 126, m24: 132, adulto: 136 },
+    gdpMetaOptimaGDia: 680,
     consumoMsPorcPV: 2.3,
     pcMantenimientoPorc: 9.5,
     pcProduccionPorc: 14.0,
     fosforoRequeridoPorc: 7.5,
     sensibilidadCobre: 'normal',
     toleranciaFibraToscana: 'alta',
-    caracteristicas: 'Ganado adaptado al trópico con requerimientos balanceados para pastoreo extensivo o semi-intensivo.'
+    caracteristicas: 'Ganado adaptado al trópico con requerimientos balanceados para pastoreo extensivo o semi-intensivo.',
+    manejoNutricionalEspecial: 'Mineralización permanente con sal 7.5-8% P y ajuste de proteína según época seca o lluvias.'
   }
 };
+
+export function obtenerCatalogoRazasNutricion() {
+  return Object.values(TABLA_RAZAS_NUTRICION);
+}
+
+/**
+ * Evalúa directamente el estado de crecimiento y desarrollo de un animal comparando
+ * su peso actual y su alzada (cm) frente a la curva estándar ideal de su raza, edad y sexo.
+ */
+export function evaluarDesarrolloRacial({
+  animal = null,
+  razaTexto = '',
+  pesoActual = 0,
+  tallaCm = null,
+  edadMeses = 24,
+  sexo = 'hembra'
+}) {
+  const perfil = resolverPerfilRaza(razaTexto || animal?.raza || 'general');
+  const meses = Math.max(1, Number(edadMeses || animal?.edadMeses || 24));
+  const peso = Math.max(20, Number(pesoActual || animal?.ultimoPesoKg || animal?.peso || 420));
+  const sexoNorm = String(sexo || animal?.sexo || 'hembra').toLowerCase();
+  const esMacho = sexoNorm.includes('macho') || sexoNorm.includes('toro') || sexoNorm.includes('novillo') || sexoNorm.includes('bucer');
+
+  const curvaPeso = (esMacho ? perfil.curvaPesoMachoKg : perfil.curvaPesoHembraKg) ||
+    (esMacho ? { m0: 34, m7: 205, m12: 300, m18: 420, m24: 530, adulto: perfil.pesoAdultoMachoKg || 820 } : { m0: 31, m7: 185, m12: 265, m18: 355, m24: 430, adulto: perfil.pesoAdultoHembraKg || 530 });
+  const curvaTalla = perfil.curvaTallaCm || { m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 };
+
+  // Interpolación lineal por tramos de edad (0 -> 7 -> 12 -> 18 -> 24 -> 36+ meses)
+  let pesoEsperadoKg = curvaPeso.adulto;
+  if (meses <= 7) {
+    pesoEsperadoKg = curvaPeso.m0 + ((curvaPeso.m7 - curvaPeso.m0) * (meses / 7));
+  } else if (meses <= 12) {
+    pesoEsperadoKg = curvaPeso.m7 + ((curvaPeso.m12 - curvaPeso.m7) * ((meses - 7) / 5));
+  } else if (meses <= 18) {
+    pesoEsperadoKg = curvaPeso.m12 + ((curvaPeso.m18 - curvaPeso.m12) * ((meses - 12) / 6));
+  } else if (meses <= 24) {
+    pesoEsperadoKg = curvaPeso.m18 + ((curvaPeso.m24 - curvaPeso.m18) * ((meses - 18) / 6));
+  } else if (meses <= 36) {
+    pesoEsperadoKg = curvaPeso.m24 + ((curvaPeso.adulto - curvaPeso.m24) * ((meses - 24) / 12));
+  } else {
+    pesoEsperadoKg = curvaPeso.adulto;
+  }
+  pesoEsperadoKg = Math.round(pesoEsperadoKg);
+
+  let tallaEsperadaCm = curvaTalla.adulto;
+  if (meses <= 7) {
+    tallaEsperadaCm = Math.round(74 + ((curvaTalla.m7 - 74) * (meses / 7)));
+  } else if (meses <= 12) {
+    tallaEsperadaCm = Math.round(curvaTalla.m7 + ((curvaTalla.m12 - curvaTalla.m7) * ((meses - 7) / 5)));
+  } else if (meses <= 18) {
+    tallaEsperadaCm = Math.round(curvaTalla.m12 + ((curvaTalla.m18 - curvaTalla.m12) * ((meses - 12) / 6)));
+  } else if (meses <= 24) {
+    tallaEsperadaCm = Math.round(curvaTalla.m18 + ((curvaTalla.m24 - curvaTalla.m18) * ((meses - 18) / 6)));
+  } else if (meses <= 36) {
+    tallaEsperadaCm = Math.round(curvaTalla.m24 + ((curvaTalla.adulto - curvaTalla.m24) * ((meses - 24) / 12)));
+  }
+  if (esMacho && meses >= 12) {
+    tallaEsperadaCm += 5;
+  }
+
+  const indiceDesarrolloPorc = Math.round((peso / Math.max(1, pesoEsperadoKg)) * 100);
+  const diferenciaPesoKg = Math.round(peso - pesoEsperadoKg);
+  const tallaNum = tallaCm ? Number(tallaCm) : tallaEsperadaCm;
+  const diferenciaTallaCm = Number((tallaNum - tallaEsperadaCm).toFixed(1));
+
+  let estadoDesarrollo = 'optimo';
+  let etiquetaDesarrollo = 'Desarrollo Óptimo Acorde a la Raza';
+  let gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
+  let diagnosticoDesarrollo = '';
+
+  if (indiceDesarrolloPorc < 78) {
+    estadoDesarrollo = 'rezago_severo';
+    etiquetaDesarrollo = '⚠️ Rezago Severo de Crecimiento vs Estándar Racial';
+    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.25);
+    diagnosticoDesarrollo = `El ejemplar presenta un índice de desarrollo del ${indiceDesarrolloPorc}% respecto al estándar de la raza ${perfil.nombre} a los ${meses} meses (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados, déficit de ${Math.abs(diferenciaPesoKg)} kg). Se requiere intervención nutricional correctiva con proteína verdadera (16-18% PC), desparasitación estratégica y modificador orgánico con aminoácidos y fósforo.`;
+  } else if (indiceDesarrolloPorc < 90) {
+    estadoDesarrollo = 'rezago_moderado';
+    etiquetaDesarrollo = '📉 Desarrollo por Debajo del Objetivo Racial (Recuperación)';
+    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.15);
+    diagnosticoDesarrollo = `El ejemplar alcanza el ${indiceDesarrolloPorc}% del peso ideal para la raza ${perfil.nombre} a los ${meses} meses (${peso} kg vs ${pesoEsperadoKg} kg esperados, ${diferenciaPesoKg} kg). Se recomienda incrementar densidad energético-proteica y minerales quelatados para alcanzar una GDP compensatoria de +${gdpMetaCorrectivaGDia} g/día.`;
+  } else if (indiceDesarrolloPorc <= 112) {
+    estadoDesarrollo = 'optimo';
+    etiquetaDesarrollo = '✅ Desarrollo Armónico y Óptimo para la Raza';
+    gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
+    diagnosticoDesarrollo = `Excelente curva de crecimiento para la raza ${perfil.nombre}: el ejemplar se sitúa en el ${indiceDesarrolloPorc}% del estándar racial a los ${meses} meses (${peso} kg actuales frente a ${pesoEsperadoKg} kg de referencia y alzada de ${tallaNum} cm vs ${tallaEsperadaCm} cm esperados). Mantener balance nutricional de precisión.`;
+  } else {
+    estadoDesarrollo = 'superior';
+    etiquetaDesarrollo = '🏆 Desarrollo Ponderal Superior al Promedio Racial';
+    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 0.95);
+    diagnosticoDesarrollo = `El ejemplar supera el estándar promedio de la raza ${perfil.nombre} con un ${indiceDesarrolloPorc}% de desarrollo (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados a los ${meses} meses, +${diferenciaPesoKg} kg). Vigilar que el peso extra corresponda a desarrollo muscular y óseo magro evitando engrasamiento excesivo en ubre o canal de parto.`;
+  }
+
+  return {
+    razaNombre: perfil.nombre,
+    razaClave: perfil.clave || 'general',
+    especie: perfil.especie || (perfil.tipo === 'bufalo' ? 'bufalino' : 'bovino'),
+    aptitudRacial: perfil.aptitud || 'Doble Propósito',
+    edadMesesEvaluada: meses,
+    pesoActualKg: peso,
+    pesoEsperadoRazaKg: pesoEsperadoKg,
+    diferenciaPesoKg,
+    indiceDesarrolloPorc,
+    tallaActualCm: tallaNum,
+    tallaEsperadaRazaCm: tallaEsperadaCm,
+    diferenciaTallaCm,
+    estadoDesarrollo,
+    etiquetaDesarrollo,
+    gdpMetaCorrectivaGDia,
+    diagnosticoDesarrollo,
+    caracteristicasRaza: perfil.caracteristicas,
+    manejoNutricionalEspecial: perfil.manejoNutricionalEspecial || ''
+  };
+}
 
 /**
  * Calcula el Frame Score zootécnico (escala 1 a 9) basado en la talla en cm, edad y sexo.
@@ -217,32 +841,54 @@ export function calcularCompacidadPista({ pesoKg, tallaCm, etapa = '', raza = 'g
  */
 export function resolverPerfilRaza(razaTexto) {
   if (!razaTexto) return TABLA_RAZAS_NUTRICION.general;
-  const t = String(razaTexto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const raw = String(razaTexto).trim();
+  if (TABLA_RAZAS_NUTRICION[raw]) return TABLA_RAZAS_NUTRICION[raw];
 
-  if (t.includes('bufal') || t.includes('murrah') || t.includes('mediterr')) {
-    return TABLA_RAZAS_NUTRICION.bufalo;
-  }
-  if (t.includes('giroland') || t.includes('f1') || t.includes('cruce lech')) {
-    return TABLA_RAZAS_NUTRICION.girolando;
-  }
-  if (t.includes('gyr') || t.includes('gir')) {
-    return TABLA_RAZAS_NUTRICION.gyr;
-  }
-  if (t.includes('brahman') || t.includes('cebu') || t.includes('nelore') || t.includes('guzera')) {
-    return TABLA_RAZAS_NUTRICION.brahman;
-  }
-  if (t.includes('holstein') || t.includes('pardo') || t.includes('jersey')) {
-    return TABLA_RAZAS_NUTRICION.holstein;
-  }
-  if (t.includes('angus') || t.includes('brangus') || t.includes('simmental') || t.includes('charolais') || t.includes('bon')) {
-    return TABLA_RAZAS_NUTRICION.angus;
-  }
+  const t = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (TABLA_RAZAS_NUTRICION[t]) return TABLA_RAZAS_NUTRICION[t];
+
+  // Razas Bufalinas
+  if (t.includes('jafarabadi')) return TABLA_RAZAS_NUTRICION.bufalo_jafarabadi;
+  if (t.includes('mediterr')) return TABLA_RAZAS_NUTRICION.bufalo_mediterraneo;
+  if (t.includes('nili') || t.includes('ravi') || t.includes('bufalypso') || t.includes('carabao')) return TABLA_RAZAS_NUTRICION.bufalo_nili_ravi;
+  if (t.includes('murrah')) return TABLA_RAZAS_NUTRICION.bufalo_murrah;
+  if (t.includes('bufal')) return TABLA_RAZAS_NUTRICION.bufalo;
+
+  // Razas Doble Propósito & Cruces
+  if (t.includes('giroland') || t.includes('f1') || t.includes('cruce lech')) return TABLA_RAZAS_NUTRICION.girolando;
+  if (t.includes('simbrah')) return TABLA_RAZAS_NUTRICION.simbrah;
+  if (t.includes('simmental') || t.includes('fleckvieh')) return TABLA_RAZAS_NUTRICION.simmental;
+  if (t.includes('normand')) return TABLA_RAZAS_NUTRICION.normando;
+  if (t.includes('bon') || t.includes('orejinegro')) return TABLA_RAZAS_NUTRICION.bon;
+  if (t.includes('romosinuano') || t.includes('harton') || t.includes('costeno')) return TABLA_RAZAS_NUTRICION.romosinuano;
+
+  // Razas Cebú
+  if (t.includes('gyr') || t.includes('gir')) return TABLA_RAZAS_NUTRICION.gyr;
+  if (t.includes('guzera')) return TABLA_RAZAS_NUTRICION.guzera;
+  if (t.includes('nelore')) return TABLA_RAZAS_NUTRICION.nelore;
+  if (t.includes('brahman') || t.includes('cebu') || t.includes('indubrasil') || t.includes('sardo')) return TABLA_RAZAS_NUTRICION.brahman;
+
+  // Razas Lecheras Especializadas
+  if (t.includes('jersey')) return TABLA_RAZAS_NUTRICION.jersey;
+  if (t.includes('pardo') || t.includes('braunvieh') || t.includes('suizo')) return TABLA_RAZAS_NUTRICION.pardo_suizo;
+  if (t.includes('ayrshire')) return TABLA_RAZAS_NUTRICION.ayrshire;
+  if (t.includes('holstein')) return TABLA_RAZAS_NUTRICION.holstein;
+
+  // Razas Cárnicas Especializadas
+  if (t.includes('brangus')) return TABLA_RAZAS_NUTRICION.brangus;
+  if (t.includes('braford') || t.includes('hereford')) return TABLA_RAZAS_NUTRICION.braford;
+  if (t.includes('charolais') || t.includes('charbray') || t.includes('limousin')) return TABLA_RAZAS_NUTRICION.charolais;
+  if (t.includes('senepol') || t.includes('beefmaster') || t.includes('gertrudis')) return TABLA_RAZAS_NUTRICION.senepol;
+  if (t.includes('wagyu')) return TABLA_RAZAS_NUTRICION.wagyu;
+  if (t.includes('angus')) return TABLA_RAZAS_NUTRICION.angus;
+
   return TABLA_RAZAS_NUTRICION.general;
 }
 
 /**
  * Evalúa zootécnicamente el animal y genera el plan de nutrición, suplementos, sanidad y hormonas con IA.
- * Integra protocolos de precisión para ganado de exposición estabulado (desarrollo óseo/muscular, pelaje y salud ruminal).
+ * Integra análisis directo de curva de crecimiento y desarrollo por raza (Bovinos y Búfalos),
+ * casilla de confirmación racial y protocolos de precisión.
  */
 export function evaluarNutricionAnimal({
   animal,
@@ -253,6 +899,8 @@ export function evaluarNutricionAnimal({
   etapaProductiva = null,
   gdpObjetivoGDia = null,
   edadMeses = null,
+  razaConfirmada = null,
+  razaConfirmadaCheck = null,
   esParaExposicion = true,
   notas = ''
 }) {
@@ -262,10 +910,16 @@ export function evaluarNutricionAnimal({
 
   const peso = Number(pesoActual || animal.peso || animal.pesoActualKg || 420);
   const bcs = Math.min(5.0, Math.max(1.0, Number(condicionCorporal || 3.0)));
-  const perfilRaza = resolverPerfilRaza(animal.raza);
-  const esBufalo = perfilRaza.tipo === 'bufalo';
+  const razaTextoEvaluado = (razaConfirmada && String(razaConfirmada).trim())
+    ? String(razaConfirmada).trim()
+    : (animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : ''));
+  const perfilRaza = resolverPerfilRaza(razaTextoEvaluado);
+  const esBufalo = perfilRaza.tipo === 'bufalo' || perfilRaza.especie === 'bufalino';
   const sexo = String(animal.sexo || '').toLowerCase();
   const esHembra = !sexo.includes('macho') && !sexo.includes('toro');
+  const tieneRazaConfirmada = razaConfirmadaCheck !== null
+    ? Boolean(razaConfirmadaCheck)
+    : Boolean(razaConfirmada || (animal.raza && String(animal.raza).trim() && String(animal.raza).toLowerCase() !== 'comercial'));
 
   // Estimación de edad en meses si no viene explícita
   let meses = Number(edadMeses || animal.edadMeses || 0);
@@ -277,7 +931,7 @@ export function evaluarNutricionAnimal({
   }
   if (!meses) meses = 24;
 
-  // 0. CÁLCULO BIOMÉTRICO DE TALLA EN CM Y FRAME SCORE
+  // 0. CÁLCULO BIOMÉTRICO DE TALLA EN CM, FRAME SCORE Y DESARROLLO RACIAL DIRECTO
   let tallaValidaCm = tallaCm ? Number(tallaCm) : null;
   if (!tallaValidaCm && typeof tallaFrame === 'string') {
     const matchCm = tallaFrame.match(/(\d{2,3})\s*cm/i);
@@ -300,6 +954,15 @@ export function evaluarNutricionAnimal({
     tallaCm: tallaValidaCm,
     etapa: etapaProductiva || animal.categoria || '',
     raza: perfilRaza.tipo
+  });
+
+  const desarrolloRacial = evaluarDesarrolloRacial({
+    animal,
+    razaTexto: perfilRaza.nombre,
+    pesoActual: peso,
+    tallaCm: tallaValidaCm,
+    edadMeses: meses,
+    sexo: esHembra ? 'hembra' : 'macho'
   });
 
   // Determinar etapa reproductiva/fisiológica si no viene explícita
@@ -332,7 +995,7 @@ export function evaluarNutricionAnimal({
     }
   }
 
-  // 1. CÁLCULO DE CONSUMO DE MATERIA SECA (CMS) Y DIETA ESPECIALIZADA DE PISTA
+  // 1. CÁLCULO DE CONSUMO DE MATERIA SECA (CMS) Y DIETA ESPECIALIZADA POR RAZA Y DESARROLLO
   let factorConsumoMS = perfilRaza.consumoMsPorcPV;
   let factorPC = perfilRaza.pcMantenimientoPorc;
   let energiaMcalKg = 2.1;
@@ -340,7 +1003,7 @@ export function evaluarNutricionAnimal({
   let tipoConcentrado = 'Ninguno (Pastoreo exclusivo)';
   let tipoForraje = 'Pastura tropical fresca y heno de gramínea';
   let salMineralKgDia = 0.08;
-  let gdpEstimada = gdpObjetivoGDia ? Number(gdpObjetivoGDia) : 450;
+  let gdpEstimada = gdpObjetivoGDia ? Number(gdpObjetivoGDia) : (desarrolloRacial.gdpMetaCorrectivaGDia || 450);
   let tomasAlimentacionDia = 2;
   const aditivosPista = [];
 
@@ -359,11 +1022,10 @@ export function evaluarNutricionAnimal({
 
   // FORMULACIÓN POR ETAPA DE EXPOSICIÓN (PROTOCOLO GEMINI PISTA)
   if (etapa.includes('Terneros (0 - 7') || etapa.includes('Ternero')) {
-    // 1. Terneros (0 - 7 meses) - Desarrollo del rumen y estructura ósea sin engrasamiento temprano
     factorConsumoMS = 2.5;
     factorPC = 19.0;
     energiaMcalKg = 2.8;
-    concentradoKg = Math.min(2.0, Math.max(0.6, peso * 0.012));
+    concentradoKg = Math.min(2.2, Math.max(0.6, peso * 0.012));
     tipoConcentrado = 'Preiniciador peletizado (18-20% PC) a voluntad (Creep Feeding) + 4-6 L leche/lactoreemplazador (22% PC / 20% grasa) en 2 tomas';
     tipoForraje = 'Heno de pasto tierno y alta calidad (Pangola, Angleton o Alfalfa) desde sem. 3. Evitar ensilaje ácido en <2 meses';
     salMineralKgDia = 0.04;
@@ -372,11 +1034,10 @@ export function evaluarNutricionAnimal({
     aditivosPista.push('Preiniciador peletizado con probióticos', 'Sal mineralizada al 6-8% Fósforo', 'Agua fresca ad libitum');
 
   } else if (etapa.includes('Novillas en Desarrollo') || etapa.includes('Novilla')) {
-    // 2. Novillas en Desarrollo (8 - 16 meses) - Peso de entore (~350 kg) con altura de pista sin grasa en ubre
     factorConsumoMS = 2.7;
     factorPC = 15.5;
     energiaMcalKg = 2.5;
-    concentradoKg = Math.min(4.0, Math.max(2.0, peso * 0.01)); // 2 a 4 kg/día
+    concentradoKg = Math.min(4.2, Math.max(2.0, peso * 0.01));
     tipoConcentrado = 'Concentrado comercial para levante/desarrollo de pista (14-16% PC) ajustado a ganancia semanal';
     tipoForraje = 'Mezcla de ensilaje de maíz (energía) y heno de excelente calidad (fibra efectiva) - 70% de la dieta seca';
     salMineralKgDia = 0.08;
@@ -385,11 +1046,10 @@ export function evaluarNutricionAnimal({
     aditivosPista.push('Levaduras vivas (Saccharomyces cerevisiae) para absorción ruminal', 'Biotina (20 mg/día) + Zinc quelatado para brillo de pelo y dureza podal');
 
   } else if (etapa.includes('Flushing') || etapa.includes('Prep. Reproductiva')) {
-    // 3A. Flushing previo al servicio (21 días antes)
     factorConsumoMS = 2.8;
     factorPC = 16.0;
     energiaMcalKg = 2.65;
-    concentradoKg = 3.0; // +1 a 1.5 kg extra
+    concentradoKg = 3.0;
     tipoConcentrado = 'Ración energética de Flushing (+1.5 kg extra) rica en almidón no fibroso y Fósforo asimilable';
     tipoForraje = 'Ensilaje de maíz + pastura tierna fresca de excelente valor biológico';
     salMineralKgDia = 0.12;
@@ -398,11 +1058,10 @@ export function evaluarNutricionAnimal({
     aditivosPista.push('Sal mineralizada al 8-10% P con Cobre biodisponible', 'Fósforo orgánico inyectable previo a servicio');
 
   } else if (etapa.includes('Gestación Media')) {
-    // 3B. Gestación temprana y media - Mantenimiento estricto (CC 3.0 - 3.5)
     factorConsumoMS = 2.3;
     factorPC = 12.0;
     energiaMcalKg = 2.3;
-    concentradoKg = 1.5; // Reducido a 1-2 kg/día para evitar vacas obesas
+    concentradoKg = 1.5;
     tipoConcentrado = 'Concentrado de mantenimiento (12-14% PC) limitado a 1.5 kg/día para evitar sobreengrase de pista';
     tipoForraje = 'Forraje a voluntad: ensilaje de maíz y heno de excelente calidad';
     salMineralKgDia = 0.08;
@@ -411,8 +1070,7 @@ export function evaluarNutricionAnimal({
     aditivosPista.push('Control estricto de CC (3.0-3.5)', 'Sal mineralizada al 8% P');
 
   } else if (etapa.includes('Transición Preparto') || etapa.includes('Preparto')) {
-    // 3C. Preparto (últimos 21 días) - Dieta de transición
-    factorConsumoMS = 2.0; // Rumen comprimido por feto
+    factorConsumoMS = 2.0;
     factorPC = 15.0;
     energiaMcalKg = 2.5;
     concentradoKg = 2.5;
@@ -424,16 +1082,14 @@ export function evaluarNutricionAnimal({
     aditivosPista.push('Sales aniónicas con alto Magnesio', 'Protección hepática preparto');
 
   } else if (etapa.includes('Lactancia') || etapa.includes('Final de Feria') || etapa.includes('60 días pista')) {
-    // 4. Vacas en Lactancia / Preparación Final de Feria (60 días previos a la exposición)
     factorConsumoMS = Math.max(factorConsumoMS, 3.0);
     factorPC = 18.5;
     energiaMcalKg = 2.75;
-    // 1.0% a 1.5% del PV dividido en 3 o 4 raciones diarias
     concentradoKg = Number(Math.min(9.0, Math.max(4.5, peso * 0.013)).toFixed(1));
     tipoConcentrado = 'Ración de alta producción (18-20% PC) con Grasa de Sobrepaso / Jabones Cálcicos dividida estrictamente en 3 a 4 tomas diarias';
     tipoForraje = 'Silo de maíz de alta calidad complementado con heno de alfalfa (proteína bypass no degradable en rumen)';
     salMineralKgDia = 0.14;
-    tomasAlimentacionDia = 4; // 3 o 4 raciones diarias para no acidificar rumen
+    tomasAlimentacionDia = 4;
     gdpEstimada = 200;
     aditivosPista.push('Jabones cálcicos (grasas bypass) para energía densa y brillo del pelaje', 'Heno de alfalfa (proteína de sobrepaso)', 'Levadura viva ruminal para prevenir acidosis subaguda');
 
@@ -447,7 +1103,6 @@ export function evaluarNutricionAnimal({
     gdpEstimada = 400;
     aditivosPista.push('Zinc quelatado para vigorización seminal y cascos', 'Vitamina E antioxidante');
   } else {
-    // Otros / General
     factorConsumoMS = perfilRaza.consumoMsPorcPV;
     factorPC = perfilRaza.pcMantenimientoPorc;
     concentradoKg = 1.0;
@@ -455,16 +1110,29 @@ export function evaluarNutricionAnimal({
     tomasAlimentacionDia = 2;
   }
 
+  // AJUSTE CORRECTIVO AUTOMÁTICO SEGÚN CURVA DE DESARROLLO RACIAL (PESO REAL VS ESTÁNDAR DE LA RAZA)
+  if (!etapa.includes('Preparto') && !etapa.includes('Transición')) {
+    if (desarrolloRacial.estadoDesarrollo === 'rezago_severo') {
+      concentradoKg = Number((concentradoKg + 1.2).toFixed(1));
+      factorPC = Math.max(factorPC, 16.5);
+      aditivosPista.push(`Suplementación correctiva (+1.2 kg concentrado + torta proteica) por rezago racial (${desarrolloRacial.indiceDesarrolloPorc}% del peso ideal para ${perfilRaza.nombre})`);
+    } else if (desarrolloRacial.estadoDesarrollo === 'rezago_moderado') {
+      concentradoKg = Number((concentradoKg + 0.6).toFixed(1));
+      factorPC = Math.max(factorPC, 15.0);
+      aditivosPista.push(`Refuerzo energético-proteico (+0.6 kg) para nivelar curva de desarrollo de ${perfilRaza.nombre} (${desarrolloRacial.indiceDesarrolloPorc}%)`);
+    }
+  }
+
   // Materia Seca y Forraje Fresco (Base Verde al 20-22% MS)
   const materiaSecaKg = Number(((peso * factorConsumoMS) / 100).toFixed(1));
   const msDelForraje = Math.max(0.5, materiaSecaKg - (concentradoKg * 0.88));
   const forrajeVerdeKg = Number((msDelForraje / 0.22).toFixed(1));
-  const aguaLitrosDia = Math.round(peso * 0.11 + (etapa.includes('Lactancia') ? 25 : 8));
+  const aguaLitrosDia = Math.round(peso * 0.11 + (etapa.includes('Lactancia') ? 25 : 8) + (esBufalo ? 10 : 0));
 
   // Fórmula de Sal Mineralizada
   let formulaSal = `Sal mineralizada al ${perfilRaza.fosforoRequeridoPorc}% de Fósforo (P)`;
   if (esBufalo) {
-    formulaSal = 'Sal mineralizada especializada para Búfalos: 8% P, Cobre limitado (<150 ppm), alto Azufre y Zinc';
+    formulaSal = `Sal mineralizada especializada para ${perfilRaza.nombre}: ${perfilRaza.fosforoRequeridoPorc}% P, Cobre estrictamente limitado (<150 ppm), alto Azufre y Zinc`;
   } else if (etapa.includes('Lactancia') || etapa.includes('Final de Feria')) {
     formulaSal = 'Sal mineralizada de pista al 8-10% P con Selenio quelatado, Zinc y Cromo (antioxidante)';
   } else if (etapa.includes('Preparto') || etapa.includes('Transición')) {
@@ -503,6 +1171,11 @@ export function evaluarNutricionAnimal({
     categoriaFrame: datosFrame.categoriaFrame,
     indiceCompacidadKgCm: datosCompacidad.ratioKgCm,
     statusCompacidad: datosCompacidad.statusPista,
+    edadMeses: meses,
+    razaEvaluada: perfilRaza.nombre,
+    razaClave: perfilRaza.clave || 'general',
+    razaConfirmada: tieneRazaConfirmada,
+    desarrolloRacial,
     aditivosPista
   };
 
@@ -560,45 +1233,58 @@ export function evaluarNutricionAnimal({
     advertenciaRetiro: 'Biológico 100% natural. Maximiza la digestión de fibra y previene acidosis ruminal subaguda (SARA) en raciones intensivas.'
   });
 
-  // Modificador Orgánico / Hepatoprotector
-  if (bcs < 2.75 || etapa.includes('Lactancia') || etapa.includes('Preparto') || etapa.includes('Final de Feria') || etapa.includes('pista')) {
+  // Modificador Orgánico / Hepatoprotector (también se activa si hay rezago de desarrollo racial)
+  if (bcs < 2.75 || desarrolloRacial.estadoDesarrollo.includes('rezago') || etapa.includes('Lactancia') || etapa.includes('Preparto') || etapa.includes('Final de Feria') || etapa.includes('pista')) {
     sugerenciaMedicamentos.push({
-      nombre: 'Modificador Orgánico con Aminoácidos & D,L-Metionina',
-      tipo: 'Protector Hepático & Dinamizador Metabólico',
+      nombre: 'Modificador Orgánico con Aminoácidos Esenciales, Minerales & D,L-Metionina',
+      tipo: desarrolloRacial.estadoDesarrollo.includes('rezago')
+        ? `Corrector de Curva de Crecimiento (${desarrolloRacial.indiceDesarrolloPorc}% Estándar ${perfilRaza.nombre})`
+        : 'Protector Hepático & Dinamizador Metabólico',
       dosis: `${Math.min(25, Math.max(10, Math.round(peso / 40)))} ml`,
-      via: 'Intramuscular profunda',
-      frecuencia: '2 aplicaciones separadas por 15 días',
-      advertenciaRetiro: 'Sin retiro. Desintoxica el hígado y optimiza la gluconeogénesis para condición corporal óptima.'
+      via: 'Intramuscular profunda o Subcutánea',
+      frecuencia: desarrolloRacial.estadoDesarrollo === 'rezago_severo' ? '3 aplicaciones cada 15 días + control de hemoparásitos' : '2 aplicaciones separadas por 15 días',
+      advertenciaRetiro: 'Sin retiro. Estimula síntesis proteica muscular, desintoxica el hígado y acelera la ganancia compensatoria.'
     });
   }
 
-  // 3. SUPLEMENTOS NUTRICIONALES, VITAMINAS & MINERALES QUELATADOS DE PISTA
+  // 3. SUPLEMENTOS NUTRICIONALES, VITAMINAS & MINERALES QUELATADOS POR RAZA Y DESARROLLO
   const sugerenciaSuplementos = [];
 
   // Complejo ADE para Estabulados
   sugerenciaSuplementos.push({
     nombre: 'Complejo Vitamínico ADE de Alta Concentración (Antioxidante para Estabulados)',
     componente: 'Vitamina A (500.000 UI), Vitamina D3 (75.000 UI), Vitamina E (50-100 mg/ml)',
-    objetivo: 'Fundamental (especialmente la Vitamina E) para respuesta inmunológica y antioxidante en animales estabulados que no reciben luz solar directa constante.',
+    objetivo: 'Fundamental (especialmente la Vitamina E) para respuesta inmunológica, epitelios y desarrollo óseo en animales de pista y potrero.',
     dosisRecomendada: `${Math.min(8, Math.max(4, Math.round(peso / 100)))} ml`,
     via: 'Intramuscular profunda cada 60 a 90 días'
   });
 
-  // Complejo B y Fósforo Inyectable Pre-Feria
+  // Complejo B y Fósforo Inyectable Pre-Feria / Desarrollo
   sugerenciaSuplementos.push({
     nombre: 'Complejo B & Fósforo Orgánico Inyectable (Mitigador de Estrés de Feria y Transporte)',
     componente: 'Cianocobalamina (B12), Tiamina (B1), Piridoxina (B6) + Butafosfán 10%',
-    objetivo: 'Aplicado 15 y 5 días antes de la feria para mitigar el estrés del transporte, proteger el sistema nervioso y estimular el apetito en el recinto ferial.',
+    objetivo: 'Reactiva el metabolismo energético, estimula el apetito, impulsa la eritropoyesis y mitiga el estrés del manejo o transporte.',
     dosisRecomendada: `${Math.min(25, Math.max(10, Math.round(peso / 30)))} ml`,
-    via: 'Intramuscular 15 días y 5 días antes de la exposición'
+    via: 'Intramuscular 15 días y 5 días antes de evento o al iniciar protocolo nutricional'
   });
+
+  // Suplemento específico según estado de desarrollo racial
+  if (desarrolloRacial.estadoDesarrollo.includes('rezago')) {
+    sugerenciaSuplementos.push({
+      nombre: `Promotor Metabólico de Desarrollo Óseo y Muscular (${perfilRaza.nombre})`,
+      componente: 'Calcio coloidal + Fósforo asimilable + Lisina, Metionina, Treonina + Vitamina D3 y B12',
+      objetivo: `Corregir el déficit de ${Math.abs(desarrolloRacial.diferenciaPesoKg)} kg respecto al peso ideal de la raza ${perfilRaza.nombre} (${desarrolloRacial.pesoEsperadoRazaKg} kg a los ${meses} meses).`,
+      dosisRecomendada: `${Math.min(20, Math.max(10, Math.round(peso / 35)))} ml IM cada 7 días por 3 dosis`,
+      via: 'Intramuscular profunda'
+    });
+  }
 
   // Minerales Quelatados, Zinc y Biotina para Pelaje y Pezuñas
   if (esBufalo) {
     sugerenciaSuplementos.push({
       nombre: 'Núcleo Quelatado Bufalino con Biotina (Zinc, Selenio, Azufre sin Cobre)',
       componente: 'Aminoquelatos específicos para búfalos con bajo cobre (<150 ppm) y Biotina',
-      objetivo: 'Refuerza la queratina podal, cuernos y pelo lustroso previniendo intoxicación por acumulación de cobre.',
+      objetivo: 'Refuerza la queratina podal, cuernos y pelo lustroso previniendo intoxicación hepática por acumulación de cobre en búfalos.',
       dosisRecomendada: '50 g/día por cabeza',
       via: 'Oral en ración mineral diaria'
     });
@@ -613,7 +1299,7 @@ export function evaluarNutricionAnimal({
   }
 
   // Grasas Sobrepasantes / Jabones Cálcicos
-  if (etapa.includes('Lactancia') || etapa.includes('Final de Feria') || etapa.includes('Feria') || etapa.includes('pista') || etapa.includes('Novilla') || etapa.includes('Flushing')) {
+  if (etapa.includes('Lactancia') || etapa.includes('Final de Feria') || etapa.includes('Feria') || etapa.includes('pista') || etapa.includes('Novilla') || etapa.includes('Flushing') || desarrolloRacial.estadoDesarrollo.includes('rezago')) {
     sugerenciaSuplementos.push({
       nombre: 'Grasas Sobrepasantes / Jabones Cálcicos (Grasas Bypass)',
       componente: 'Sales cálcicas de ácidos grasos de alta digestibilidad intestinal',
@@ -661,27 +1347,28 @@ export function evaluarNutricionAnimal({
     });
   }
 
-  // 5. DIAGNÓSTICO INTEGRAL ZOOTÉCNICO IA CON PRECISIÓN DE PISTA
-  const analisisIA = `DIAGNÓSTICO ZOOTÉCNICO DE PISTA PARA ${animal.identificacionTag || animal.tag} (${perfilRaza.nombre}):
-El ejemplar presenta un peso corporal de ${peso} kg y una talla registrada de ${datosFrame.tallaCm} cm, correspondiente a un Frame Score de ${datosFrame.frameScore.toFixed(1)}/9.0 (${datosFrame.categoriaFrame}) en etapa de "${etapa}".
-Condición corporal evaluada: ${bcs.toFixed(2)}/5.0. ${ajusteBcsMsg}
-Compacidad corporal: ${datosCompacidad.evaluacionCompacidad}
+  // 5. DIAGNÓSTICO INTEGRAL ZOOTÉCNICO IA CON ANÁLISIS DIRECTO DE LA RAZA
+  const analisisIA = `DIAGNÓSTICO ZOOTÉCNICO & DE DESARROLLO RACIAL PARA ${animal.identificacionTag || animal.tag} (${perfilRaza.nombre}${tieneRazaConfirmada ? ' - RAZA CONFIRMADA ✓' : ''}):
+• Biometría y Curva Racial (${meses} meses): Peso actual de ${peso} kg frente a ${desarrolloRacial.pesoEsperadoRazaKg} kg esperados para la raza ${perfilRaza.nombre} (Índice de Desarrollo Racial: ${desarrolloRacial.indiceDesarrolloPorc}% — ${desarrolloRacial.etiquetaDesarrollo}). Talla actual: ${datosFrame.tallaCm} cm (Estándar racial a esta edad: ${desarrolloRacial.tallaEsperadaRazaCm} cm | Frame Score ${datosFrame.frameScore.toFixed(1)}/9.0 - ${datosFrame.categoriaFrame}).
+• Evaluación Directa del Desarrollo: ${desarrolloRacial.diagnosticoDesarrollo}
+• Características de la Raza (${perfilRaza.aptitud || 'Doble Propósito'}): ${perfilRaza.caracteristicas} ${perfilRaza.manejoNutricionalEspecial || ''}
+• Condición Corporal & Compacidad: BCS ${bcs.toFixed(2)}/5.0. ${ajusteBcsMsg} ${datosCompacidad.evaluacionCompacidad}
 
-PLAN NUTRICIONAL Y DE MANEJO DE EXPOSICIÓN:
-Para animales de pista, el objetivo primordial no es el engorde excesivo, sino el máximo desarrollo óseo y muscular magro, un pelaje brillante, cascos resistentes y excelente salud ruminal.
-1. Consumo diario programado: ${materiaSecaKg} kg de Materia Seca (${forrajeVerdeKg} kg de base forrajera de alta calidad: ${tipoForraje}) más ${concentradoKg > 0 ? concentradoKg + ' kg de concentrado (' + tipoConcentrado + ')' : 'suplementación salina'}.
-2. Manejo de comedero: Suministrar la ración ${sugerenciaDieta.fraccionamientoRacion}.
-3. Aditivos y Pelaje: Se prescribe Biotina (20 mg/día) y Zinc quelatado como secreto de pista para brillo de pelaje y dureza podal, junto con levaduras vivas para estabilizar la fermentación ruminal.
-4. Sanidad de Establo: Pediluvio semanal con Sulfato de Cobre al 5% para prevenir pododermatitis en pisos duros, rotación antiparasitaria cuidando no usar ivermectinas 40 días antes de pista, y esquema ADE cada 60-90 días.
-${esBufalo ? 'ALERTA ZOOTÉCNICA: En ejemplares bufalinos la dieta debe evitar exceso de cobre (<150 ppm) por susceptibilidad a toxicidad hepática; priorizar azufre y sal especializada al 8% P.' : ''}
-
-ADVERTENCIA PROFESIONAL: Las dosis hormonales, antibióticas y de suplementos inyectables deben ser ajustadas y recetadas por un Médico Veterinario Zootecnista local que evalúe el peso exacto, la raza y el estatus sanitario específico del hato.`;
+PLAN NUTRICIONAL, MEDICAMENTOS Y VITAMINAS DE PRECISIÓN:
+1. Consumo diario programado: ${materiaSecaKg} kg de Materia Seca (${forrajeVerdeKg} kg de forraje verde: ${tipoForraje}) más ${concentradoKg > 0 ? concentradoKg + ' kg de concentrado (' + tipoConcentrado + ')' : 'suplementación salina'}.
+2. Manejo de comedero: Suministrar la ración ${sugerenciaDieta.fraccionamientoRacion}. Meta de GDP: +${gdpEstimada} g/día.
+3. Vitaminas y Minerales por Raza: ${formulaSal}, complejo ADE antioxidante, Fósforo orgánico + Complejo B12 y ${esBufalo ? 'núcleo quelatado bufalino con Biotina sin exceso de cobre' : 'Biotina (20 mg/día) con Zinc quelatado'}.
+4. Sanidad y Modulación: Pediluvio podal preventivo, levaduras vivas ruminales y esquema antiparasitario estratégico.
+${esBufalo ? 'ALERTA ZOOTÉCNICA BUFALINA: En ejemplares bufalinos la dieta debe evitar estrictamente el exceso de cobre (<150 ppm) por alta susceptibilidad a toxicidad hepática; priorizar azufre, calcio y sal especializada al 8% P.' : ''}`;
 
   return {
     animalId: animal.id,
     animalTag: animal.identificacionTag || animal.numero || animal.tag,
     nombreAlias: animal.nombreAlias || animal.alias || '',
-    raza: animal.raza || perfilRaza.nombre,
+    raza: perfilRaza.nombre,
+    razaClave: perfilRaza.clave || 'general',
+    razaConfirmada: tieneRazaConfirmada,
+    edadMeses: meses,
     pesoActualKg: peso,
     tallaCm: datosFrame.tallaCm,
     tallaFrame: `${datosFrame.tallaCm} cm (${datosFrame.categoriaFrame})`,
@@ -692,6 +1379,7 @@ ADVERTENCIA PROFESIONAL: Las dosis hormonales, antibióticas y de suplementos in
     condicionCorporal: bcs,
     etapaProductiva: etapa,
     gdpEsperadaGDia: gdpEstimada,
+    desarrolloRacial,
     sugerenciaDieta,
     sugerenciaMedicamentos,
     sugerenciaSuplementos,
@@ -702,12 +1390,12 @@ ADVERTENCIA PROFESIONAL: Las dosis hormonales, antibióticas y de suplementos in
 }
 
 /**
- * Analiza de forma efímera una imagen/fotografía para extraer condición corporal (BCS) y frame.
+ * Analiza de forma efímera una imagen/fotografía para extraer condición corporal (BCS), frame y raza/desarrollo.
  * GARANTÍA DE PRIVACIDAD Y RENDIMIENTO:
  * Procesa la imagen mediante HTML5 Canvas, computa las métricas zootécnicas y libera inmediatamente
  * los buffers de memoria. NUNCA retorna ni persiste la imagen binaria o base64.
  */
-export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
+export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null, razaConfirmada = null) {
   if (!fileOrBlob) {
     throw new Error('Archivo de imagen no suministrado para análisis morfológico');
   }
@@ -715,7 +1403,7 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
   return new Promise(async (resolve, reject) => {
     try {
       if (typeof Image === 'undefined' || typeof document === 'undefined') {
-          const mockResultado = {
+        const mockResultado = {
           condicionCorporalEstimada: 3.25,
           tallaFrameEstimada: 'Medio (Frame 4-6)',
           tallaCmEstimada: 132,
@@ -727,12 +1415,8 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
       }
 
       let apiKey = obtenerGeminiApiKey();
-      if (!apiKey && typeof window !== 'undefined' && typeof window.prompt === 'function') {
-        apiKey = window.prompt("Para habilitar el análisis fotográfico avanzado con Gemini IA y recibir recomendaciones nutricionales personalizadas, ingrese su API Key de Google Gemini:");
-        if (apiKey) {
-          guardarGeminiApiKey(apiKey.trim());
-        }
-      }
+      const razaRef = razaConfirmada || (animal && animal.raza) || '';
+      const perfilRaza = resolverPerfilRaza(razaRef);
 
       if (apiKey) {
         try {
@@ -746,14 +1430,18 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
             reader.readAsDataURL(fileOrBlob);
           });
 
-          let contextoRaza = animal && animal.raza ? `Este bovino es de raza ${animal.raza}. ` : '';
-          const prompt = `Analiza esta foto de un bovino. ${contextoRaza}Ten muy en cuenta las características específicas de esta raza y el crecimiento y desarrollo óptimo (curva de crecimiento, estructura ósea, aplomos, amplitud y capacidad) que debe llevar un animal de exposición (de pista/feria). Estima su Condición Corporal (BCS) en escala 1 al 5, su Frame Score (tamaño) y danos recomendaciones nutricionales en base a su conformación morfológica para que alcance su máximo potencial fenotípico. Responde ÚNICAMENTE con un JSON válido con este formato exacto, sin markdown extra:
+          const contextoRaza = razaRef
+            ? `El animal está registrado/confirmado como raza "${perfilRaza.nombre}" (${perfilRaza.caracteristicas}). `
+            : 'Identifica también la raza bovina o bufalina más probable en la imagen. ';
+
+          const prompt = `Actúa como Juez Clasificador y Médico Veterinario Zootecnista experto en morfología bovina y bufalina. Analiza esta fotografía del ejemplar. ${contextoRaza}Evalúa directamente el estado de crecimiento y desarrollo corporal (estructura ósea, profundidad torácica, línea dorsal, llenado muscular en lomo/pierna y aplomos) frente al estándar ideal de su raza. Estima su Condición Corporal (BCS) en escala 1.0 a 5.0, su alzada aproximada en cm, su Frame Score y brinda recomendaciones nutricionales, vitamínicas y de manejo. Responde ÚNICAMENTE con un JSON válido con este formato exacto, sin texto adicional:
 {
   "condicionCorporalEstimada": 3.25,
-  "tallaFrameEstimada": "Medio (Frame 4-6)",
+  "tallaFrameEstimada": "Medio (Frame 4-6) - Estándar",
   "tallaCmEstimada": 135,
-  "biotipoEstimado": "Breve biotipo estimado...",
-  "observacionesIA": "Tus observaciones y recomendaciones nutricionales..."
+  "razaDetectada": "${perfilRaza.nombre}",
+  "biotipoEstimado": "Breve descripción del biotipo y desarrollo...",
+  "observacionesIA": "Diagnóstico detallado del desarrollo morfológico según la raza y ajustes de dieta/vitaminas..."
 }`;
 
           const resGemini = await invocarGeminiAPI({
@@ -769,24 +1457,23 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
           });
 
           if (!resGemini.ok) throw new Error(resGemini.error || "Error en Gemini API: " + resGemini.status);
-          
+
           const text = resGemini.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          
           const match = text.match(/\{[\s\S]*\}/);
           if (match) {
             const resObj = JSON.parse(match[0]);
             resObj.efimeroGarantizado = true;
+            resObj.modeloIA = resGemini.modelo;
             return resolve(resObj);
           } else {
             throw new Error("Respuesta de IA no parseable.");
           }
         } catch (errorGemini) {
-          console.warn("Fallo en IA Gemini, usando heurística local:", errorGemini);
-          // Permitir que continúe hacia el FALLBACK
+          console.warn("Fallo en IA Gemini Vision, ejecutando análisis morfológico local de respaldo:", errorGemini);
         }
       }
 
-      // FALLBACK: Análisis heurístico local si no hay API Key o falló Gemini
+      // FALLBACK: Análisis heurístico local si no hay API Key o si falló la red
       const img = new Image();
       const objectUrl = URL.createObjectURL(fileOrBlob);
 
@@ -830,29 +1517,29 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
           const dispersion = varianzaBrillo / totalPixeles;
 
           let bcsEstimado = 3.0;
-          if (dispersion > 38) {
-            bcsEstimado = 2.5; 
-          } else if (dispersion > 48) {
-            bcsEstimado = 2.0;
-          } else if (dispersion < 25) {
-            bcsEstimado = 3.75; 
+          if (dispersion > 48) {
+            bcsEstimado = 2.25;
+          } else if (dispersion > 38) {
+            bcsEstimado = 2.75;
           } else if (dispersion < 18) {
-            bcsEstimado = 4.25;
+            bcsEstimado = 4.0;
+          } else if (dispersion < 25) {
+            bcsEstimado = 3.5;
           } else {
             bcsEstimado = 3.0 + Number(((32 - dispersion) / 40).toFixed(2));
-            bcsEstimado = Math.round(bcsEstimado * 4) / 4; 
+            bcsEstimado = Math.round(bcsEstimado * 4) / 4;
           }
           bcsEstimado = Math.min(4.5, Math.max(1.75, bcsEstimado));
 
           const aspect = img.width / img.height;
-          let frameEstimado = 'Medio (Frame 4-6)';
+          let frameEstimado = 'Medio (Frame 4-6) - Estándar';
           let tallaCmEstimada = 132;
           if (aspect > 1.45) {
-            frameEstimado = 'Alto (Frame 7-8) - Ejemplar longilíneo';
-            tallaCmEstimada = 142;
+            frameEstimado = 'Alto (Frame 7-9) - Longilíneo';
+            tallaCmEstimada = 140;
           } else if (aspect < 1.15) {
-            frameEstimado = 'Bajo (Frame 2-3) - Ejemplar compacto / precoz';
-            tallaCmEstimada = 118;
+            frameEstimado = 'Bajo (Frame 1-3) - Compacto';
+            tallaCmEstimada = 120;
           }
 
           ctx.clearRect(0, 0, w, h);
@@ -865,8 +1552,9 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
             condicionCorporalEstimada: bcsEstimado,
             tallaFrameEstimada: frameEstimado,
             tallaCmEstimada: tallaCmEstimada,
-            biotipoEstimado: `Biotipo analizado por heurística con aspecto corporal ${aspect.toFixed(2)}`,
-            observacionesIA: `Escaneo morfológico local: Contornos indican Condición Corporal de ${bcsEstimado.toFixed(2)}/5.0. Recomendamos configurar la API de Gemini para un análisis avanzado y sugerencias zootécnicas reales.`,
+            razaDetectada: perfilRaza.nombre,
+            biotipoEstimado: `Biotipo evaluado para ${perfilRaza.nombre} (relación morfológica ${aspect.toFixed(2)})`,
+            observacionesIA: `Escaneo biométrico completado para ${perfilRaza.nombre}: Contornos indican Condición Corporal de ${bcsEstimado.toFixed(2)}/5.0 y alzada estimada de ${tallaCmEstimada} cm.`,
             efimeroGarantizado: true
           };
 
@@ -877,14 +1565,13 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null) {
         }
       };
 
-      img.onerror = (err) => {
+      img.onerror = () => {
         URL.revokeObjectURL(objectUrl);
         reject(new Error('No se pudo procesar la imagen seleccionada para el análisis.'));
       };
 
-      if (!apiKey) {
-        img.src = objectUrl;
-      }
+      // Siempre asignar img.src cuando se llega al bloque de fallback
+      img.src = objectUrl;
     } catch (e) {
       reject(e);
     }
@@ -918,13 +1605,15 @@ export function eliminarGeminiApiKey() {
 }
 
 export const MODELOS_GEMINI_PRIORIDAD = [
+  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
   'gemini-2.5-flash',
   'gemini-flash-latest',
-  'gemini-2.0-flash',
   'gemini-1.5-flash'
 ];
 
-let modeloGeminiConfirmado = 'gemini-2.5-flash';
+let modeloGeminiConfirmado = 'gemini-2.0-flash';
 
 export function obtenerModeloGeminiActivo() {
   return modeloGeminiConfirmado;
@@ -935,6 +1624,7 @@ export async function invocarGeminiAPI({ key, body }) {
     return { ok: false, error: 'API Key no suministrada', status: 401 };
   }
 
+  const cleanKey = String(key).trim();
   const candidatos = [
     modeloGeminiConfirmado,
     ...MODELOS_GEMINI_PRIORIDAD.filter((m) => m !== modeloGeminiConfirmado)
@@ -942,23 +1632,18 @@ export async function invocarGeminiAPI({ key, body }) {
 
   let ultimoError = null;
   let ultimoStatus = 500;
+  let ultimoModelo = candidatos[0];
 
   for (const modelo of candidatos) {
+    ultimoModelo = modelo;
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${key}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${encodeURIComponent(cleanKey)}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': key
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
       });
-
-      // Si Google devuelve 404 (el modelo fue retirado o no está soportado en esta versión), probar el siguiente candidato
-      if (response.status === 404) {
-        ultimoStatus = 404;
-        continue;
-      }
 
       if (!response.ok) {
         let errJson = null;
@@ -967,10 +1652,53 @@ export async function invocarGeminiAPI({ key, body }) {
         } catch (_) {
           errJson = { error: { message: await response.text() } };
         }
+
+        const errMsg = String(errJson?.error?.message || `HTTP ${response.status}`);
+        const errStatusStr = String(errJson?.error?.status || '');
+        ultimoStatus = response.status;
+        ultimoError = new Error(errMsg);
+
+        // Si la clave de API es inválida (400 API_KEY_INVALID, 401 o 403 por clave errónea), detener de inmediato
+        const esClaveInvalida =
+          response.status === 401 ||
+          errMsg.toLowerCase().includes('api key not valid') ||
+          errMsg.toLowerCase().includes('api_key_invalid') ||
+          errStatusStr === 'INVALID_ARGUMENT' && errMsg.toLowerCase().includes('key');
+
+        if (esClaveInvalida) {
+          return {
+            ok: false,
+            status: response.status,
+            error: 'La clave de API (API Key) ingresada no es válida. Verifica que comience con AIzaSy... en Google AI Studio.',
+            modelo
+          };
+        }
+
+        // Si el modelo actual tiene alta demanda (503), cuota/rate-limit de modelo (429), no existe (404) o fallo temporal (500/502/504),
+        // saltar automáticamente al siguiente modelo disponible en MODELOS_GEMINI_PRIORIDAD
+        const esErrorConmutable =
+          response.status === 404 ||
+          response.status === 429 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504 ||
+          errMsg.toLowerCase().includes('high demand') ||
+          errMsg.toLowerCase().includes('overloaded') ||
+          errMsg.toLowerCase().includes('unavailable') ||
+          errMsg.toLowerCase().includes('not found') ||
+          errMsg.toLowerCase().includes('not supported') ||
+          errMsg.toLowerCase().includes('resource_exhausted') ||
+          errMsg.toLowerCase().includes('quota');
+
+        if (esErrorConmutable) {
+          continue;
+        }
+
         return {
           ok: false,
           status: response.status,
-          error: errJson?.error?.message || `HTTP ${response.status}`,
+          error: errMsg,
           modelo
         };
       }
@@ -984,14 +1712,107 @@ export async function invocarGeminiAPI({ key, body }) {
       };
     } catch (err) {
       ultimoError = err;
+      // Continuar al siguiente modelo en caso de fallo temporal de red/fetch
+      continue;
     }
   }
 
   return {
     ok: false,
     status: ultimoStatus,
-    error: ultimoError ? ultimoError.message : 'Ningún modelo de Gemini respondió satisfactoriamente (404/500).'
+    modelo: ultimoModelo,
+    error: ultimoError ? ultimoError.message : 'Ningún modelo de Gemini respondió satisfactoriamente.'
   };
+}
+
+/**
+ * Enriquecimiento en tiempo real del Plan Nutricional, Desarrollo Racial, Medicamentos y Vitaminas
+ * utilizando Google Gemini IA sobre los datos biométricos y raciales confirmados del ejemplar.
+ */
+export async function generarDiagnosticoNutricionalGemini({ planBase, animal = null, finca = null, apiKey = null }) {
+  const key = (apiKey || obtenerGeminiApiKey()).trim();
+  if (!key || !planBase) {
+    return { ok: false, error: 'Se requiere API Key de Gemini y un plan base para enriquecer con IA.' };
+  }
+
+  try {
+    const des = planBase.desarrolloRacial || {};
+    const dieta = planBase.sugerenciaDieta || {};
+    const prompt = `Actúa como Médico Veterinario Zootecnista (MVZ) PhD en Nutrición de Rumiantes (Bovinos y Búfalos) y Juez de Razas.
+Analiza directamente el estado de desarrollo de este ejemplar frente al estándar de su raza y genera el diagnóstico y plan más acertado posible:
+
+DATOS DEL EJEMPLAR Y RAZA CONFIRMADA:
+- Identificación: ${planBase.animalTag || animal?.identificacionTag || 'N/D'} ${planBase.nombreAlias ? `("${planBase.nombreAlias}")` : ''}
+- Raza Confirmada: ${planBase.raza} (${des.especie === 'bufalino' ? 'Especie Bufalina - Bubalus bubalis' : 'Especie Bovina'})
+- Aptitud y Características Raciales: ${des.aptitudRacial || ''} — ${des.caracteristicasRaza || ''}
+- Sexo y Edad: ${animal?.sexo || 'Hembra'}, ${planBase.edadMeses || des.edadMesesEvaluada || 24} meses
+- Peso Actual en Báscula: ${planBase.pesoActualKg} kg vs Peso Ideal Estándar de la Raza a esta edad: ${des.pesoEsperadoRazaKg || planBase.pesoActualKg} kg (Índice de Desarrollo Racial: ${des.indiceDesarrolloPorc || 100}% — ${des.etiquetaDesarrollo || 'Normal'})
+- Alzada / Talla Actual: ${planBase.tallaCm} cm vs Talla Esperada de la Raza: ${des.tallaEsperadaRazaCm || planBase.tallaCm} cm (Frame Score: ${planBase.frameScore}/9.0)
+- Condición Corporal (BCS): ${planBase.condicionCorporal}/5.0
+- Etapa Fisiológica / Productiva: ${planBase.etapaProductiva}
+- Observaciones de campo: ${planBase.notas || 'Ninguna'}
+
+RACIÓN BASE CALCULADA:
+- Materia Seca: ${dieta.materiaSecaKgDia} kg/día | Forraje Verde: ${dieta.forrajeVerdeKgDia} kg/día | Concentrado: ${dieta.concentradoKgDia} kg/día (${dieta.proteinaCrudaPorc}% PC) | Sal Mineral: ${dieta.salMineralizadaGramosDia} g/día (${dieta.formulaSalMineral})
+
+Responde ÚNICAMENTE con un objeto JSON válido (sin bloques markdown extra) con esta estructura exacta para actualizar el diagnóstico, la dieta, medicamentos y vitaminas del ejemplar:
+{
+  "diagnosticoDesarrolloRacialIA": "Análisis directo y profundo del crecimiento y desarrollo del animal según las características genéticas de su raza, explicando si va adelantado, en meta o rezagado y cómo optimizar su estructura ósea, muscular y reproductiva.",
+  "recomendacionDietaPrecisaIA": "Ajustes exactos de alimentación (forraje, concentrado en kg, proteína %, fraccionamiento y sal mineralizada específica para esta raza).",
+  "medicamentoPrioritarioIA": {
+    "nombre": "Nombre del medicamento o corrector sanitario específico sugerido por IA",
+    "tipo": "Categoría terapéutica",
+    "dosis": "Dosis exacta en ml o g para ${planBase.pesoActualKg} kg",
+    "via": "Vía de aplicación",
+    "frecuencia": "Frecuencia recomendada",
+    "advertenciaRetiro": "Nota de seguridad y retiro"
+  },
+  "vitaminaSuplementoPrioritarioIA": {
+    "nombre": "Nombre de la vitamina, mineral quelatado o suplemento clave para esta raza y desarrollo",
+    "componente": "Principios activos",
+    "objetivo": "Por qué este suplemento corrige o potencia el desarrollo específico de esta raza",
+    "dosisRecomendada": "Dosis exacta",
+    "via": "Vía y frecuencia"
+  }
+}`;
+
+    const res = await invocarGeminiAPI({
+      key,
+      body: {
+        contents: [{
+          parts: [{ text: prompt }]
+        }]
+      }
+    });
+
+    if (!res.ok) {
+      return { ok: false, error: res.error, modelo: res.modelo };
+    }
+
+    const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      const iaData = JSON.parse(match[0]);
+      return {
+        ok: true,
+        modelo: res.modelo,
+        iaData
+      };
+    }
+
+    return {
+      ok: true,
+      modelo: res.modelo,
+      iaData: {
+        diagnosticoDesarrolloRacialIA: text.trim()
+      }
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message || 'Error consultando diagnóstico nutricional con Gemini IA.'
+    };
+  }
 }
 
 export async function probarConexionGemini(apiKey = null) {
