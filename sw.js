@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.2.3-nutricion-razas-gemini-fix';
+const CACHE_NAME = 'ganadero-ad-v4.2.4-gemini-listmodels-hibrido';
 const CORE_FILES = [
   './',
   './index.html',

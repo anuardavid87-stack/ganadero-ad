@@ -316,9 +316,9 @@ export class ModuloNutricion {
       notas
     });
 
-    // Si se solicitó enriquecimiento con IA Gemini y hay API Key activa, consultar Gemini en tiempo real
+    // Si se solicitó enriquecimiento con IA, consultar Gemini en tiempo real con respaldo automático del Motor Híbrido
     const apiKey = obtenerGeminiApiKey();
-    if (consultarIAEnVivo && apiKey) {
+    if (consultarIAEnVivo) {
       this.consultaGeminiEnCurso = true;
       this.render();
       try {

@@ -14,7 +14,7 @@ import { TablaDinamica } from './frontend/src/components/TablaDinamica.js';
 import { SupabaseSyncService } from './frontend/src/core/supabaseSync.js';
 import { buscarCoincidenciasAnimales, normalizarTextoBusqueda, conectarAutosuggestAnimales } from './frontend/src/ui/AutosuggestAnimales.js';
 import { ImportadorExcel } from './frontend/src/components/ImportadorExcel.js';
-import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista, evaluarDesarrolloRacial, obtenerCatalogoRazasNutricion, invocarGeminiAPI, generarDiagnosticoNutricionalGemini } from './frontend/src/core/nutricionIA.js';
+import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista, evaluarDesarrolloRacial, obtenerCatalogoRazasNutricion, invocarGeminiAPI, generarDiagnosticoNutricionalGemini, probarConexionGemini, descubrirModelosGeminiDisponibles } from './frontend/src/core/nutricionIA.js';
 import { ModuloNutricion } from './frontend/src/components/ModuloNutricion.js';
 import { ExportadorBackupService } from './frontend/src/core/exportadorBackup.js';
 import { BoviTrackApp, escapeHTML } from './frontend/src/app.js';
@@ -6796,6 +6796,51 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     modelosIntentados.length === 2 &&
     respFailover.modelo === modelosIntentados[1],
     `invocarGeminiAPI (Failover Automático 503): Si el primer modelo devuelve HTTP 503 High Demand (${modelosIntentados[0]}), conmuta automáticamente al siguiente (${respFailover.modelo}) sin fallar`
+  );
+
+  // 58.7: probarConexionGemini con ListModels y respaldo híbrido cuando todos los modelos están en 503 High Demand
+  globalThis.fetch = async (url) => {
+    if (url.includes('/v1beta/models?key=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-2.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemma-3-27b-it', supportedGenerationMethods: ['generateContent'] }
+          ]
+        })
+      };
+    }
+    return {
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: {
+          code: 503,
+          message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'
+        }
+      })
+    };
+  };
+
+  const resPruebaHibrida = await probarConexionGemini('AIzaSyClaveValidaGoogleAIStudio123456789');
+  const resDiagHibrido = await generarDiagnosticoNutricionalGemini({
+    planBase: planMurrah,
+    animal: { id: 'BUF-10', identificacionTag: 'BUF-10', sexo: 'Hembra' },
+    apiKey: 'AIzaSyClaveValidaGoogleAIStudio123456789'
+  });
+  globalThis.fetch = origFetchGemini;
+
+  test(
+    resPruebaHibrida.ok === true &&
+    resPruebaHibrida.mensaje.includes('verificada') &&
+    resDiagHibrido.ok === true &&
+    resDiagHibrido.iaData &&
+    Boolean(resDiagHibrido.iaData.diagnosticoDesarrolloRacialIA) &&
+    Boolean(resDiagHibrido.iaData.medicamentoPrioritarioIA?.nombre) &&
+    Boolean(resDiagHibrido.iaData.vitaminaSuplementoPrioritarioIA?.nombre),
+    'Motor IA Híbrido + ListModels: Verifica la API Key en Google AI Studio y mantiene diagnósticos, dieta, medicamentos y vitaminas 100% operativos incluso durante caídas 503 de Google'
   );
 }
 

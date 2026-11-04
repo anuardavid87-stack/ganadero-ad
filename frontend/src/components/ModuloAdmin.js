@@ -4012,14 +4012,10 @@ END $$;
           return;
         }
 
-        const apiKey = obtenerGeminiApiKey();
-        if (!apiKey) {
-          this.geminiTestResultado = {
-            ok: false,
-            mensaje: 'Primero debes guardar y configurar tu clave de Gemini arriba.',
-          };
-          this.render();
-          return;
+        const inputKeyEl = this.container.querySelector('#input-gemini-api-key');
+        const apiKey = (inputKeyEl && inputKeyEl.value.trim()) || obtenerGeminiApiKey();
+        if (apiKey) {
+          guardarGeminiApiKey(apiKey);
         }
 
         this.asistenteGeminiCargando = true;
@@ -4085,14 +4081,10 @@ END $$;
     const btnGenerarInforme = this.container.querySelector('#btn-generar-informe-hato-gemini');
     if (btnGenerarInforme) {
       btnGenerarInforme.addEventListener('click', async () => {
-        const apiKey = obtenerGeminiApiKey();
-        if (!apiKey) {
-          this.geminiTestResultado = {
-            ok: false,
-            mensaje: 'Primero debes guardar y configurar tu clave de Gemini arriba.',
-          };
-          this.render();
-          return;
+        const inputKeyEl = this.container.querySelector('#input-gemini-api-key');
+        const apiKey = (inputKeyEl && inputKeyEl.value.trim()) || obtenerGeminiApiKey();
+        if (apiKey) {
+          guardarGeminiApiKey(apiKey);
         }
 
         this.informeHatoCargando = true;
