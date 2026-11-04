@@ -316,9 +316,11 @@ export class ModuloAdmin {
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'whatsapp' ? 'bg-gradient-to-r from-emerald-800 to-green-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-400/40' : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'} cursor-pointer" data-sec="whatsapp">
             <span>💬</span> WhatsApp API
           </button>
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
-            <span>✨</span> IA Gemini
-          </button>
+          ${esSuperAdmin ? `
+            <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
+              <span>✨</span> IA Gemini (Global)
+            </button>
+          ` : ''}
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'backup' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="backup">
             <span>💾</span> Copia Seg.
           </button>
@@ -360,7 +362,18 @@ export class ModuloAdmin {
     } else if (this.seccion === 'whatsapp') {
       return this.renderSeccionWhatsApp(fincaActiva);
     } else if (this.seccion === 'gemini') {
-      return this.renderSeccionGemini(fincas, fincaActiva, esAdmin);
+      if (!esSuperAdmin) {
+        return `
+          <div class="max-w-2xl mx-auto bg-rose-50 border border-rose-200 rounded-3xl p-6 text-center space-y-2">
+            <div class="text-3xl">🔒</div>
+            <h4 class="text-base font-black text-rose-900">Acceso Exclusivo del Super Administrador</h4>
+            <p class="text-xs text-rose-700">
+              La conexión global de Inteligencia Artificial está centralizada para todas las empresas y fincas, y solo puede ser administrada por el Super Administrador del sistema.
+            </p>
+          </div>
+        `;
+      }
+      return this.renderSeccionGemini(fincas, fincaActiva, esSuperAdmin);
     } else if (this.seccion === 'backup') {
       return this.renderSeccionBackup();
     } else if (this.seccion === 'supabase') {
@@ -1245,16 +1258,19 @@ export class ModuloAdmin {
             </div>
             <div>
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Google Gemini IA Zootécnica</h3>
+                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Conexión Global Google Gemini IA</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-amber-400/20 text-amber-200 border border-amber-400/40">
+                  👑 EXCLUSIVO SUPER ADMINISTRADOR
+                </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
-                  ${tieneKey ? '● CONECTADO' : '○ CLAVE PENDIENTE'}
+                  ${tieneKey ? '● CONECTADO GLOBALMENTE' : '○ MOTOR HÍBRIDO ACTIVO'}
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
                   ${obtenerModeloGeminiActivo()}
                 </span>
               </div>
               <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">
-                Potencia tu ganadería con inteligencia artificial multimodal: escaneo fotográfico corporal, asesoría zootécnica veterinaria y diagnósticos automáticos del hato.
+                Conexión centralizada para <strong>todas las empresas (${(this.getEmpresas ? this.getEmpresas() : []).length || 'todas'}) y todas las fincas (${fincas.length || 'todas'})</strong>. Los usuarios del sistema utilizan la IA automáticamente en Nutrición IA sin tener acceso a esta configuración.
               </p>
             </div>
           </div>
@@ -1273,15 +1289,15 @@ export class ModuloAdmin {
           </div>
         </div>
 
-        <!-- TARJETA 1: GESTIÓN DE LA API KEY -->
+        <!-- TARJETA 1: GESTIÓN DE LA API KEY GLOBAL -->
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
               <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
-                <span>🔐</span> Clave de API de Google Gemini (Google AI Studio)
+                <span>🌐</span> Clave Global de API de Google Gemini (Para Todas las Fincas y Empresas)
               </h4>
               <p class="text-xs text-slate-500 mt-0.5">
-                La clave se almacena de forma privada en el almacenamiento local de este dispositivo.
+                Al guardar esta clave como Super Administrador, queda activa automáticamente para todas las empresas y todas las fincas y se sincroniza con Supabase Cloud.
               </p>
             </div>
             ${tieneKey ? `
@@ -3923,7 +3939,7 @@ END $$;
         guardarGeminiApiKey(key);
         this.geminiTestResultado = {
           ok: true,
-          mensaje: 'Clave de Google Gemini guardada exitosamente en este dispositivo.',
+          mensaje: 'Clave Global de Google Gemini guardada y sincronizada para todas las empresas y todas las fincas.',
         };
         this.render();
       });
@@ -3950,6 +3966,9 @@ END $$;
 
         try {
           const resultado = await probarConexionGemini(key);
+          if (resultado && resultado.ok) {
+            guardarGeminiApiKey(key);
+          }
           this.geminiTestResultado = resultado;
         } catch (err) {
           this.geminiTestResultado = {

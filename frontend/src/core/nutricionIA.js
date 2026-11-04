@@ -11,21 +11,244 @@
  */
 
 export const TABLA_RAZAS_NUTRICION = {
-  // === RAZAS CEBÚ / TROPICALES (Bos indicus) ===
+  // === ⭐ RAZAS PRIORIZADAS DEL HATO (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO & BRAHMAN) ===
+  red_sindhi: {
+    clave: 'red_sindhi',
+    nombre: 'Red Sindhi / Sindi Rojo (Doble Propósito & Leche Tropical)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Leche & Carne en Trópico Seco / Alta Eficiencia por Ha',
+    tipo: 'leche_cebu',
+    frameEstandar: 'Compacto a Medio (Frame 3-5)',
+    pesoAdultoMachoKg: 620,
+    pesoAdultoHembraKg: 430,
+    curvaPesoHembraKg: { m0: 22, m3: 82, m7: 150, m12: 195, m15: 230, m18: 265, m24: 325, m30: 375, adulto: 430 },
+    curvaPesoMachoKg: { m0: 24, m3: 92, m7: 168, m12: 225, m15: 270, m18: 315, m24: 405, m30: 500, adulto: 620 },
+    curvaTallaCm: { m0: 66, m3: 84, m7: 98, m12: 109, m18: 117, m24: 122, adulto: 126 },
+    gdpMetaOptimaGDia: 550,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 580,
+      levante_7_12m: 450,
+      levante_12_18m: 480,
+      vientre_ceba_18_24m: 520,
+      adulto_mantenimiento: 350,
+      pista_intensivo: 720
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '18 - 21 meses',
+      pesoMetaPrimerServicioKg: 265,
+      edadPrimerPartoMeses: '28 - 31 meses',
+      intervaloEntrePartosDias: '370 - 395 días',
+      produccionLecheLactancia: '2.200 a 3.600 kg/lactancia (8 - 14 L/día • 4.8% Grasa y 3.6% Proteína A2A2)',
+      rendimientoCanalPorc: '54% - 56% (Carne tierna con excelente cobertura grasa a pasto)',
+      fuenteOficial: 'ABCZ / Embrapa Semiárido / Asocebú'
+    },
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'Cebú de pelaje rojo caoba intenso y tamaño medio-compacto con la mayor eficiencia metabólica del trópico: requiere 25% menos energía de mantenimiento por cabeza, permitiendo mayor carga animal por hectárea, alta fertilidad, partos sin distocia (crías de 20-24 kg) y resistencia extrema al calor y garrapatas.',
+    manejoNutricionalEspecial: 'Por su alta eficiencia de conversión tiende a engrasar rápido si se sobrealimenta con almidón en levante; priorizar forraje fibroso de rotación, proteína pasante (14-15% PC) en lactancia y sal mineral al 7.5-8% P con Selenio y Zinc.'
+  },
+  gyr: {
+    clave: 'gyr',
+    nombre: 'Gyr Lechero (Cebú Lechero Especializado)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Leche Tropical Cebú A2A2 & Base Materna F1',
+    tipo: 'leche_cebu',
+    frameEstandar: 'Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 800,
+    pesoAdultoHembraKg: 490,
+    curvaPesoHembraKg: { m0: 24, m3: 90, m7: 160, m12: 215, m15: 255, m18: 295, m24: 365, m30: 425, adulto: 490 },
+    curvaPesoMachoKg: { m0: 26, m3: 100, m7: 180, m12: 250, m15: 305, m18: 365, m24: 470, m30: 590, adulto: 800 },
+    curvaTallaCm: { m0: 68, m3: 88, m7: 104, m12: 116, m18: 124, m24: 130, adulto: 135 },
+    gdpMetaOptimaGDia: 620,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 620,
+      levante_7_12m: 460,
+      levante_12_18m: 510,
+      vientre_ceba_18_24m: 560,
+      adulto_mantenimiento: 380,
+      pista_intensivo: 760
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '20 - 24 meses',
+      pesoMetaPrimerServicioKg: 310,
+      edadPrimerPartoMeses: '30 - 34 meses',
+      intervaloEntrePartosDias: '385 - 410 días',
+      produccionLecheLactancia: '3.500 a 6.200+ kg/lactancia (12 - 22 L/día • 4.5% Grasa • 98% Genotipo A2A2)',
+      rendimientoCanalPorc: '52% - 54%',
+      fuenteOficial: 'ABCGIL / Embrapa Gado de Leite / Asocebú Colombia'
+    },
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 10.0,
+    pcProduccionPorc: 15.5,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Zebuíno líder en producción lechera tropical, piel pigmentada, perfil ultraconvexo, ubre voluminosa bien irrigada y temperamento dócil. Base genética indispensable para producir Girolando F1.',
+    manejoNutricionalEspecial: 'En terneras y novillas Gyr controlar relación energía/proteína para desarrollar glándula mamaria limpia sin infiltración grasa; en lactancia suministrar proteína bypass (15-16% PC), grasas cálcicas y sal 8% P con Calcio y Biotina.'
+  },
+  guzera: {
+    clave: 'guzera',
+    nombre: 'Guzerat / Guzerá (Doble Propósito Cebú: Carne & Leche)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Doble Propósito Real (Alta Carne & Leche Tropical)',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-7)',
+    pesoAdultoMachoKg: 900,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 30, m3: 112, m7: 195, m12: 260, m15: 310, m18: 355, m24: 435, m30: 500, adulto: 560 },
+    curvaPesoMachoKg: { m0: 33, m3: 125, m7: 215, m12: 300, m15: 370, m18: 435, m24: 550, m30: 690, adulto: 900 },
+    curvaTallaCm: { m0: 72, m3: 93, m7: 109, m12: 122, m18: 131, m24: 136, adulto: 141 },
+    gdpMetaOptimaGDia: 720,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 760,
+      levante_7_12m: 550,
+      levante_12_18m: 620,
+      vientre_ceba_18_24m: 680,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 920
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '19 - 23 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '29 - 34 meses',
+      intervaloEntrePartosDias: '380 - 405 días',
+      produccionLecheLactancia: '2.800 a 4.800 kg/lactancia (10 - 17 L/día con 4.4% grasa) + Destetes >200 kg',
+      rendimientoCanalPorc: '56% - 58% (Gran profundidad torácica y masas musculares)',
+      fuenteOficial: 'CBMG / ABCZ / Embrapa / Asocebú'
+    },
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Raza milenaria de imponente estructura ósea, cornamenta en lira, gran capacidad torácica y rusticidad extrema en sequía. Sobresale tanto en pruebas de ganancia de peso en pastoreo como en control lechero oficial.',
+    manejoNutricionalEspecial: 'Por su pesada estructura ósea y cornamenta en lira demanda suplementación permanente de Calcio, Fósforo (sal ≥8% P) y Magnesio desde el destete, más proteinado estratégico en época seca.'
+  },
+  nelore: {
+    clave: 'nelore',
+    nombre: 'Nelore / Nelore Mocho (Cebú Cárnico & Ciclo Corto)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Carne Especializada a Pasto & Precocidad Sexual',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-6)',
+    pesoAdultoMachoKg: 880,
+    pesoAdultoHembraKg: 540,
+    curvaPesoHembraKg: { m0: 30, m3: 110, m7: 190, m12: 250, m15: 295, m18: 340, m24: 420, m30: 485, adulto: 540 },
+    curvaPesoMachoKg: { m0: 32, m3: 122, m7: 210, m12: 290, m15: 355, m18: 420, m24: 535, m30: 670, adulto: 880 },
+    curvaTallaCm: { m0: 73, m3: 94, m7: 110, m12: 123, m18: 132, m24: 137, adulto: 142 },
+    gdpMetaOptimaGDia: 760,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 750,
+      levante_7_12m: 540,
+      levante_12_18m: 650,
+      vientre_ceba_18_24m: 780,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 1050
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '14 - 18 meses (Precoz) / 20 - 22 meses (Pastoreo)',
+      pesoMetaPrimerServicioKg: 320,
+      edadPrimerPartoMeses: '25 - 31 meses',
+      intervaloEntrePartosDias: '365 - 390 días',
+      produccionLecheLactancia: 'Leche materna de alto tenor graso para destetar terneros de 190 a 220 kg a los 210 días',
+      rendimientoCanalPorc: '57% - 60% (Acabado de grasa uniforme y alto rendimiento de cortes nobles)',
+      fuenteOficial: 'PMGZ ABCZ / Embrapa Gado de Corte / ACNB'
+    },
+    consumoMsPorcPV: 2.3,
+    pcMantenimientoPorc: 9.0,
+    pcProduccionPorc: 13.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Raza cebuina líder en producción de carne tropical: pelvis amplia (cero distocias), becerros que se levantan y maman a los 15 minutos de nacidos, gran longitud corporal y máxima conversión de gramíneas tropicales.',
+    manejoNutricionalEspecial: 'Responde extraordinariamente a Creep Feeding en crías (0-7m), sales proteinadas (30-40% PC) en recría (7-18m) para preñez precoz de novillas y dietas con levaduras vivas en finalización.'
+  },
+  girolando: {
+    clave: 'girolando',
+    nombre: 'Girolando (F1 1/2 Sangre, 5/8 y 3/4 — Leche Tropical)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Alta Producción Lechera Tropical & Vigor Híbrido',
+    tipo: 'doble_proposito',
+    frameEstandar: 'Medio a Alto (Frame 5-6)',
+    pesoAdultoMachoKg: 860,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 34, m3: 115, m7: 200, m12: 270, m15: 315, m18: 360, m24: 445, m30: 510, adulto: 560 },
+    curvaPesoMachoKg: { m0: 36, m3: 125, m7: 215, m12: 295, m15: 355, m18: 420, m24: 535, m30: 665, adulto: 860 },
+    curvaTallaCm: { m0: 73, m3: 93, m7: 108, m12: 121, m18: 130, m24: 136, adulto: 140 },
+    gdpMetaOptimaGDia: 740,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 780,
+      levante_7_12m: 680,
+      levante_12_18m: 720,
+      vientre_ceba_18_24m: 650,
+      adulto_mantenimiento: 420,
+      pista_intensivo: 900
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '15 - 18 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '25 - 28 meses',
+      intervaloEntrePartosDias: '375 - 400 días',
+      produccionLecheLactancia: '4.800 a 8.500+ kg/lactancia (18 - 32 L/día en 305 días • 4.0% Grasa y 3.4% Proteína)',
+      rendimientoCanalPorc: '52% - 54% (Machos F1 con alta ganancia en ceba intensiva)',
+      fuenteOficial: 'Associação Brasileira dos Criadores de Girolando / Embrapa'
+    },
+    consumoMsPorcPV: 2.8,
+    pcMantenimientoPorc: 11.0,
+    pcProduccionPorc: 17.0,
+    fosforoRequeridoPorc: 8.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'media_alta',
+    caracteristicas: 'Máxima expresión de heterosis (Holstein x Gyr): combina capacidad ruminal, persistencia de lactancia, docilidad, adaptación al pastoreo cálido-húmedo y precocidad reproductiva.',
+    manejoNutricionalEspecial: 'Por su alto volumen lácteo requiere concentrado 16-18% PC según litros producidos (1 kg por cada 3-3.5 L de leche), grasas sobrepasantes (jabones cálcicos) en los primeros 100 DEL y sal mineral 8.5-9% P con Selenio, Cromo y Biotina.'
+  },
   brahman: {
     clave: 'brahman',
-    nombre: 'Brahman (Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
+    nombre: 'Brahman Rojo / Blanco (Cebú)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
     especie: 'bovino',
     aptitud: 'Carne Tropical & Cría Maternal',
     tipo: 'carne_cebu',
     frameEstandar: 'Medio (Frame 5-6)',
     pesoAdultoMachoKg: 880,
     pesoAdultoHembraKg: 550,
-    curvaPesoHembraKg: { m0: 32, m7: 195, m12: 275, m18: 365, m24: 440, adulto: 550 },
-    curvaPesoMachoKg: { m0: 35, m7: 215, m12: 320, m18: 445, m24: 560, adulto: 880 },
-    curvaTallaCm: { m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
+    curvaPesoHembraKg: { m0: 32, m3: 115, m7: 195, m12: 275, m15: 320, m18: 365, m24: 440, m30: 500, adulto: 550 },
+    curvaPesoMachoKg: { m0: 35, m3: 128, m7: 215, m12: 320, m15: 385, m18: 445, m24: 560, m30: 710, adulto: 880 },
+    curvaTallaCm: { m0: 72, m3: 92, m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
     gdpMetaOptimaGDia: 750,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 780,
+      levante_7_12m: 580,
+      levante_12_18m: 650,
+      vientre_ceba_18_24m: 720,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 980
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '18 - 22 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '28 - 33 meses',
+      intervaloEntrePartosDias: '380 - 405 días',
+      produccionLecheLactancia: '1.800 a 2.800 kg/lactancia (Destetes pesados >200 kg y líneas Brahman Lechero)',
+      rendimientoCanalPorc: '58% - 61%',
+      fuenteOficial: 'Asocebú Colombia / ABBA / ABCZ'
+    },
     consumoMsPorcPV: 2.2,
     pcMantenimientoPorc: 9.0,
     pcProduccionPorc: 13.0,
@@ -35,100 +258,8 @@ export const TABLA_RAZAS_NUTRICION = {
     caracteristicas: 'Alta rusticidad, termotolerancia sobresaliente, excelente digestión de pastos fibrosos tropicales y gran habilidad materna.',
     manejoNutricionalEspecial: 'Priorizar relación energía/proteína para llenado de lomo y pierna sin engrasamiento en giba o pecho; sal al 7-8% P con Zinc quelatado.'
   },
-  gyr: {
-    clave: 'gyr',
-    nombre: 'Gyr Lechero (Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Leche Tropical Cebú',
-    tipo: 'leche_cebu',
-    frameEstandar: 'Medio (Frame 4-5)',
-    pesoAdultoMachoKg: 800,
-    pesoAdultoHembraKg: 500,
-    curvaPesoHembraKg: { m0: 27, m7: 165, m12: 235, m18: 325, m24: 395, adulto: 500 },
-    curvaPesoMachoKg: { m0: 30, m7: 185, m12: 275, m18: 390, m24: 495, adulto: 800 },
-    curvaTallaCm: { m7: 104, m12: 117, m18: 125, m24: 131, adulto: 135 },
-    gdpMetaOptimaGDia: 650,
-    consumoMsPorcPV: 2.4,
-    pcMantenimientoPorc: 10.0,
-    pcProduccionPorc: 15.0,
-    fosforoRequeridoPorc: 8.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'alta',
-    caracteristicas: 'Zebuíno especializado en leche tropical, alta resistencia a ectoparásitos y estrés calórico, ubre profunda y temperamento dócil.',
-    manejoNutricionalEspecial: 'Cuidar desarrollo de novillas sin engrasar tejido mamario; en lactancia suministrar proteína bypass y calcio/fósforo 8%.'
-  },
-  guzera: {
-    clave: 'guzera',
-    nombre: 'Guzerá (Doble Propósito Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Doble Propósito (Carne & Leche Tropical)',
-    tipo: 'carne_cebu',
-    frameEstandar: 'Medio a Alto (Frame 5-7)',
-    pesoAdultoMachoKg: 900,
-    pesoAdultoHembraKg: 560,
-    curvaPesoHembraKg: { m0: 31, m7: 190, m12: 270, m18: 360, m24: 445, adulto: 560 },
-    curvaPesoMachoKg: { m0: 34, m7: 210, m12: 315, m18: 440, m24: 555, adulto: 900 },
-    curvaTallaCm: { m7: 109, m12: 122, m18: 131, m24: 136, adulto: 141 },
-    gdpMetaOptimaGDia: 750,
-    consumoMsPorcPV: 2.3,
-    pcMantenimientoPorc: 9.5,
-    pcProduccionPorc: 14.0,
-    fosforoRequeridoPorc: 7.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'muy_alta',
-    caracteristicas: 'Gran alzada, rusticidad extrema en sequía, cornamenta en lira que demanda alto aporte mineral cálcico-fosfórico.',
-    manejoNutricionalEspecial: 'Suplementación constante de Calcio, Fósforo y Magnesio por su gran estructura ósea y desarrollo de cornamenta.'
-  },
-  nelore: {
-    clave: 'nelore',
-    nombre: 'Nelore (Cebú Cárnico)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Carne & Ciclo Corto a Pastoreo',
-    tipo: 'carne_cebu',
-    frameEstandar: 'Medio a Alto (Frame 5-6)',
-    pesoAdultoMachoKg: 860,
-    pesoAdultoHembraKg: 530,
-    curvaPesoHembraKg: { m0: 30, m7: 185, m12: 265, m18: 350, m24: 425, adulto: 530 },
-    curvaPesoMachoKg: { m0: 33, m7: 205, m12: 310, m18: 430, m24: 540, adulto: 860 },
-    curvaTallaCm: { m7: 108, m12: 121, m18: 130, m24: 135, adulto: 139 },
-    gdpMetaOptimaGDia: 780,
-    consumoMsPorcPV: 2.2,
-    pcMantenimientoPorc: 9.0,
-    pcProduccionPorc: 13.5,
-    fosforoRequeridoPorc: 7.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'muy_alta',
-    caracteristicas: 'Eficiencia sobresaliente en conversión de pasturas tropicales a carne magra, partos fáciles y gran vigor neonatal.',
-    manejoNutricionalEspecial: 'Excelente respuesta a proteinados en época seca y dietas de ceba intensiva con ionóforos/levaduras.'
-  },
 
   // === DOBLE PROPÓSITO, CRUCES & CRIOLLOS ===
-  girolando: {
-    clave: 'girolando',
-    nombre: 'Girolando / Cruces F1',
-    grupo: 'Doble Propósito & Cruces',
-    especie: 'bovino',
-    aptitud: 'Leche & Doble Propósito Tropical (F1 / 5/8)',
-    tipo: 'doble_proposito',
-    frameEstandar: 'Medio a Alto (Frame 5-6)',
-    pesoAdultoMachoKg: 850,
-    pesoAdultoHembraKg: 560,
-    curvaPesoHembraKg: { m0: 33, m7: 185, m12: 270, m18: 365, m24: 450, adulto: 560 },
-    curvaPesoMachoKg: { m0: 36, m7: 205, m12: 305, m18: 420, m24: 530, adulto: 850 },
-    curvaTallaCm: { m7: 107, m12: 120, m18: 129, m24: 135, adulto: 139 },
-    gdpMetaOptimaGDia: 720,
-    consumoMsPorcPV: 2.7,
-    pcMantenimientoPorc: 11.0,
-    pcProduccionPorc: 16.5,
-    fosforoRequeridoPorc: 8.5,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'media_alta',
-    caracteristicas: 'Heterosis máxima: alto potencial lechero con rusticidad tropical. Demanda suplementación energética en pico de lactancia.',
-    manejoNutricionalEspecial: 'Requiere grasas sobrepasantes en primeros 100 días de leche y sal al 8.5-9% P con Cromo y Selenio orgánico para no caer en anestro postparto.'
-  },
   simmental: {
     clave: 'simmental',
     nombre: 'Simmental / Fleckvieh (Doble Propósito)',
@@ -628,7 +759,8 @@ export function obtenerCatalogoRazasNutricion() {
 
 /**
  * Evalúa directamente el estado de crecimiento y desarrollo de un animal comparando
- * su peso actual y su alzada (cm) frente a la curva estándar ideal de su raza, edad y sexo.
+ * su peso actual, su ganancia diaria (GDP) y su alzada (cm) frente a la curva estándar ideal
+ * de su raza por edad, etapa de crecimiento y sexo.
  */
 export function evaluarDesarrolloRacial({
   animal = null,
@@ -644,42 +776,126 @@ export function evaluarDesarrolloRacial({
   const sexoNorm = String(sexo || animal?.sexo || 'hembra').toLowerCase();
   const esMacho = sexoNorm.includes('macho') || sexoNorm.includes('toro') || sexoNorm.includes('novillo') || sexoNorm.includes('bucer');
 
-  const curvaPeso = (esMacho ? perfil.curvaPesoMachoKg : perfil.curvaPesoHembraKg) ||
+  const curvaBase = (esMacho ? perfil.curvaPesoMachoKg : perfil.curvaPesoHembraKg) ||
     (esMacho ? { m0: 34, m7: 205, m12: 300, m18: 420, m24: 530, adulto: perfil.pesoAdultoMachoKg || 820 } : { m0: 31, m7: 185, m12: 265, m18: 355, m24: 430, adulto: perfil.pesoAdultoHembraKg || 530 });
-  const curvaTalla = perfil.curvaTallaCm || { m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 };
 
-  // Interpolación lineal por tramos de edad (0 -> 7 -> 12 -> 18 -> 24 -> 36+ meses)
-  let pesoEsperadoKg = curvaPeso.adulto;
-  if (meses <= 7) {
-    pesoEsperadoKg = curvaPeso.m0 + ((curvaPeso.m7 - curvaPeso.m0) * (meses / 7));
+  // Asegurar hitos intermedios m3, m15 y m30 en cualquier raza del catálogo
+  const m0 = Number(curvaBase.m0 || 30);
+  const m7 = Number(curvaBase.m7 || 185);
+  const m3 = Number(curvaBase.m3 || Math.round(m0 + (m7 - m0) * (3 / 7)));
+  const m12 = Number(curvaBase.m12 || 260);
+  const m18 = Number(curvaBase.m18 || 350);
+  const m15 = Number(curvaBase.m15 || Math.round((m12 + m18) / 2));
+  const m24 = Number(curvaBase.m24 || 430);
+  const adulto = Number(curvaBase.adulto || (esMacho ? 820 : 530));
+  const m30 = Number(curvaBase.m30 || Math.round((m24 + adulto) / 2));
+
+  const curvaPeso = { m0, m3, m7, m12, m15, m18, m24, m30, adulto };
+  const curvaTalla = perfil.curvaTallaCm || { m0: 70, m3: 90, m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 };
+
+  // Interpolación lineal exacta por tramos de edad (0 -> 3 -> 7 -> 12 -> 15 -> 18 -> 24 -> 30 -> 36+ meses)
+  let pesoEsperadoKg = adulto;
+  if (meses <= 3) {
+    pesoEsperadoKg = m0 + ((m3 - m0) * (meses / 3));
+  } else if (meses <= 7) {
+    pesoEsperadoKg = m3 + ((m7 - m3) * ((meses - 3) / 4));
   } else if (meses <= 12) {
-    pesoEsperadoKg = curvaPeso.m7 + ((curvaPeso.m12 - curvaPeso.m7) * ((meses - 7) / 5));
+    pesoEsperadoKg = m7 + ((m12 - m7) * ((meses - 7) / 5));
+  } else if (meses <= 15) {
+    pesoEsperadoKg = m12 + ((m15 - m12) * ((meses - 12) / 3));
   } else if (meses <= 18) {
-    pesoEsperadoKg = curvaPeso.m12 + ((curvaPeso.m18 - curvaPeso.m12) * ((meses - 12) / 6));
+    pesoEsperadoKg = m15 + ((m18 - m15) * ((meses - 15) / 3));
   } else if (meses <= 24) {
-    pesoEsperadoKg = curvaPeso.m18 + ((curvaPeso.m24 - curvaPeso.m18) * ((meses - 18) / 6));
+    pesoEsperadoKg = m18 + ((m24 - m18) * ((meses - 18) / 6));
+  } else if (meses <= 30) {
+    pesoEsperadoKg = m24 + ((m30 - m24) * ((meses - 24) / 6));
   } else if (meses <= 36) {
-    pesoEsperadoKg = curvaPeso.m24 + ((curvaPeso.adulto - curvaPeso.m24) * ((meses - 24) / 12));
+    pesoEsperadoKg = m30 + ((adulto - m30) * ((meses - 30) / 6));
   } else {
-    pesoEsperadoKg = curvaPeso.adulto;
+    pesoEsperadoKg = adulto;
   }
   pesoEsperadoKg = Math.round(pesoEsperadoKg);
 
-  let tallaEsperadaCm = curvaTalla.adulto;
+  const t0 = Number(curvaTalla.m0 || 70);
+  const t7 = Number(curvaTalla.m7 || 106);
+  const t12 = Number(curvaTalla.m12 || 119);
+  const t18 = Number(curvaTalla.m18 || 127);
+  const t24 = Number(curvaTalla.m24 || 133);
+  const tAd = Number(curvaTalla.adulto || 137);
+
+  let tallaEsperadaCm = tAd;
   if (meses <= 7) {
-    tallaEsperadaCm = Math.round(74 + ((curvaTalla.m7 - 74) * (meses / 7)));
+    tallaEsperadaCm = Math.round(t0 + ((t7 - t0) * (meses / 7)));
   } else if (meses <= 12) {
-    tallaEsperadaCm = Math.round(curvaTalla.m7 + ((curvaTalla.m12 - curvaTalla.m7) * ((meses - 7) / 5)));
+    tallaEsperadaCm = Math.round(t7 + ((t12 - t7) * ((meses - 7) / 5)));
   } else if (meses <= 18) {
-    tallaEsperadaCm = Math.round(curvaTalla.m12 + ((curvaTalla.m18 - curvaTalla.m12) * ((meses - 12) / 6)));
+    tallaEsperadaCm = Math.round(t12 + ((t18 - t12) * ((meses - 12) / 6)));
   } else if (meses <= 24) {
-    tallaEsperadaCm = Math.round(curvaTalla.m18 + ((curvaTalla.m24 - curvaTalla.m18) * ((meses - 18) / 6)));
+    tallaEsperadaCm = Math.round(t18 + ((t24 - t18) * ((meses - 18) / 6)));
   } else if (meses <= 36) {
-    tallaEsperadaCm = Math.round(curvaTalla.m24 + ((curvaTalla.adulto - curvaTalla.m24) * ((meses - 24) / 12)));
+    tallaEsperadaCm = Math.round(t24 + ((tAd - t24) * ((meses - 24) / 12)));
   }
   if (esMacho && meses >= 12) {
     tallaEsperadaCm += 5;
   }
+
+  // Determinar Etapa de Crecimiento y Ganancia Diaria de Peso (GDP) esperada de la raza para esta etapa
+  const gdpEtapas = perfil.gdpPorEtapaGDia || {
+    cria_0_7m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 1.02),
+    levante_7_12m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 0.85),
+    levante_12_18m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 0.92),
+    vientre_ceba_18_24m: perfil.gdpMetaOptimaGDia || 680,
+    adulto_mantenimiento: 400,
+    pista_intensivo: Math.round((perfil.gdpMetaOptimaGDia || 680) * 1.25)
+  };
+
+  let etapaCrecimientoNombre = 'Adulto en Producción (>24 meses)';
+  let gdpEsperadaEtapaGDia = gdpEtapas.adulto_mantenimiento || 400;
+  if (meses <= 7) {
+    etapaCrecimientoNombre = 'Cría / Lactancia Pre-destete (0 - 7 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.cria_0_7m;
+  } else if (meses <= 12) {
+    etapaCrecimientoNombre = 'Posdestete / Levante Temprano (8 - 12 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.levante_7_12m;
+  } else if (meses <= 18) {
+    etapaCrecimientoNombre = 'Levante Medio / Entrada a Servicio (13 - 18 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.levante_12_18m;
+  } else if (meses <= 24) {
+    etapaCrecimientoNombre = esMacho ? 'Torete / Ceba Joven (19 - 24 meses)' : 'Novilla de Vientre (19 - 24 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.vientre_ceba_18_24m;
+  } else if (meses <= 32) {
+    etapaCrecimientoNombre = esMacho ? 'Toro Joven / Finalización (25 - 32 meses)' : 'Primer Parto / Primeros DEL (25 - 32 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.vientre_ceba_18_24m;
+  }
+
+  const gdpActualAnimalGDia = Number(animal?.gdp || animal?.gananciaDiaria || 0) || null;
+  const diferenciaGdpEtapaGDia = gdpActualAnimalGDia !== null ? Math.round(gdpActualAnimalGDia - gdpEsperadaEtapaGDia) : null;
+
+  // Parámetros reproductivos y productivos de la raza
+  const fichaRaza = perfil.fichaZootecnicaRaza || {
+    edadPrimerServicioMeses: '18 - 22 meses',
+    pesoMetaPrimerServicioKg: Math.round(m18 * 0.95),
+    edadPrimerPartoMeses: '28 - 32 meses',
+    intervaloEntrePartosDias: '385 - 410 días',
+    produccionLecheLactancia: perfil.aptitud || 'Doble Propósito Tropical',
+    rendimientoCanalPorc: '54% - 58%',
+    fuenteOficial: 'Asocebú / ABCZ / Embrapa'
+  };
+
+  const pesoMetaServicioKg = Number(fichaRaza.pesoMetaPrimerServicioKg || Math.round(m18 * 0.95));
+  const kgFaltantesPrimerServicio = !esMacho && peso < pesoMetaServicioKg ? Math.max(0, Math.round(pesoMetaServicioKg - peso)) : 0;
+
+  // Tabla completa de hitos de desarrollo por edades para mostrar en pantalla
+  const tablaHitosRaza = [
+    { clave: 'm0', etiqueta: 'Nac. (0m)', etapa: 'Nac. (0m)', meses: 0, edadMeses: 0, pesoEsperadoKg: m0, tallaCm: t0, tallaEsperadaCm: t0, esActual: meses <= 1 },
+    { clave: 'm3', etiqueta: 'Cría (3m)', etapa: 'Cría (3m)', meses: 3, edadMeses: 3, pesoEsperadoKg: m3, tallaCm: Number(curvaTalla.m3 || Math.round((t0 + t7) / 2)), tallaEsperadaCm: Number(curvaTalla.m3 || Math.round((t0 + t7) / 2)), esActual: meses > 1 && meses <= 5 },
+    { clave: 'm7', etiqueta: 'Destete (7m)', etapa: 'Destete (7m)', meses: 7, edadMeses: 7, pesoEsperadoKg: m7, tallaCm: t7, tallaEsperadaCm: t7, esActual: meses > 5 && meses <= 9 },
+    { clave: 'm12', etiqueta: 'Año (12m)', etapa: 'Año (12m)', meses: 12, edadMeses: 12, pesoEsperadoKg: m12, tallaCm: t12, tallaEsperadaCm: t12, esActual: meses > 9 && meses <= 15 },
+    { clave: 'm18', etiqueta: 'Servicio (18m)', etapa: 'Servicio (18m)', meses: 18, edadMeses: 18, pesoEsperadoKg: m18, tallaCm: t18, tallaEsperadaCm: t18, esActual: meses > 15 && meses <= 21 },
+    { clave: 'm24', etiqueta: 'Vientre (24m)', etapa: 'Vientre (24m)', meses: 24, edadMeses: 24, pesoEsperadoKg: m24, tallaCm: t24, tallaEsperadaCm: t24, esActual: meses > 21 && meses <= 28 },
+    { clave: 'm30', etiqueta: '1er Parto (30m)', etapa: '1er Parto (30m)', meses: 30, edadMeses: 30, pesoEsperadoKg: m30, tallaCm: Math.round((t24 + tAd) / 2), tallaEsperadaCm: Math.round((t24 + tAd) / 2), esActual: meses > 28 && meses <= 34 },
+    { clave: 'adulto', etiqueta: 'Adulto (36m+)', etapa: 'Adulto (36m+)', meses: 36, edadMeses: 36, pesoEsperadoKg: adulto, tallaCm: tAd, tallaEsperadaCm: tAd, esActual: meses > 34 }
+  ];
 
   const indiceDesarrolloPorc = Math.round((peso / Math.max(1, pesoEsperadoKg)) * 100);
   const diferenciaPesoKg = Math.round(peso - pesoEsperadoKg);
@@ -688,37 +904,47 @@ export function evaluarDesarrolloRacial({
 
   let estadoDesarrollo = 'optimo';
   let etiquetaDesarrollo = 'Desarrollo Óptimo Acorde a la Raza';
-  let gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
+  let gdpMetaCorrectivaGDia = Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700);
   let diagnosticoDesarrollo = '';
 
   if (indiceDesarrolloPorc < 78) {
     estadoDesarrollo = 'rezago_severo';
     etiquetaDesarrollo = '⚠️ Rezago Severo de Crecimiento vs Estándar Racial';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.25);
-    diagnosticoDesarrollo = `El ejemplar presenta un índice de desarrollo del ${indiceDesarrolloPorc}% respecto al estándar de la raza ${perfil.nombre} a los ${meses} meses (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados, déficit de ${Math.abs(diferenciaPesoKg)} kg). Se requiere intervención nutricional correctiva con proteína verdadera (16-18% PC), desparasitación estratégica y modificador orgánico con aminoácidos y fósforo.`;
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 1.25);
+    diagnosticoDesarrollo = `El ejemplar presenta un índice de desarrollo del ${indiceDesarrolloPorc}% respecto al estándar de la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}" a los ${meses} meses (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados, déficit de ${Math.abs(diferenciaPesoKg)} kg; GDP estándar etapa: +${gdpEsperadaEtapaGDia} g/día). Se requiere intervención nutricional correctiva con proteína verdadera (16-18% PC), desparasitación estratégica y modificador orgánico con aminoácidos y fósforo.`;
   } else if (indiceDesarrolloPorc < 90) {
     estadoDesarrollo = 'rezago_moderado';
     etiquetaDesarrollo = '📉 Desarrollo por Debajo del Objetivo Racial (Recuperación)';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.15);
-    diagnosticoDesarrollo = `El ejemplar alcanza el ${indiceDesarrolloPorc}% del peso ideal para la raza ${perfil.nombre} a los ${meses} meses (${peso} kg vs ${pesoEsperadoKg} kg esperados, ${diferenciaPesoKg} kg). Se recomienda incrementar densidad energético-proteica y minerales quelatados para alcanzar una GDP compensatoria de +${gdpMetaCorrectivaGDia} g/día.`;
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 1.15);
+    diagnosticoDesarrollo = `El ejemplar alcanza el ${indiceDesarrolloPorc}% del peso ideal para la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}" a los ${meses} meses (${peso} kg vs ${pesoEsperadoKg} kg esperados, ${diferenciaPesoKg} kg). Se recomienda incrementar densidad energético-proteica y minerales quelatados para pasar de la GDP base de etapa (+${gdpEsperadaEtapaGDia} g/día) a una GDP compensatoria de +${gdpMetaCorrectivaGDia} g/día.`;
   } else if (indiceDesarrolloPorc <= 112) {
     estadoDesarrollo = 'optimo';
     etiquetaDesarrollo = '✅ Desarrollo Armónico y Óptimo para la Raza';
-    gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
-    diagnosticoDesarrollo = `Excelente curva de crecimiento para la raza ${perfil.nombre}: el ejemplar se sitúa en el ${indiceDesarrolloPorc}% del estándar racial a los ${meses} meses (${peso} kg actuales frente a ${pesoEsperadoKg} kg de referencia y alzada de ${tallaNum} cm vs ${tallaEsperadaCm} cm esperados). Mantener balance nutricional de precisión.`;
+    gdpMetaCorrectivaGDia = Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700);
+    diagnosticoDesarrollo = `Excelente curva de crecimiento para la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}": el ejemplar se sitúa en el ${indiceDesarrolloPorc}% del estándar racial a los ${meses} meses (${peso} kg actuales frente a ${pesoEsperadoKg} kg de referencia y alzada de ${tallaNum} cm vs ${tallaEsperadaCm} cm esperados). Mantener balance nutricional para sostener +${gdpEsperadaEtapaGDia} g/día.`;
   } else {
     estadoDesarrollo = 'superior';
     etiquetaDesarrollo = '🏆 Desarrollo Ponderal Superior al Promedio Racial';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 0.95);
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 0.95);
     diagnosticoDesarrollo = `El ejemplar supera el estándar promedio de la raza ${perfil.nombre} con un ${indiceDesarrolloPorc}% de desarrollo (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados a los ${meses} meses, +${diferenciaPesoKg} kg). Vigilar que el peso extra corresponda a desarrollo muscular y óseo magro evitando engrasamiento excesivo en ubre o canal de parto.`;
   }
 
   return {
     razaNombre: perfil.nombre,
     razaClave: perfil.clave || 'general',
+    esRazaPriorizada: Boolean(perfil.esPriorizada),
     especie: perfil.especie || (perfil.tipo === 'bufalo' ? 'bufalino' : 'bovino'),
     aptitudRacial: perfil.aptitud || 'Doble Propósito',
     edadMesesEvaluada: meses,
+    etapaCrecimientoNombre,
+    gdpEsperadaEtapaGDia,
+    gdpPorEtapaGDia: gdpEtapas,
+    gdpActualAnimalGDia,
+    diferenciaGdpEtapaGDia,
+    fichaZootecnicaRaza: fichaRaza,
+    pesoMetaPrimerServicioKg: pesoMetaServicioKg,
+    kgFaltantesPrimerServicio,
+    tablaHitosRaza,
     pesoActualKg: peso,
     pesoEsperadoRazaKg: pesoEsperadoKg,
     diferenciaPesoKg,
@@ -854,19 +1080,20 @@ export function resolverPerfilRaza(razaTexto) {
   if (t.includes('murrah')) return TABLA_RAZAS_NUTRICION.bufalo_murrah;
   if (t.includes('bufal')) return TABLA_RAZAS_NUTRICION.bufalo;
 
-  // Razas Doble Propósito & Cruces
+  // Razas Priorizadas Cebú & Cruces (Red Sindhi, Gyr, Guzerat, Nelore, Girolando, Brahman)
+  if (t.includes('sindhi') || t.includes('sindi')) return TABLA_RAZAS_NUTRICION.red_sindhi;
   if (t.includes('giroland') || t.includes('f1') || t.includes('cruce lech')) return TABLA_RAZAS_NUTRICION.girolando;
+  if (t.includes('gyr') || t.includes('gir')) return TABLA_RAZAS_NUTRICION.gyr;
+  if (t.includes('guzera') || t.includes('guzerat') || t.includes('kankrej')) return TABLA_RAZAS_NUTRICION.guzera;
+  if (t.includes('nelore') || t.includes('nellore')) return TABLA_RAZAS_NUTRICION.nelore;
+  if (t.includes('brahman') || t.includes('cebu') || t.includes('indubrasil') || t.includes('sardo')) return TABLA_RAZAS_NUTRICION.brahman;
+
+  // Otras Razas Doble Propósito & Cruces
   if (t.includes('simbrah')) return TABLA_RAZAS_NUTRICION.simbrah;
   if (t.includes('simmental') || t.includes('fleckvieh')) return TABLA_RAZAS_NUTRICION.simmental;
   if (t.includes('normand')) return TABLA_RAZAS_NUTRICION.normando;
   if (t.includes('bon') || t.includes('orejinegro')) return TABLA_RAZAS_NUTRICION.bon;
   if (t.includes('romosinuano') || t.includes('harton') || t.includes('costeno')) return TABLA_RAZAS_NUTRICION.romosinuano;
-
-  // Razas Cebú
-  if (t.includes('gyr') || t.includes('gir')) return TABLA_RAZAS_NUTRICION.gyr;
-  if (t.includes('guzera')) return TABLA_RAZAS_NUTRICION.guzera;
-  if (t.includes('nelore')) return TABLA_RAZAS_NUTRICION.nelore;
-  if (t.includes('brahman') || t.includes('cebu') || t.includes('indubrasil') || t.includes('sardo')) return TABLA_RAZAS_NUTRICION.brahman;
 
   // Razas Lecheras Especializadas
   if (t.includes('jersey')) return TABLA_RAZAS_NUTRICION.jersey;
@@ -1584,7 +1811,11 @@ export async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null, r
 
 export function obtenerGeminiApiKey() {
   if (typeof localStorage === 'undefined') return '';
-  return (localStorage.getItem('gemini_api_key') || '').trim();
+  return (
+    localStorage.getItem('bovitrack_global_gemini_api_key') ||
+    localStorage.getItem('gemini_api_key') ||
+    ''
+  ).trim();
 }
 
 export function guardarGeminiApiKey(key) {
@@ -1592,8 +1823,15 @@ export function guardarGeminiApiKey(key) {
   const clean = (key || '').trim();
   if (clean) {
     localStorage.setItem('gemini_api_key', clean);
+    localStorage.setItem('bovitrack_global_gemini_api_key', clean);
   } else {
     localStorage.removeItem('gemini_api_key');
+    localStorage.removeItem('bovitrack_global_gemini_api_key');
+  }
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__bovitrackSyncGlobalGeminiKey === 'function') {
+    try {
+      globalThis.__bovitrackSyncGlobalGeminiKey(clean);
+    } catch (_) {}
   }
   return true;
 }
@@ -1601,6 +1839,12 @@ export function guardarGeminiApiKey(key) {
 export function eliminarGeminiApiKey() {
   if (typeof localStorage === 'undefined') return false;
   localStorage.removeItem('gemini_api_key');
+  localStorage.removeItem('bovitrack_global_gemini_api_key');
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__bovitrackSyncGlobalGeminiKey === 'function') {
+    try {
+      globalThis.__bovitrackSyncGlobalGeminiKey('');
+    } catch (_) {}
+  }
   return true;
 }
 

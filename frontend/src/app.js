@@ -43,6 +43,35 @@ class BoviTrackApp {
     this._syncPendiente = false;
     this._tokenSesion = null;
 
+    if (this.state && this.state.globalGeminiApiKey && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('bovitrack_global_gemini_api_key', this.state.globalGeminiApiKey);
+        localStorage.setItem('gemini_api_key', this.state.globalGeminiApiKey);
+      } catch (_e) {}
+    }
+
+    globalThis.__bovitrackSyncGlobalGeminiKey = (cleanKey) => {
+      if (!this.state) return;
+      this.state.globalGeminiApiKey = cleanKey || '';
+      if (!Array.isArray(this.state.operacionesDiarias)) {
+        this.state.operacionesDiarias = [];
+      }
+      const idx = this.state.operacionesDiarias.findIndex((op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG');
+      const configRow = {
+        id: 'SYS_GEMINI_GLOBAL_CONFIG',
+        fincaId: 'GLOBAL',
+        tipo: 'SYS_GEMINI_GLOBAL_CONFIG',
+        geminiApiKey: cleanKey || '',
+        actualizadoEn: new Date().toISOString()
+      };
+      if (idx >= 0) {
+        this.state.operacionesDiarias[idx] = configRow;
+      } else {
+        this.state.operacionesDiarias.push(configRow);
+      }
+      this.guardarEstado();
+    };
+
     this.iniciarPWA();
     this.iniciarComponentes();
     this.iniciarSincronizacionEnLineaPermanente();
@@ -856,6 +885,24 @@ class BoviTrackApp {
     fusionarColeccion('operacionesDiarias', datos.operacionesDiarias);
     fusionarColeccion('pesajes', datos.pesajes);
     fusionarColeccion('nutricion', datos.nutricion);
+
+    // Sincronizar Clave Global de IA Gemini para todas las empresas y todas las fincas
+    const globalGeminiConfig = (this.state.operacionesDiarias || []).find(
+      (op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG' && typeof op.geminiApiKey === 'string'
+    );
+    if (globalGeminiConfig && globalGeminiConfig.geminiApiKey !== undefined) {
+      const cloudKey = globalGeminiConfig.geminiApiKey.trim();
+      if (cloudKey && cloudKey !== this.state.globalGeminiApiKey) {
+        this.state.globalGeminiApiKey = cloudKey;
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem('bovitrack_global_gemini_api_key', cloudKey);
+            localStorage.setItem('gemini_api_key', cloudKey);
+          } catch (_e) {}
+        }
+        huboCambios = true;
+      }
+    }
 
     if (huboCambios) {
       if (typeof localStorage !== 'undefined') {

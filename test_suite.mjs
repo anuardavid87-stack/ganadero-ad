@@ -6842,6 +6842,122 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     Boolean(resDiagHibrido.iaData.vitaminaSuplementoPrioritarioIA?.nombre),
     'Motor IA Híbrido + ListModels: Verifica la API Key en Google AI Studio y mantiene diagnósticos, dieta, medicamentos y vitaminas 100% operativos incluso durante caídas 503 de Google'
   );
+
+  // 59.1: Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando, Brahman) con curvas por edades y GDP por etapa
+  const razasPriorizadasClaves = ['red_sindhi', 'gyr', 'guzera', 'nelore', 'girolando', 'brahman'];
+  const todasPriorizadasConCurvas = razasPriorizadasClaves.every((clave) => {
+    const r = TABLA_RAZAS_NUTRICION[clave];
+    return (
+      r &&
+      r.esPriorizada === true &&
+      r.curvaPesoHembraKg &&
+      r.curvaPesoHembraKg.m0 > 0 &&
+      r.curvaPesoHembraKg.m3 > 0 &&
+      r.curvaPesoHembraKg.m7 > 0 &&
+      r.curvaPesoHembraKg.m12 > 0 &&
+      r.curvaPesoHembraKg.m15 > 0 &&
+      r.curvaPesoHembraKg.m18 > 0 &&
+      r.curvaPesoHembraKg.m24 > 0 &&
+      r.curvaPesoHembraKg.m30 > 0 &&
+      r.curvaPesoHembraKg.adulto > 0 &&
+      r.gdpPorEtapaGDia &&
+      r.gdpPorEtapaGDia.cria_0_7m > 0 &&
+      r.gdpPorEtapaGDia.levante_7_12m > 0 &&
+      r.gdpPorEtapaGDia.levante_12_18m > 0 &&
+      r.gdpPorEtapaGDia.vientre_ceba_18_24m > 0 &&
+      r.gdpPorEtapaGDia.pista_intensivo > 0 &&
+      r.fichaZootecnicaRaza &&
+      r.fichaZootecnicaRaza.pesoMetaPrimerServicioKg > 0
+    );
+  });
+
+  test(
+    todasPriorizadasConCurvas && resolverPerfilRaza('Red Sindhi').clave === 'red_sindhi' && resolverPerfilRaza('Guzerat').clave === 'guzera',
+    'Catálogo de Razas Priorizadas: Red Sindhi, Gyr, Guzerat, Nelore, Girolando y Brahman incluyen curvas oficiales por edades (0m a 36m+), GDP por etapa de crecimiento y parámetros reproductivos'
+  );
+
+  // 59.2: Evaluación de desarrollo por edades y etapas en Red Sindhi y Girolando
+  const desRedSindhi = evaluarDesarrolloRacial({
+    animal: { id: 'RS-01', sexo: 'Hembra', gdpPromedioGDia: 410 },
+    razaTexto: 'Red Sindhi (Sindi Rojo)',
+    pesoActual: 240,
+    tallaCm: 120,
+    edadMeses: 18,
+    sexo: 'hembra'
+  });
+
+  test(
+    desRedSindhi.razaClave === 'red_sindhi' &&
+    desRedSindhi.pesoEsperadoRazaKg === 265 &&
+    desRedSindhi.gdpEsperadaEtapaGDia === 480 &&
+    desRedSindhi.pesoMetaPrimerServicioKg === 265 &&
+    desRedSindhi.kgFaltantesPrimerServicio === 25 &&
+    Array.isArray(desRedSindhi.tablaHitosRaza) &&
+    desRedSindhi.tablaHitosRaza.length === 8,
+    'evaluarDesarrolloRacial (Red Sindhi 18m): Compara peso actual vs curva oficial (265 kg), GDP de etapa (480 g/d), calcula kg faltantes a 1er servicio y genera tabla de 8 hitos por edad'
+  );
+
+  // 59.3: ModuloNutricion NO expone configuración de IA a los usuarios y muestra chips de razas priorizadas + tabla por edades
+  const modNutriUI = new ModuloNutricion({
+    containerId: 'test-nutri-ui',
+    getAnimales: () => [{ id: 'ANM-RS1', identificacionTag: 'RS-100', raza: 'Red Sindhi (Sindi Rojo)', sexo: 'Hembra', ultimoPesoKg: 250, edadMeses: 18 }],
+    getFincaActiva: () => ({ id: 'FIN-1', nombre: 'Hacienda Central' }),
+    getNutricion: () => []
+  });
+  modNutriUI.container = new MockDomElement('test-nutri-ui');
+  modNutriUI.abrirEvaluacionParaAnimal({ id: 'ANM-RS1', identificacionTag: 'RS-100', raza: 'Red Sindhi (Sindi Rojo)', sexo: 'Hembra', ultimoPesoKg: 250, edadMeses: 18 });
+  const htmlNutriEval = modNutriUI.container.innerHTML;
+
+  test(
+    !htmlNutriEval.includes('btn-abrir-config-gemini-nutri') &&
+    !htmlNutriEval.includes('input-modal-gemini-key') &&
+    htmlNutriEval.includes('btn-chip-raza-priorizada') &&
+    htmlNutriEval.includes('Red Sindhi') &&
+    htmlNutriEval.includes('Curva Oficial de Desarrollo por Edades'),
+    'ModuloNutricion (Seguridad & UI): Oculta configuración de API Key a usuarios del módulo y renderiza chips de Razas Priorizadas y Curva Oficial por Edades'
+  );
+
+  // 59.4: ModuloAdmin restringe la pestaña y sección IA Gemini exclusivamente al rol superadmin
+  const modAdminNormal = new ModuloAdmin({
+    containerId: 'test-admin-normal',
+    getEmpresas: () => [{ id: 'EMP-1', nombre: 'Empresa A' }],
+    getEmpresaActiva: () => ({ id: 'EMP-1', nombre: 'Empresa A' }),
+    getFincas: () => [{ id: 'FIN-1', nombre: 'Finca A', empresaId: 'EMP-1' }],
+    getFincaActiva: () => ({ id: 'FIN-1', nombre: 'Finca A', empresaId: 'EMP-1' }),
+    getUsuarios: () => [],
+    getUsuarioActual: () => ({ id: 'USR-ADM', usuario: 'admin_empresa', rol: 'administrador', empresaId: 'EMP-1' }),
+    getAnimales: () => [],
+    getCostosFijos: () => ({}),
+    getInversiones: () => []
+  });
+  modAdminNormal.container = new MockDomElement('test-admin-normal');
+  modAdminNormal.render();
+  const htmlAdminNormal = modAdminNormal.container.innerHTML;
+
+  const modSuperAdmin = new ModuloAdmin({
+    containerId: 'test-super-admin',
+    getEmpresas: () => [{ id: 'EMP-1', nombre: 'Empresa A' }],
+    getEmpresaActiva: () => ({ id: 'EMP-1', nombre: 'Empresa A' }),
+    getFincas: () => [{ id: 'FIN-1', nombre: 'Finca A', empresaId: 'EMP-1' }],
+    getFincaActiva: () => ({ id: 'FIN-1', nombre: 'Finca A', empresaId: 'EMP-1' }),
+    getUsuarios: () => [],
+    getUsuarioActual: () => ({ id: 'USR-ROOT', usuario: 'superadmin', rol: 'superadmin' }),
+    getAnimales: () => [],
+    getCostosFijos: () => ({}),
+    getInversiones: () => []
+  });
+  modSuperAdmin.container = new MockDomElement('test-super-admin');
+  modSuperAdmin.seccion = 'gemini';
+  modSuperAdmin.render();
+  const htmlSuperAdmin = modSuperAdmin.container.innerHTML;
+
+  test(
+    !htmlAdminNormal.includes('data-sec="gemini"') &&
+    htmlSuperAdmin.includes('data-sec="gemini"') &&
+    htmlSuperAdmin.includes('EXCLUSIVO SUPER ADMINISTRADOR') &&
+    htmlSuperAdmin.includes('Para Todas las Fincas y Empresas'),
+    'ModuloAdmin (Control de Acceso IA): Oculta la pestaña IA Gemini a administradores/usuarios regulares y permite su gestión global exclusivamente al Super Administrador'
+  );
 }
 
 console.log(`\n=====================================================================`);

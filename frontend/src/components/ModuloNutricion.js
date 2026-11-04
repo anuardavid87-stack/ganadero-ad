@@ -455,108 +455,6 @@ export class ModuloNutricion {
     }
   }
 
-  renderModalConfigGemini() {
-    const keyActual = obtenerGeminiApiKey();
-    const tieneKey = Boolean(keyActual);
-
-    return `
-      <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-        <div class="bg-slate-900 border border-purple-500/40 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-auto text-white p-5 sm:p-6 space-y-4">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div class="flex items-center gap-2.5">
-              <span class="text-2xl p-2 rounded-2xl bg-purple-900/60 border border-purple-500/40 text-purple-300">✨</span>
-              <div>
-                <h3 class="font-black text-base text-white">Google Gemini IA (Visión Multimodal)</h3>
-                <p class="text-xs text-purple-300/80">Configuración de API Key para escaneo corporal y nutrición</p>
-              </div>
-            </div>
-            <button type="button" id="btn-cerrar-modal-config-gemini" class="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer">✕</button>
-          </div>
-
-          ${this.geminiFeedback ? `
-            <div class="p-3 rounded-2xl text-xs font-bold flex items-center justify-between ${
-              this.geminiFeedback.ok ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border border-rose-500/50 text-rose-300'
-            }">
-              <div class="flex items-center gap-2">
-                <span>${this.geminiFeedback.ok ? '✅' : '⚠️'}</span>
-                <span>${this.geminiFeedback.mensaje || this.geminiFeedback.error}</span>
-              </div>
-              <button id="btn-cerrar-feedback-gemini-modal" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
-            </div>
-          ` : ''}
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-bold text-slate-300 uppercase">Clave de API Google AI Studio:</label>
-              <span class="text-[10px] font-mono uppercase font-black px-2 py-0.5 rounded-full ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
-                ${tieneKey ? '● Configurada' : '○ Sin Clave'}
-              </span>
-            </div>
-            <input
-              type="password"
-              id="input-modal-gemini-key"
-              placeholder="Pega aquí tu API Key (AIzaSy...)"
-              value="${keyActual || ''}"
-              class="w-full bg-slate-950 border border-slate-700 text-white font-mono px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-purple-500"
-            />
-          </div>
-
-          <div class="bg-purple-950/40 border border-purple-800/50 rounded-2xl p-3.5 text-[11px] text-purple-200/90 space-y-1.5 leading-relaxed">
-            <p class="font-bold text-white flex items-center gap-1.5">
-              <span>🔑</span> ¿Cómo obtener tu clave gratuita?
-            </p>
-            <p>
-              Obtén tu API Key gratis en 
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline text-purple-300 font-bold hover:text-white">Google AI Studio ↗</a>. 
-              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para modelos <code>gemini-flash</code>.
-            </p>
-          </div>
-
-          <div class="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-probar-modal-gemini"
-                ${this.geminiProbando ? 'disabled' : ''}
-                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700 transition cursor-pointer ${this.geminiProbando ? 'opacity-50 cursor-wait' : ''}"
-              >
-                <span>${this.geminiProbando ? '⏳' : '⚡'}</span>
-                <span>${this.geminiProbando ? 'Probando...' : 'Probar'}</span>
-              </button>
-
-              ${tieneKey ? `
-                <button
-                  type="button"
-                  id="btn-eliminar-modal-gemini"
-                  class="px-3 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800 transition cursor-pointer"
-                >
-                  🗑️ Eliminar
-                </button>
-              ` : ''}
-            </div>
-
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-cancelar-modal-gemini"
-                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
-              >
-                Cerrar
-              </button>
-              <button
-                type="button"
-                id="btn-guardar-modal-gemini"
-                class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-lg shadow-purple-900/40 transition cursor-pointer"
-              >
-                💾 Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   imprimirPlanNutricional() {
     if (!this.planGenerado) return;
     window.print();
@@ -571,10 +469,7 @@ export class ModuloNutricion {
     }
 
     if (this.modoModalEvaluacion && this.animalSeleccionado) {
-      let evalHtml = this.renderPanelEvaluacion();
-      if (this.modalConfigGeminiAbierto) {
-        evalHtml += this.renderModalConfigGemini();
-      }
+      const evalHtml = this.renderPanelEvaluacion();
       this.container.innerHTML = evalHtml;
       this.enlazarEventos();
       return;
@@ -598,19 +493,18 @@ export class ModuloNutricion {
             </p>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              class="btn-abrir-config-gemini-nutri bg-slate-800/90 hover:bg-slate-800 border border-purple-500/40 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-left transition cursor-pointer"
-              title="Configurar Google Gemini IA"
+            <div
+              class="bg-slate-800/90 border border-purple-500/40 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-left"
+              title="Conexión de IA administrada globalmente por el Super Administrador para todas las empresas y fincas"
             >
               <span class="text-xl">✨</span>
               <div>
-                <div class="text-[9px] text-purple-300 font-black uppercase">Google Gemini IA</div>
-                <div class="text-xs font-black ${obtenerGeminiApiKey() ? 'text-emerald-400' : 'text-amber-400'} flex items-center gap-1">
-                  <span>${obtenerGeminiApiKey() ? '● Conectado' : '○ Sin Clave'}</span>
+                <div class="text-[9px] text-purple-300 font-black uppercase">Motor IA Global</div>
+                <div class="text-xs font-black text-emerald-400 flex items-center gap-1">
+                  <span>● Activo (Todas las Fincas)</span>
                 </div>
               </div>
-            </button>
+            </div>
 
             <div class="bg-slate-800/90 border border-slate-700 px-4 py-2 rounded-2xl flex items-center gap-3">
               <div class="text-right">
@@ -769,10 +663,6 @@ export class ModuloNutricion {
       </div>
     `;
 
-    if (this.modalConfigGeminiAbierto) {
-      html += this.renderModalConfigGemini();
-    }
-
     this.container.innerHTML = html;
     this.enlazarEventos();
   }
@@ -842,9 +732,9 @@ export class ModuloNutricion {
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" class="btn-abrir-config-gemini-nutri px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900 text-purple-200 text-xs font-bold border border-purple-500/40 transition flex items-center gap-1.5 cursor-pointer">
-                <span>✨</span> <span class="hidden sm:inline">IA Gemini (${obtenerModeloGeminiActivo()})</span>
-              </button>
+              <span class="px-3 py-1.5 rounded-xl bg-purple-950/60 text-purple-200 text-xs font-bold border border-purple-500/40 flex items-center gap-1.5" title="Conexión IA Global administrada en Super Admin">
+                <span>✨</span> <span class="hidden sm:inline">IA Global Activa (${obtenerModeloGeminiActivo()})</span>
+              </span>
               <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                 <span>🖨️</span> <span class="hidden sm:inline">Imprimir Ficha</span>
               </button>
@@ -859,15 +749,44 @@ export class ModuloNutricion {
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                 <div>
                   <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
-                    <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo
+                    <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo por Edades
                   </h4>
                   <p class="text-[11px] text-slate-400 mt-0.5">
-                    Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso y alzada contra el estándar genético de su raza.
+                    Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso, alzada y ganancia diaria en cada etapa de crecimiento.
                   </p>
                 </div>
                 <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${tieneRazaEnFicha ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/60 border-amber-500/40 text-amber-300'} shrink-0">
                   ${tieneRazaEnFicha ? `📋 En Ficha: ${animal.raza}` : '📋 Sin raza específica en ficha (Confírmala abajo)'}
                 </span>
+              </div>
+
+              <!-- ACCESO RÁPIDO A RAZAS PRIORIZADAS (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO, BRAHMAN) -->
+              <div class="bg-slate-900/90 p-3 rounded-xl border border-amber-500/30 space-y-2">
+                <div class="flex items-center justify-between flex-wrap gap-1">
+                  <span class="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1.5">
+                    <span>⭐</span> Razas Priorizadas (Selección Rápida con Curvas Oficiales ABCZ / Embrapa / Asocebú):
+                  </span>
+                  <span class="text-[10px] text-slate-400">Clic para aplicar estándar genético y curva por edades</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  ${catalogoRazas.filter(r => r.esPriorizada).map(r => {
+                    const activa = r.clave === perfil.clave || r.nombre === perfil.nombre;
+                    return `
+                      <button
+                        type="button"
+                        data-raza-nombre="${r.nombre}"
+                        class="btn-chip-raza-priorizada px-3 py-1.5 rounded-xl text-[11px] font-black transition cursor-pointer flex items-center gap-1.5 ${
+                          activa
+                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 border border-amber-300'
+                            : 'bg-slate-950 hover:bg-slate-800 text-amber-200 border border-amber-500/30'
+                        }"
+                      >
+                        <span>⭐</span>
+                        <span>${r.nombre.split('(')[0].trim()}</span>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
               </div>
 
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
@@ -883,7 +802,7 @@ export class ModuloNutricion {
                       <optgroup label="── ${nombreGrupo} ──">
                         ${gruposRazas[nombreGrupo].map(r => `
                           <option value="${r.nombre}" ${r.clave === perfil.clave || r.nombre === perfil.nombre ? 'selected' : ''}>
-                            ${r.especie === 'bufalino' ? '🐃' : '🐄'} ${r.nombre} — (${r.aptitud})
+                            ${r.especie === 'bufalino' ? '🐃' : (r.esPriorizada ? '⭐' : '🐄')} ${r.nombre} — (${r.aptitud})
                           </option>
                         `).join('')}
                       </optgroup>
@@ -951,6 +870,26 @@ export class ModuloNutricion {
                       <div class="text-[11px] font-black ${esBuf ? 'text-rose-400' : 'text-cyan-400'} font-mono">${perfil.fosforoRequeridoPorc}%P ${esBuf ? '(Bajo Cu)' : ''}</div>
                     </div>
                   </div>
+                  ${des.fichaZootecnicaRaza ? `
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-center">
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">1er Servicio</div>
+                        <div class="text-[10px] font-black text-cyan-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerServicioMeses} (${des.pesoMetaPrimerServicioKg}kg)</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Edad 1er Parto</div>
+                        <div class="text-[10px] font-black text-emerald-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerPartoMeses}</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Lactancia Raza</div>
+                        <div class="text-[10px] font-black text-amber-300 font-mono">${des.fichaZootecnicaRaza.produccionLecheLactancia}</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Rend. Canal</div>
+                        <div class="text-[10px] font-black text-purple-300 font-mono">${des.fichaZootecnicaRaza.rendimientoCanalPorc}</div>
+                      </div>
+                    </div>
+                  ` : ''}
                   ${perfil.manejoNutricionalEspecial ? `
                     <div class="text-[10px] text-emerald-200/90 bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
                       💡 <strong>Clave Nutricional de la Raza:</strong> ${perfil.manejoNutricionalEspecial}
@@ -960,9 +899,9 @@ export class ModuloNutricion {
 
                 <!-- Tarjeta B: Análisis Directo del Desarrollo del Animal vs Estándar Racial -->
                 <div class="p-3.5 rounded-xl border ${colorDesarrollo} space-y-2.5 text-xs">
-                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5 flex-wrap gap-1">
                     <span class="font-black text-white flex items-center gap-1.5">
-                      <span>📈</span> Desarrollo Directo a los ${des.edadMesesEvaluada} Meses
+                      <span>📈</span> Desarrollo a los ${des.edadMesesEvaluada} Meses (${des.etapaCrecimientoNombre || 'Crecimiento'})
                     </span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-950/90 border border-slate-700">
                       Índice Racial: ${porcDesarrollo}%
@@ -985,9 +924,9 @@ export class ModuloNutricion {
                       </div>
                     </div>
                     <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Meta GDP Raza</div>
-                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpMetaCorrectivaGDia} g/d</div>
-                      <div class="text-[9px] text-slate-400">Objetivo diario</div>
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">GDP Etapa vs Meta</div>
+                      <div class="text-xs font-black text-amber-300 font-mono">${des.gdpEsperadaEtapaGDia || des.gdpReferenciaPastoreoGDia} → +${des.gdpMetaCorrectivaGDia} g/d</div>
+                      <div class="text-[9px] text-slate-400">${des.gdpActualAnimalGDia ? `Actual: ${des.gdpActualAnimalGDia} g/d` : 'Objetivo diario'}</div>
                     </div>
                   </div>
 
@@ -998,7 +937,91 @@ export class ModuloNutricion {
                   <p class="text-[11px] text-slate-200 leading-relaxed">
                     <strong>${des.etiquetaDesarrollo}:</strong> ${des.diagnosticoDesarrollo}
                   </p>
+                  ${des.kgFaltantesPrimerServicio > 0 ? `
+                    <div class="text-[10px] bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-200 font-semibold">
+                      🎯 <strong>Proyección a 1er Servicio (${des.pesoMetaPrimerServicioKg} kg):</strong> Faltan <strong>${des.kgFaltantesPrimerServicio} kg</strong> (aprox. ${Math.ceil(des.kgFaltantesPrimerServicio / ((des.gdpMetaCorrectivaGDia || 650) / 1000))} días con el plan nutricional sugerido).
+                    </div>
+                  ` : ''}
                 </div>
+              </div>
+
+              <!-- CURVA DE DESARROLLO POR EDADES Y GANANCIA DE PESO (GDP) POR ETAPA DE CRECIMIENTO -->
+              <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
+                  <div class="text-xs font-black text-white flex items-center gap-1.5">
+                    <span>📊</span> Curva Oficial de Desarrollo por Edades y Ganancia Diaria (GDP) por Etapa — ${perfil.nombre}
+                  </div>
+                  <span class="text-[10px] text-emerald-400 font-mono">
+                    ${des.fichaZootecnicaRaza?.fuenteReferencia || 'Estándar Zootécnico ABCZ / Embrapa / Asocebú'}
+                  </span>
+                </div>
+
+                <!-- Ganancia Diaria de Peso (GDP) en cada etapa de crecimiento -->
+                ${des.gdpPorEtapaGDia ? `
+                  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada <= 7 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">1. Cría (0-7 m)</div>
+                      <div class="text-xs font-black text-emerald-400 font-mono">+${des.gdpPorEtapaGDia.cria_0_7m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Predestete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 7 && des.edadMesesEvaluada <= 12 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">2. Recría (7-12 m)</div>
+                      <div class="text-xs font-black text-cyan-300 font-mono">+${des.gdpPorEtapaGDia.levante_7_12m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Post-destete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 12 && des.edadMesesEvaluada <= 18 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">3. Levante (12-18 m)</div>
+                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpPorEtapaGDia.levante_12_18m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Entrada Servicio</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 18 && des.edadMesesEvaluada <= 24 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">4. Vientre/Ceba (18-24 m)</div>
+                      <div class="text-xs font-black text-purple-300 font-mono">+${des.gdpPorEtapaGDia.vientre_ceba_18_24m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Novilla / Torete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border border-amber-500/30">
+                      <div class="text-[9px] text-amber-300 uppercase font-bold">🏆 Pista / Sup. Intensiva</div>
+                      <div class="text-xs font-black text-amber-400 font-mono">+${des.gdpPorEtapaGDia.pista_intensivo} g/día</div>
+                      <div class="text-[9px] text-slate-500">Potencial Genético</div>
+                    </div>
+                  </div>
+                ` : ''}
+
+                <!-- Tabla de hitos de peso y alzada por edades (0m a Adulto) -->
+                ${Array.isArray(des.tablaHitosRaza) && des.tablaHitosRaza.length > 0 ? `
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                      <thead>
+                        <tr class="border-b border-slate-800 text-[9px] uppercase text-slate-400 font-black">
+                          <th class="py-1.5 px-2">Etapa / Edad</th>
+                          ${des.tablaHitosRaza.map(h => `
+                            <th class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/40 rounded-t-lg' : ''}">
+                              ${h.etapa}
+                            </th>
+                          `).join('')}
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-800/60 font-mono">
+                        <tr>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-300">Peso Estándar Raza (${des.sexoEvaluado === 'macho' ? 'Macho' : 'Hembra'})</td>
+                          ${des.tablaHitosRaza.map(h => `
+                            <td class="py-1.5 px-2 text-center font-black ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/30' : 'text-white'}">
+                              ${h.pesoEsperadoKg} kg
+                            </td>
+                          `).join('')}
+                        </tr>
+                        <tr>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-400">Alzada Estándar (Cruz/Grupa)</td>
+                          ${des.tablaHitosRaza.map(h => `
+                            <td class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-cyan-300 font-black bg-emerald-950/30' : 'text-slate-400'}">
+                              ${h.tallaEsperadaCm ? `${h.tallaEsperadaCm} cm` : '—'}
+                            </td>
+                          `).join('')}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ` : ''}
               </div>
             </div>
 
@@ -1122,9 +1145,9 @@ export class ModuloNutricion {
                     <span class="text-base">📸</span>
                     <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico & Diagnóstico Gemini IA</span>
                     <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">100% EFÍMERO</span>
-                    <button type="button" class="btn-abrir-config-gemini-nutri text-[10px] font-bold text-purple-300 hover:text-purple-200 underline cursor-pointer">
-                      ${obtenerGeminiApiKey() ? `✨ Conectado a Gemini (${obtenerModeloGeminiActivo()})` : '⚠️ Configurar API Key de Gemini'}
-                    </button>
+                    <span class="text-[10px] font-bold text-purple-300">
+                      ✨ Motor IA Global Activo (${obtenerModeloGeminiActivo()})
+                    </span>
                   </div>
                   <p class="text-[10px] text-slate-400">
                     Sube una foto del ejemplar o pulsa <strong>Actualizar Plan IA</strong> para recalcular dieta, medicamentos y vitaminas según su raza confirmada y curva de desarrollo.
@@ -1427,6 +1450,19 @@ export class ModuloNutricion {
       const inputRaza = this.container.querySelector('#input-nutri-raza');
       const checkRaza = this.container.querySelector('#check-nutri-raza-confirmada');
       const inputEdad = this.container.querySelector('#input-nutri-edad-meses');
+
+      // Selección rápida de razas priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando, Brahman)
+      this.container.querySelectorAll('.btn-chip-raza-priorizada').forEach((btnChip) => {
+        btnChip.addEventListener('click', () => {
+          const razaNombre = btnChip.getAttribute('data-raza-nombre');
+          if (razaNombre && inputRaza) {
+            inputRaza.value = razaNombre;
+            if (checkRaza) checkRaza.checked = true;
+            this.calcularPlanDesdeFormulario(false);
+          }
+        });
+      });
+
       if (inputRaza) {
         inputRaza.addEventListener('change', () => {
           if (checkRaza) checkRaza.checked = true;
@@ -1479,109 +1515,6 @@ export class ModuloNutricion {
           this.imprimirPlanNutricional();
         });
       }
-    }
-
-    // --- EVENTOS MODAL CONFIG GEMINI ---
-    this.container.querySelectorAll('.btn-abrir-config-gemini-nutri').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = true;
-        this.render();
-      });
-    });
-
-    const btnCerrarModalGemini = this.container.querySelector('#btn-cerrar-modal-config-gemini');
-    if (btnCerrarModalGemini) {
-      btnCerrarModalGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = false;
-        this.render();
-      });
-    }
-
-    const btnCancelarModalGemini = this.container.querySelector('#btn-cancelar-modal-gemini');
-    if (btnCancelarModalGemini) {
-      btnCancelarModalGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = false;
-        this.render();
-      });
-    }
-
-    const btnCerrarFbGemini = this.container.querySelector('#btn-cerrar-feedback-gemini-modal');
-    if (btnCerrarFbGemini) {
-      btnCerrarFbGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.render();
-      });
-    }
-
-    const btnGuardarModalGemini = this.container.querySelector('#btn-guardar-modal-gemini');
-    if (btnGuardarModalGemini) {
-      btnGuardarModalGemini.addEventListener('click', () => {
-        const inputKey = this.container.querySelector('#input-modal-gemini-key');
-        const key = inputKey ? inputKey.value.trim() : '';
-        if (!key) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'Por favor ingresa una clave de API válida.',
-          };
-          this.render();
-          return;
-        }
-        guardarGeminiApiKey(key);
-        this.geminiFeedback = {
-          ok: true,
-          mensaje: 'Clave de Google Gemini guardada con éxito.',
-        };
-        this.render();
-      });
-    }
-
-    const btnProbarModalGemini = this.container.querySelector('#btn-probar-modal-gemini');
-    if (btnProbarModalGemini) {
-      btnProbarModalGemini.addEventListener('click', async () => {
-        const inputKey = this.container.querySelector('#input-modal-gemini-key');
-        const key = inputKey ? inputKey.value.trim() : obtenerGeminiApiKey();
-        if (!key) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'No hay clave configurada para probar.',
-          };
-          this.render();
-          return;
-        }
-        this.geminiProbando = true;
-        this.geminiFeedback = null;
-        this.render();
-
-        try {
-          const res = await probarConexionGemini(key);
-          this.geminiFeedback = res;
-        } catch (err) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'Error probando clave: ' + (err.message || err),
-          };
-        } finally {
-          this.geminiProbando = false;
-          this.render();
-        }
-      });
-    }
-
-    const btnEliminarModalGemini = this.container.querySelector('#btn-eliminar-modal-gemini');
-    if (btnEliminarModalGemini) {
-      btnEliminarModalGemini.addEventListener('click', () => {
-        if (confirm('¿Deseas eliminar la clave de API de Google Gemini de este dispositivo?')) {
-          eliminarGeminiApiKey();
-          this.geminiFeedback = {
-            ok: true,
-            mensaje: 'Clave eliminada del dispositivo.',
-          };
-          this.render();
-        }
-      });
     }
   }
 }

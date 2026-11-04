@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-04T21:02:59.726Z
+ * Generado automáticamente: 2026-11-04T21:29:47.541Z
  */
 (function() {
   "use strict";
@@ -2293,21 +2293,244 @@ class SupabaseSyncService {
  */
 
 const TABLA_RAZAS_NUTRICION = {
-  // === RAZAS CEBÚ / TROPICALES (Bos indicus) ===
+  // === ⭐ RAZAS PRIORIZADAS DEL HATO (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO & BRAHMAN) ===
+  red_sindhi: {
+    clave: 'red_sindhi',
+    nombre: 'Red Sindhi / Sindi Rojo (Doble Propósito & Leche Tropical)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Leche & Carne en Trópico Seco / Alta Eficiencia por Ha',
+    tipo: 'leche_cebu',
+    frameEstandar: 'Compacto a Medio (Frame 3-5)',
+    pesoAdultoMachoKg: 620,
+    pesoAdultoHembraKg: 430,
+    curvaPesoHembraKg: { m0: 22, m3: 82, m7: 150, m12: 195, m15: 230, m18: 265, m24: 325, m30: 375, adulto: 430 },
+    curvaPesoMachoKg: { m0: 24, m3: 92, m7: 168, m12: 225, m15: 270, m18: 315, m24: 405, m30: 500, adulto: 620 },
+    curvaTallaCm: { m0: 66, m3: 84, m7: 98, m12: 109, m18: 117, m24: 122, adulto: 126 },
+    gdpMetaOptimaGDia: 550,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 580,
+      levante_7_12m: 450,
+      levante_12_18m: 480,
+      vientre_ceba_18_24m: 520,
+      adulto_mantenimiento: 350,
+      pista_intensivo: 720
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '18 - 21 meses',
+      pesoMetaPrimerServicioKg: 265,
+      edadPrimerPartoMeses: '28 - 31 meses',
+      intervaloEntrePartosDias: '370 - 395 días',
+      produccionLecheLactancia: '2.200 a 3.600 kg/lactancia (8 - 14 L/día • 4.8% Grasa y 3.6% Proteína A2A2)',
+      rendimientoCanalPorc: '54% - 56% (Carne tierna con excelente cobertura grasa a pasto)',
+      fuenteOficial: 'ABCZ / Embrapa Semiárido / Asocebú'
+    },
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'sobresaliente',
+    caracteristicas: 'Cebú de pelaje rojo caoba intenso y tamaño medio-compacto con la mayor eficiencia metabólica del trópico: requiere 25% menos energía de mantenimiento por cabeza, permitiendo mayor carga animal por hectárea, alta fertilidad, partos sin distocia (crías de 20-24 kg) y resistencia extrema al calor y garrapatas.',
+    manejoNutricionalEspecial: 'Por su alta eficiencia de conversión tiende a engrasar rápido si se sobrealimenta con almidón en levante; priorizar forraje fibroso de rotación, proteína pasante (14-15% PC) en lactancia y sal mineral al 7.5-8% P con Selenio y Zinc.'
+  },
+  gyr: {
+    clave: 'gyr',
+    nombre: 'Gyr Lechero (Cebú Lechero Especializado)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Leche Tropical Cebú A2A2 & Base Materna F1',
+    tipo: 'leche_cebu',
+    frameEstandar: 'Medio (Frame 4-5)',
+    pesoAdultoMachoKg: 800,
+    pesoAdultoHembraKg: 490,
+    curvaPesoHembraKg: { m0: 24, m3: 90, m7: 160, m12: 215, m15: 255, m18: 295, m24: 365, m30: 425, adulto: 490 },
+    curvaPesoMachoKg: { m0: 26, m3: 100, m7: 180, m12: 250, m15: 305, m18: 365, m24: 470, m30: 590, adulto: 800 },
+    curvaTallaCm: { m0: 68, m3: 88, m7: 104, m12: 116, m18: 124, m24: 130, adulto: 135 },
+    gdpMetaOptimaGDia: 620,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 620,
+      levante_7_12m: 460,
+      levante_12_18m: 510,
+      vientre_ceba_18_24m: 560,
+      adulto_mantenimiento: 380,
+      pista_intensivo: 760
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '20 - 24 meses',
+      pesoMetaPrimerServicioKg: 310,
+      edadPrimerPartoMeses: '30 - 34 meses',
+      intervaloEntrePartosDias: '385 - 410 días',
+      produccionLecheLactancia: '3.500 a 6.200+ kg/lactancia (12 - 22 L/día • 4.5% Grasa • 98% Genotipo A2A2)',
+      rendimientoCanalPorc: '52% - 54%',
+      fuenteOficial: 'ABCGIL / Embrapa Gado de Leite / Asocebú Colombia'
+    },
+    consumoMsPorcPV: 2.5,
+    pcMantenimientoPorc: 10.0,
+    pcProduccionPorc: 15.5,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'alta',
+    caracteristicas: 'Zebuíno líder en producción lechera tropical, piel pigmentada, perfil ultraconvexo, ubre voluminosa bien irrigada y temperamento dócil. Base genética indispensable para producir Girolando F1.',
+    manejoNutricionalEspecial: 'En terneras y novillas Gyr controlar relación energía/proteína para desarrollar glándula mamaria limpia sin infiltración grasa; en lactancia suministrar proteína bypass (15-16% PC), grasas cálcicas y sal 8% P con Calcio y Biotina.'
+  },
+  guzera: {
+    clave: 'guzera',
+    nombre: 'Guzerat / Guzerá (Doble Propósito Cebú: Carne & Leche)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Doble Propósito Real (Alta Carne & Leche Tropical)',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-7)',
+    pesoAdultoMachoKg: 900,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 30, m3: 112, m7: 195, m12: 260, m15: 310, m18: 355, m24: 435, m30: 500, adulto: 560 },
+    curvaPesoMachoKg: { m0: 33, m3: 125, m7: 215, m12: 300, m15: 370, m18: 435, m24: 550, m30: 690, adulto: 900 },
+    curvaTallaCm: { m0: 72, m3: 93, m7: 109, m12: 122, m18: 131, m24: 136, adulto: 141 },
+    gdpMetaOptimaGDia: 720,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 760,
+      levante_7_12m: 550,
+      levante_12_18m: 620,
+      vientre_ceba_18_24m: 680,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 920
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '19 - 23 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '29 - 34 meses',
+      intervaloEntrePartosDias: '380 - 405 días',
+      produccionLecheLactancia: '2.800 a 4.800 kg/lactancia (10 - 17 L/día con 4.4% grasa) + Destetes >200 kg',
+      rendimientoCanalPorc: '56% - 58% (Gran profundidad torácica y masas musculares)',
+      fuenteOficial: 'CBMG / ABCZ / Embrapa / Asocebú'
+    },
+    consumoMsPorcPV: 2.4,
+    pcMantenimientoPorc: 9.5,
+    pcProduccionPorc: 14.5,
+    fosforoRequeridoPorc: 8.0,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Raza milenaria de imponente estructura ósea, cornamenta en lira, gran capacidad torácica y rusticidad extrema en sequía. Sobresale tanto en pruebas de ganancia de peso en pastoreo como en control lechero oficial.',
+    manejoNutricionalEspecial: 'Por su pesada estructura ósea y cornamenta en lira demanda suplementación permanente de Calcio, Fósforo (sal ≥8% P) y Magnesio desde el destete, más proteinado estratégico en época seca.'
+  },
+  nelore: {
+    clave: 'nelore',
+    nombre: 'Nelore / Nelore Mocho (Cebú Cárnico & Ciclo Corto)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Carne Especializada a Pasto & Precocidad Sexual',
+    tipo: 'carne_cebu',
+    frameEstandar: 'Medio a Alto (Frame 5-6)',
+    pesoAdultoMachoKg: 880,
+    pesoAdultoHembraKg: 540,
+    curvaPesoHembraKg: { m0: 30, m3: 110, m7: 190, m12: 250, m15: 295, m18: 340, m24: 420, m30: 485, adulto: 540 },
+    curvaPesoMachoKg: { m0: 32, m3: 122, m7: 210, m12: 290, m15: 355, m18: 420, m24: 535, m30: 670, adulto: 880 },
+    curvaTallaCm: { m0: 73, m3: 94, m7: 110, m12: 123, m18: 132, m24: 137, adulto: 142 },
+    gdpMetaOptimaGDia: 760,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 750,
+      levante_7_12m: 540,
+      levante_12_18m: 650,
+      vientre_ceba_18_24m: 780,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 1050
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '14 - 18 meses (Precoz) / 20 - 22 meses (Pastoreo)',
+      pesoMetaPrimerServicioKg: 320,
+      edadPrimerPartoMeses: '25 - 31 meses',
+      intervaloEntrePartosDias: '365 - 390 días',
+      produccionLecheLactancia: 'Leche materna de alto tenor graso para destetar terneros de 190 a 220 kg a los 210 días',
+      rendimientoCanalPorc: '57% - 60% (Acabado de grasa uniforme y alto rendimiento de cortes nobles)',
+      fuenteOficial: 'PMGZ ABCZ / Embrapa Gado de Corte / ACNB'
+    },
+    consumoMsPorcPV: 2.3,
+    pcMantenimientoPorc: 9.0,
+    pcProduccionPorc: 13.5,
+    fosforoRequeridoPorc: 7.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'muy_alta',
+    caracteristicas: 'Raza cebuina líder en producción de carne tropical: pelvis amplia (cero distocias), becerros que se levantan y maman a los 15 minutos de nacidos, gran longitud corporal y máxima conversión de gramíneas tropicales.',
+    manejoNutricionalEspecial: 'Responde extraordinariamente a Creep Feeding en crías (0-7m), sales proteinadas (30-40% PC) en recría (7-18m) para preñez precoz de novillas y dietas con levaduras vivas en finalización.'
+  },
+  girolando: {
+    clave: 'girolando',
+    nombre: 'Girolando (F1 1/2 Sangre, 5/8 y 3/4 — Leche Tropical)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
+    especie: 'bovino',
+    aptitud: 'Alta Producción Lechera Tropical & Vigor Híbrido',
+    tipo: 'doble_proposito',
+    frameEstandar: 'Medio a Alto (Frame 5-6)',
+    pesoAdultoMachoKg: 860,
+    pesoAdultoHembraKg: 560,
+    curvaPesoHembraKg: { m0: 34, m3: 115, m7: 200, m12: 270, m15: 315, m18: 360, m24: 445, m30: 510, adulto: 560 },
+    curvaPesoMachoKg: { m0: 36, m3: 125, m7: 215, m12: 295, m15: 355, m18: 420, m24: 535, m30: 665, adulto: 860 },
+    curvaTallaCm: { m0: 73, m3: 93, m7: 108, m12: 121, m18: 130, m24: 136, adulto: 140 },
+    gdpMetaOptimaGDia: 740,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 780,
+      levante_7_12m: 680,
+      levante_12_18m: 720,
+      vientre_ceba_18_24m: 650,
+      adulto_mantenimiento: 420,
+      pista_intensivo: 900
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '15 - 18 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '25 - 28 meses',
+      intervaloEntrePartosDias: '375 - 400 días',
+      produccionLecheLactancia: '4.800 a 8.500+ kg/lactancia (18 - 32 L/día en 305 días • 4.0% Grasa y 3.4% Proteína)',
+      rendimientoCanalPorc: '52% - 54% (Machos F1 con alta ganancia en ceba intensiva)',
+      fuenteOficial: 'Associação Brasileira dos Criadores de Girolando / Embrapa'
+    },
+    consumoMsPorcPV: 2.8,
+    pcMantenimientoPorc: 11.0,
+    pcProduccionPorc: 17.0,
+    fosforoRequeridoPorc: 8.5,
+    sensibilidadCobre: 'normal',
+    toleranciaFibraToscana: 'media_alta',
+    caracteristicas: 'Máxima expresión de heterosis (Holstein x Gyr): combina capacidad ruminal, persistencia de lactancia, docilidad, adaptación al pastoreo cálido-húmedo y precocidad reproductiva.',
+    manejoNutricionalEspecial: 'Por su alto volumen lácteo requiere concentrado 16-18% PC según litros producidos (1 kg por cada 3-3.5 L de leche), grasas sobrepasantes (jabones cálcicos) en los primeros 100 DEL y sal mineral 8.5-9% P con Selenio, Cromo y Biotina.'
+  },
   brahman: {
     clave: 'brahman',
-    nombre: 'Brahman (Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
+    nombre: 'Brahman Rojo / Blanco (Cebú)',
+    grupo: '⭐ Razas Priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando & Brahman)',
+    esPriorizada: true,
     especie: 'bovino',
     aptitud: 'Carne Tropical & Cría Maternal',
     tipo: 'carne_cebu',
     frameEstandar: 'Medio (Frame 5-6)',
     pesoAdultoMachoKg: 880,
     pesoAdultoHembraKg: 550,
-    curvaPesoHembraKg: { m0: 32, m7: 195, m12: 275, m18: 365, m24: 440, adulto: 550 },
-    curvaPesoMachoKg: { m0: 35, m7: 215, m12: 320, m18: 445, m24: 560, adulto: 880 },
-    curvaTallaCm: { m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
+    curvaPesoHembraKg: { m0: 32, m3: 115, m7: 195, m12: 275, m15: 320, m18: 365, m24: 440, m30: 500, adulto: 550 },
+    curvaPesoMachoKg: { m0: 35, m3: 128, m7: 215, m12: 320, m15: 385, m18: 445, m24: 560, m30: 710, adulto: 880 },
+    curvaTallaCm: { m0: 72, m3: 92, m7: 108, m12: 121, m18: 129, m24: 134, adulto: 138 },
     gdpMetaOptimaGDia: 750,
+    gdpPorEtapaGDia: {
+      cria_0_7m: 780,
+      levante_7_12m: 580,
+      levante_12_18m: 650,
+      vientre_ceba_18_24m: 720,
+      adulto_mantenimiento: 450,
+      pista_intensivo: 980
+    },
+    fichaZootecnicaRaza: {
+      edadPrimerServicioMeses: '18 - 22 meses',
+      pesoMetaPrimerServicioKg: 340,
+      edadPrimerPartoMeses: '28 - 33 meses',
+      intervaloEntrePartosDias: '380 - 405 días',
+      produccionLecheLactancia: '1.800 a 2.800 kg/lactancia (Destetes pesados >200 kg y líneas Brahman Lechero)',
+      rendimientoCanalPorc: '58% - 61%',
+      fuenteOficial: 'Asocebú Colombia / ABBA / ABCZ'
+    },
     consumoMsPorcPV: 2.2,
     pcMantenimientoPorc: 9.0,
     pcProduccionPorc: 13.0,
@@ -2317,100 +2540,8 @@ const TABLA_RAZAS_NUTRICION = {
     caracteristicas: 'Alta rusticidad, termotolerancia sobresaliente, excelente digestión de pastos fibrosos tropicales y gran habilidad materna.',
     manejoNutricionalEspecial: 'Priorizar relación energía/proteína para llenado de lomo y pierna sin engrasamiento en giba o pecho; sal al 7-8% P con Zinc quelatado.'
   },
-  gyr: {
-    clave: 'gyr',
-    nombre: 'Gyr Lechero (Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Leche Tropical Cebú',
-    tipo: 'leche_cebu',
-    frameEstandar: 'Medio (Frame 4-5)',
-    pesoAdultoMachoKg: 800,
-    pesoAdultoHembraKg: 500,
-    curvaPesoHembraKg: { m0: 27, m7: 165, m12: 235, m18: 325, m24: 395, adulto: 500 },
-    curvaPesoMachoKg: { m0: 30, m7: 185, m12: 275, m18: 390, m24: 495, adulto: 800 },
-    curvaTallaCm: { m7: 104, m12: 117, m18: 125, m24: 131, adulto: 135 },
-    gdpMetaOptimaGDia: 650,
-    consumoMsPorcPV: 2.4,
-    pcMantenimientoPorc: 10.0,
-    pcProduccionPorc: 15.0,
-    fosforoRequeridoPorc: 8.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'alta',
-    caracteristicas: 'Zebuíno especializado en leche tropical, alta resistencia a ectoparásitos y estrés calórico, ubre profunda y temperamento dócil.',
-    manejoNutricionalEspecial: 'Cuidar desarrollo de novillas sin engrasar tejido mamario; en lactancia suministrar proteína bypass y calcio/fósforo 8%.'
-  },
-  guzera: {
-    clave: 'guzera',
-    nombre: 'Guzerá (Doble Propósito Cebú)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Doble Propósito (Carne & Leche Tropical)',
-    tipo: 'carne_cebu',
-    frameEstandar: 'Medio a Alto (Frame 5-7)',
-    pesoAdultoMachoKg: 900,
-    pesoAdultoHembraKg: 560,
-    curvaPesoHembraKg: { m0: 31, m7: 190, m12: 270, m18: 360, m24: 445, adulto: 560 },
-    curvaPesoMachoKg: { m0: 34, m7: 210, m12: 315, m18: 440, m24: 555, adulto: 900 },
-    curvaTallaCm: { m7: 109, m12: 122, m18: 131, m24: 136, adulto: 141 },
-    gdpMetaOptimaGDia: 750,
-    consumoMsPorcPV: 2.3,
-    pcMantenimientoPorc: 9.5,
-    pcProduccionPorc: 14.0,
-    fosforoRequeridoPorc: 7.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'muy_alta',
-    caracteristicas: 'Gran alzada, rusticidad extrema en sequía, cornamenta en lira que demanda alto aporte mineral cálcico-fosfórico.',
-    manejoNutricionalEspecial: 'Suplementación constante de Calcio, Fósforo y Magnesio por su gran estructura ósea y desarrollo de cornamenta.'
-  },
-  nelore: {
-    clave: 'nelore',
-    nombre: 'Nelore (Cebú Cárnico)',
-    grupo: 'Bovinos Cebú / Tropicales',
-    especie: 'bovino',
-    aptitud: 'Carne & Ciclo Corto a Pastoreo',
-    tipo: 'carne_cebu',
-    frameEstandar: 'Medio a Alto (Frame 5-6)',
-    pesoAdultoMachoKg: 860,
-    pesoAdultoHembraKg: 530,
-    curvaPesoHembraKg: { m0: 30, m7: 185, m12: 265, m18: 350, m24: 425, adulto: 530 },
-    curvaPesoMachoKg: { m0: 33, m7: 205, m12: 310, m18: 430, m24: 540, adulto: 860 },
-    curvaTallaCm: { m7: 108, m12: 121, m18: 130, m24: 135, adulto: 139 },
-    gdpMetaOptimaGDia: 780,
-    consumoMsPorcPV: 2.2,
-    pcMantenimientoPorc: 9.0,
-    pcProduccionPorc: 13.5,
-    fosforoRequeridoPorc: 7.0,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'muy_alta',
-    caracteristicas: 'Eficiencia sobresaliente en conversión de pasturas tropicales a carne magra, partos fáciles y gran vigor neonatal.',
-    manejoNutricionalEspecial: 'Excelente respuesta a proteinados en época seca y dietas de ceba intensiva con ionóforos/levaduras.'
-  },
 
   // === DOBLE PROPÓSITO, CRUCES & CRIOLLOS ===
-  girolando: {
-    clave: 'girolando',
-    nombre: 'Girolando / Cruces F1',
-    grupo: 'Doble Propósito & Cruces',
-    especie: 'bovino',
-    aptitud: 'Leche & Doble Propósito Tropical (F1 / 5/8)',
-    tipo: 'doble_proposito',
-    frameEstandar: 'Medio a Alto (Frame 5-6)',
-    pesoAdultoMachoKg: 850,
-    pesoAdultoHembraKg: 560,
-    curvaPesoHembraKg: { m0: 33, m7: 185, m12: 270, m18: 365, m24: 450, adulto: 560 },
-    curvaPesoMachoKg: { m0: 36, m7: 205, m12: 305, m18: 420, m24: 530, adulto: 850 },
-    curvaTallaCm: { m7: 107, m12: 120, m18: 129, m24: 135, adulto: 139 },
-    gdpMetaOptimaGDia: 720,
-    consumoMsPorcPV: 2.7,
-    pcMantenimientoPorc: 11.0,
-    pcProduccionPorc: 16.5,
-    fosforoRequeridoPorc: 8.5,
-    sensibilidadCobre: 'normal',
-    toleranciaFibraToscana: 'media_alta',
-    caracteristicas: 'Heterosis máxima: alto potencial lechero con rusticidad tropical. Demanda suplementación energética en pico de lactancia.',
-    manejoNutricionalEspecial: 'Requiere grasas sobrepasantes en primeros 100 días de leche y sal al 8.5-9% P con Cromo y Selenio orgánico para no caer en anestro postparto.'
-  },
   simmental: {
     clave: 'simmental',
     nombre: 'Simmental / Fleckvieh (Doble Propósito)',
@@ -2910,7 +3041,8 @@ function obtenerCatalogoRazasNutricion() {
 
 /**
  * Evalúa directamente el estado de crecimiento y desarrollo de un animal comparando
- * su peso actual y su alzada (cm) frente a la curva estándar ideal de su raza, edad y sexo.
+ * su peso actual, su ganancia diaria (GDP) y su alzada (cm) frente a la curva estándar ideal
+ * de su raza por edad, etapa de crecimiento y sexo.
  */
 function evaluarDesarrolloRacial({
   animal = null,
@@ -2926,42 +3058,126 @@ function evaluarDesarrolloRacial({
   const sexoNorm = String(sexo || animal?.sexo || 'hembra').toLowerCase();
   const esMacho = sexoNorm.includes('macho') || sexoNorm.includes('toro') || sexoNorm.includes('novillo') || sexoNorm.includes('bucer');
 
-  const curvaPeso = (esMacho ? perfil.curvaPesoMachoKg : perfil.curvaPesoHembraKg) ||
+  const curvaBase = (esMacho ? perfil.curvaPesoMachoKg : perfil.curvaPesoHembraKg) ||
     (esMacho ? { m0: 34, m7: 205, m12: 300, m18: 420, m24: 530, adulto: perfil.pesoAdultoMachoKg || 820 } : { m0: 31, m7: 185, m12: 265, m18: 355, m24: 430, adulto: perfil.pesoAdultoHembraKg || 530 });
-  const curvaTalla = perfil.curvaTallaCm || { m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 };
 
-  // Interpolación lineal por tramos de edad (0 -> 7 -> 12 -> 18 -> 24 -> 36+ meses)
-  let pesoEsperadoKg = curvaPeso.adulto;
-  if (meses <= 7) {
-    pesoEsperadoKg = curvaPeso.m0 + ((curvaPeso.m7 - curvaPeso.m0) * (meses / 7));
+  // Asegurar hitos intermedios m3, m15 y m30 en cualquier raza del catálogo
+  const m0 = Number(curvaBase.m0 || 30);
+  const m7 = Number(curvaBase.m7 || 185);
+  const m3 = Number(curvaBase.m3 || Math.round(m0 + (m7 - m0) * (3 / 7)));
+  const m12 = Number(curvaBase.m12 || 260);
+  const m18 = Number(curvaBase.m18 || 350);
+  const m15 = Number(curvaBase.m15 || Math.round((m12 + m18) / 2));
+  const m24 = Number(curvaBase.m24 || 430);
+  const adulto = Number(curvaBase.adulto || (esMacho ? 820 : 530));
+  const m30 = Number(curvaBase.m30 || Math.round((m24 + adulto) / 2));
+
+  const curvaPeso = { m0, m3, m7, m12, m15, m18, m24, m30, adulto };
+  const curvaTalla = perfil.curvaTallaCm || { m0: 70, m3: 90, m7: 106, m12: 119, m18: 127, m24: 133, adulto: 137 };
+
+  // Interpolación lineal exacta por tramos de edad (0 -> 3 -> 7 -> 12 -> 15 -> 18 -> 24 -> 30 -> 36+ meses)
+  let pesoEsperadoKg = adulto;
+  if (meses <= 3) {
+    pesoEsperadoKg = m0 + ((m3 - m0) * (meses / 3));
+  } else if (meses <= 7) {
+    pesoEsperadoKg = m3 + ((m7 - m3) * ((meses - 3) / 4));
   } else if (meses <= 12) {
-    pesoEsperadoKg = curvaPeso.m7 + ((curvaPeso.m12 - curvaPeso.m7) * ((meses - 7) / 5));
+    pesoEsperadoKg = m7 + ((m12 - m7) * ((meses - 7) / 5));
+  } else if (meses <= 15) {
+    pesoEsperadoKg = m12 + ((m15 - m12) * ((meses - 12) / 3));
   } else if (meses <= 18) {
-    pesoEsperadoKg = curvaPeso.m12 + ((curvaPeso.m18 - curvaPeso.m12) * ((meses - 12) / 6));
+    pesoEsperadoKg = m15 + ((m18 - m15) * ((meses - 15) / 3));
   } else if (meses <= 24) {
-    pesoEsperadoKg = curvaPeso.m18 + ((curvaPeso.m24 - curvaPeso.m18) * ((meses - 18) / 6));
+    pesoEsperadoKg = m18 + ((m24 - m18) * ((meses - 18) / 6));
+  } else if (meses <= 30) {
+    pesoEsperadoKg = m24 + ((m30 - m24) * ((meses - 24) / 6));
   } else if (meses <= 36) {
-    pesoEsperadoKg = curvaPeso.m24 + ((curvaPeso.adulto - curvaPeso.m24) * ((meses - 24) / 12));
+    pesoEsperadoKg = m30 + ((adulto - m30) * ((meses - 30) / 6));
   } else {
-    pesoEsperadoKg = curvaPeso.adulto;
+    pesoEsperadoKg = adulto;
   }
   pesoEsperadoKg = Math.round(pesoEsperadoKg);
 
-  let tallaEsperadaCm = curvaTalla.adulto;
+  const t0 = Number(curvaTalla.m0 || 70);
+  const t7 = Number(curvaTalla.m7 || 106);
+  const t12 = Number(curvaTalla.m12 || 119);
+  const t18 = Number(curvaTalla.m18 || 127);
+  const t24 = Number(curvaTalla.m24 || 133);
+  const tAd = Number(curvaTalla.adulto || 137);
+
+  let tallaEsperadaCm = tAd;
   if (meses <= 7) {
-    tallaEsperadaCm = Math.round(74 + ((curvaTalla.m7 - 74) * (meses / 7)));
+    tallaEsperadaCm = Math.round(t0 + ((t7 - t0) * (meses / 7)));
   } else if (meses <= 12) {
-    tallaEsperadaCm = Math.round(curvaTalla.m7 + ((curvaTalla.m12 - curvaTalla.m7) * ((meses - 7) / 5)));
+    tallaEsperadaCm = Math.round(t7 + ((t12 - t7) * ((meses - 7) / 5)));
   } else if (meses <= 18) {
-    tallaEsperadaCm = Math.round(curvaTalla.m12 + ((curvaTalla.m18 - curvaTalla.m12) * ((meses - 12) / 6)));
+    tallaEsperadaCm = Math.round(t12 + ((t18 - t12) * ((meses - 12) / 6)));
   } else if (meses <= 24) {
-    tallaEsperadaCm = Math.round(curvaTalla.m18 + ((curvaTalla.m24 - curvaTalla.m18) * ((meses - 18) / 6)));
+    tallaEsperadaCm = Math.round(t18 + ((t24 - t18) * ((meses - 18) / 6)));
   } else if (meses <= 36) {
-    tallaEsperadaCm = Math.round(curvaTalla.m24 + ((curvaTalla.adulto - curvaTalla.m24) * ((meses - 24) / 12)));
+    tallaEsperadaCm = Math.round(t24 + ((tAd - t24) * ((meses - 24) / 12)));
   }
   if (esMacho && meses >= 12) {
     tallaEsperadaCm += 5;
   }
+
+  // Determinar Etapa de Crecimiento y Ganancia Diaria de Peso (GDP) esperada de la raza para esta etapa
+  const gdpEtapas = perfil.gdpPorEtapaGDia || {
+    cria_0_7m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 1.02),
+    levante_7_12m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 0.85),
+    levante_12_18m: Math.round((perfil.gdpMetaOptimaGDia || 680) * 0.92),
+    vientre_ceba_18_24m: perfil.gdpMetaOptimaGDia || 680,
+    adulto_mantenimiento: 400,
+    pista_intensivo: Math.round((perfil.gdpMetaOptimaGDia || 680) * 1.25)
+  };
+
+  let etapaCrecimientoNombre = 'Adulto en Producción (>24 meses)';
+  let gdpEsperadaEtapaGDia = gdpEtapas.adulto_mantenimiento || 400;
+  if (meses <= 7) {
+    etapaCrecimientoNombre = 'Cría / Lactancia Pre-destete (0 - 7 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.cria_0_7m;
+  } else if (meses <= 12) {
+    etapaCrecimientoNombre = 'Posdestete / Levante Temprano (8 - 12 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.levante_7_12m;
+  } else if (meses <= 18) {
+    etapaCrecimientoNombre = 'Levante Medio / Entrada a Servicio (13 - 18 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.levante_12_18m;
+  } else if (meses <= 24) {
+    etapaCrecimientoNombre = esMacho ? 'Torete / Ceba Joven (19 - 24 meses)' : 'Novilla de Vientre (19 - 24 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.vientre_ceba_18_24m;
+  } else if (meses <= 32) {
+    etapaCrecimientoNombre = esMacho ? 'Toro Joven / Finalización (25 - 32 meses)' : 'Primer Parto / Primeros DEL (25 - 32 meses)';
+    gdpEsperadaEtapaGDia = gdpEtapas.vientre_ceba_18_24m;
+  }
+
+  const gdpActualAnimalGDia = Number(animal?.gdp || animal?.gananciaDiaria || 0) || null;
+  const diferenciaGdpEtapaGDia = gdpActualAnimalGDia !== null ? Math.round(gdpActualAnimalGDia - gdpEsperadaEtapaGDia) : null;
+
+  // Parámetros reproductivos y productivos de la raza
+  const fichaRaza = perfil.fichaZootecnicaRaza || {
+    edadPrimerServicioMeses: '18 - 22 meses',
+    pesoMetaPrimerServicioKg: Math.round(m18 * 0.95),
+    edadPrimerPartoMeses: '28 - 32 meses',
+    intervaloEntrePartosDias: '385 - 410 días',
+    produccionLecheLactancia: perfil.aptitud || 'Doble Propósito Tropical',
+    rendimientoCanalPorc: '54% - 58%',
+    fuenteOficial: 'Asocebú / ABCZ / Embrapa'
+  };
+
+  const pesoMetaServicioKg = Number(fichaRaza.pesoMetaPrimerServicioKg || Math.round(m18 * 0.95));
+  const kgFaltantesPrimerServicio = !esMacho && peso < pesoMetaServicioKg ? Math.max(0, Math.round(pesoMetaServicioKg - peso)) : 0;
+
+  // Tabla completa de hitos de desarrollo por edades para mostrar en pantalla
+  const tablaHitosRaza = [
+    { clave: 'm0', etiqueta: 'Nac. (0m)', etapa: 'Nac. (0m)', meses: 0, edadMeses: 0, pesoEsperadoKg: m0, tallaCm: t0, tallaEsperadaCm: t0, esActual: meses <= 1 },
+    { clave: 'm3', etiqueta: 'Cría (3m)', etapa: 'Cría (3m)', meses: 3, edadMeses: 3, pesoEsperadoKg: m3, tallaCm: Number(curvaTalla.m3 || Math.round((t0 + t7) / 2)), tallaEsperadaCm: Number(curvaTalla.m3 || Math.round((t0 + t7) / 2)), esActual: meses > 1 && meses <= 5 },
+    { clave: 'm7', etiqueta: 'Destete (7m)', etapa: 'Destete (7m)', meses: 7, edadMeses: 7, pesoEsperadoKg: m7, tallaCm: t7, tallaEsperadaCm: t7, esActual: meses > 5 && meses <= 9 },
+    { clave: 'm12', etiqueta: 'Año (12m)', etapa: 'Año (12m)', meses: 12, edadMeses: 12, pesoEsperadoKg: m12, tallaCm: t12, tallaEsperadaCm: t12, esActual: meses > 9 && meses <= 15 },
+    { clave: 'm18', etiqueta: 'Servicio (18m)', etapa: 'Servicio (18m)', meses: 18, edadMeses: 18, pesoEsperadoKg: m18, tallaCm: t18, tallaEsperadaCm: t18, esActual: meses > 15 && meses <= 21 },
+    { clave: 'm24', etiqueta: 'Vientre (24m)', etapa: 'Vientre (24m)', meses: 24, edadMeses: 24, pesoEsperadoKg: m24, tallaCm: t24, tallaEsperadaCm: t24, esActual: meses > 21 && meses <= 28 },
+    { clave: 'm30', etiqueta: '1er Parto (30m)', etapa: '1er Parto (30m)', meses: 30, edadMeses: 30, pesoEsperadoKg: m30, tallaCm: Math.round((t24 + tAd) / 2), tallaEsperadaCm: Math.round((t24 + tAd) / 2), esActual: meses > 28 && meses <= 34 },
+    { clave: 'adulto', etiqueta: 'Adulto (36m+)', etapa: 'Adulto (36m+)', meses: 36, edadMeses: 36, pesoEsperadoKg: adulto, tallaCm: tAd, tallaEsperadaCm: tAd, esActual: meses > 34 }
+  ];
 
   const indiceDesarrolloPorc = Math.round((peso / Math.max(1, pesoEsperadoKg)) * 100);
   const diferenciaPesoKg = Math.round(peso - pesoEsperadoKg);
@@ -2970,37 +3186,47 @@ function evaluarDesarrolloRacial({
 
   let estadoDesarrollo = 'optimo';
   let etiquetaDesarrollo = 'Desarrollo Óptimo Acorde a la Raza';
-  let gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
+  let gdpMetaCorrectivaGDia = Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700);
   let diagnosticoDesarrollo = '';
 
   if (indiceDesarrolloPorc < 78) {
     estadoDesarrollo = 'rezago_severo';
     etiquetaDesarrollo = '⚠️ Rezago Severo de Crecimiento vs Estándar Racial';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.25);
-    diagnosticoDesarrollo = `El ejemplar presenta un índice de desarrollo del ${indiceDesarrolloPorc}% respecto al estándar de la raza ${perfil.nombre} a los ${meses} meses (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados, déficit de ${Math.abs(diferenciaPesoKg)} kg). Se requiere intervención nutricional correctiva con proteína verdadera (16-18% PC), desparasitación estratégica y modificador orgánico con aminoácidos y fósforo.`;
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 1.25);
+    diagnosticoDesarrollo = `El ejemplar presenta un índice de desarrollo del ${indiceDesarrolloPorc}% respecto al estándar de la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}" a los ${meses} meses (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados, déficit de ${Math.abs(diferenciaPesoKg)} kg; GDP estándar etapa: +${gdpEsperadaEtapaGDia} g/día). Se requiere intervención nutricional correctiva con proteína verdadera (16-18% PC), desparasitación estratégica y modificador orgánico con aminoácidos y fósforo.`;
   } else if (indiceDesarrolloPorc < 90) {
     estadoDesarrollo = 'rezago_moderado';
     etiquetaDesarrollo = '📉 Desarrollo por Debajo del Objetivo Racial (Recuperación)';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 1.15);
-    diagnosticoDesarrollo = `El ejemplar alcanza el ${indiceDesarrolloPorc}% del peso ideal para la raza ${perfil.nombre} a los ${meses} meses (${peso} kg vs ${pesoEsperadoKg} kg esperados, ${diferenciaPesoKg} kg). Se recomienda incrementar densidad energético-proteica y minerales quelatados para alcanzar una GDP compensatoria de +${gdpMetaCorrectivaGDia} g/día.`;
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 1.15);
+    diagnosticoDesarrollo = `El ejemplar alcanza el ${indiceDesarrolloPorc}% del peso ideal para la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}" a los ${meses} meses (${peso} kg vs ${pesoEsperadoKg} kg esperados, ${diferenciaPesoKg} kg). Se recomienda incrementar densidad energético-proteica y minerales quelatados para pasar de la GDP base de etapa (+${gdpEsperadaEtapaGDia} g/día) a una GDP compensatoria de +${gdpMetaCorrectivaGDia} g/día.`;
   } else if (indiceDesarrolloPorc <= 112) {
     estadoDesarrollo = 'optimo';
     etiquetaDesarrollo = '✅ Desarrollo Armónico y Óptimo para la Raza';
-    gdpMetaCorrectivaGDia = perfil.gdpMetaOptimaGDia || 700;
-    diagnosticoDesarrollo = `Excelente curva de crecimiento para la raza ${perfil.nombre}: el ejemplar se sitúa en el ${indiceDesarrolloPorc}% del estándar racial a los ${meses} meses (${peso} kg actuales frente a ${pesoEsperadoKg} kg de referencia y alzada de ${tallaNum} cm vs ${tallaEsperadaCm} cm esperados). Mantener balance nutricional de precisión.`;
+    gdpMetaCorrectivaGDia = Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700);
+    diagnosticoDesarrollo = `Excelente curva de crecimiento para la raza ${perfil.nombre} en etapa "${etapaCrecimientoNombre}": el ejemplar se sitúa en el ${indiceDesarrolloPorc}% del estándar racial a los ${meses} meses (${peso} kg actuales frente a ${pesoEsperadoKg} kg de referencia y alzada de ${tallaNum} cm vs ${tallaEsperadaCm} cm esperados). Mantener balance nutricional para sostener +${gdpEsperadaEtapaGDia} g/día.`;
   } else {
     estadoDesarrollo = 'superior';
     etiquetaDesarrollo = '🏆 Desarrollo Ponderal Superior al Promedio Racial';
-    gdpMetaCorrectivaGDia = Math.round((perfil.gdpMetaOptimaGDia || 700) * 0.95);
+    gdpMetaCorrectivaGDia = Math.round(Math.max(gdpEsperadaEtapaGDia, perfil.gdpMetaOptimaGDia || 700) * 0.95);
     diagnosticoDesarrollo = `El ejemplar supera el estándar promedio de la raza ${perfil.nombre} con un ${indiceDesarrolloPorc}% de desarrollo (${peso} kg actuales vs ${pesoEsperadoKg} kg esperados a los ${meses} meses, +${diferenciaPesoKg} kg). Vigilar que el peso extra corresponda a desarrollo muscular y óseo magro evitando engrasamiento excesivo en ubre o canal de parto.`;
   }
 
   return {
     razaNombre: perfil.nombre,
     razaClave: perfil.clave || 'general',
+    esRazaPriorizada: Boolean(perfil.esPriorizada),
     especie: perfil.especie || (perfil.tipo === 'bufalo' ? 'bufalino' : 'bovino'),
     aptitudRacial: perfil.aptitud || 'Doble Propósito',
     edadMesesEvaluada: meses,
+    etapaCrecimientoNombre,
+    gdpEsperadaEtapaGDia,
+    gdpPorEtapaGDia: gdpEtapas,
+    gdpActualAnimalGDia,
+    diferenciaGdpEtapaGDia,
+    fichaZootecnicaRaza: fichaRaza,
+    pesoMetaPrimerServicioKg: pesoMetaServicioKg,
+    kgFaltantesPrimerServicio,
+    tablaHitosRaza,
     pesoActualKg: peso,
     pesoEsperadoRazaKg: pesoEsperadoKg,
     diferenciaPesoKg,
@@ -3136,19 +3362,20 @@ function resolverPerfilRaza(razaTexto) {
   if (t.includes('murrah')) return TABLA_RAZAS_NUTRICION.bufalo_murrah;
   if (t.includes('bufal')) return TABLA_RAZAS_NUTRICION.bufalo;
 
-  // Razas Doble Propósito & Cruces
+  // Razas Priorizadas Cebú & Cruces (Red Sindhi, Gyr, Guzerat, Nelore, Girolando, Brahman)
+  if (t.includes('sindhi') || t.includes('sindi')) return TABLA_RAZAS_NUTRICION.red_sindhi;
   if (t.includes('giroland') || t.includes('f1') || t.includes('cruce lech')) return TABLA_RAZAS_NUTRICION.girolando;
+  if (t.includes('gyr') || t.includes('gir')) return TABLA_RAZAS_NUTRICION.gyr;
+  if (t.includes('guzera') || t.includes('guzerat') || t.includes('kankrej')) return TABLA_RAZAS_NUTRICION.guzera;
+  if (t.includes('nelore') || t.includes('nellore')) return TABLA_RAZAS_NUTRICION.nelore;
+  if (t.includes('brahman') || t.includes('cebu') || t.includes('indubrasil') || t.includes('sardo')) return TABLA_RAZAS_NUTRICION.brahman;
+
+  // Otras Razas Doble Propósito & Cruces
   if (t.includes('simbrah')) return TABLA_RAZAS_NUTRICION.simbrah;
   if (t.includes('simmental') || t.includes('fleckvieh')) return TABLA_RAZAS_NUTRICION.simmental;
   if (t.includes('normand')) return TABLA_RAZAS_NUTRICION.normando;
   if (t.includes('bon') || t.includes('orejinegro')) return TABLA_RAZAS_NUTRICION.bon;
   if (t.includes('romosinuano') || t.includes('harton') || t.includes('costeno')) return TABLA_RAZAS_NUTRICION.romosinuano;
-
-  // Razas Cebú
-  if (t.includes('gyr') || t.includes('gir')) return TABLA_RAZAS_NUTRICION.gyr;
-  if (t.includes('guzera')) return TABLA_RAZAS_NUTRICION.guzera;
-  if (t.includes('nelore')) return TABLA_RAZAS_NUTRICION.nelore;
-  if (t.includes('brahman') || t.includes('cebu') || t.includes('indubrasil') || t.includes('sardo')) return TABLA_RAZAS_NUTRICION.brahman;
 
   // Razas Lecheras Especializadas
   if (t.includes('jersey')) return TABLA_RAZAS_NUTRICION.jersey;
@@ -3866,7 +4093,11 @@ async function analizarMorfologiaFotoEfimera(fileOrBlob, animal = null, razaConf
 
 function obtenerGeminiApiKey() {
   if (typeof localStorage === 'undefined') return '';
-  return (localStorage.getItem('gemini_api_key') || '').trim();
+  return (
+    localStorage.getItem('bovitrack_global_gemini_api_key') ||
+    localStorage.getItem('gemini_api_key') ||
+    ''
+  ).trim();
 }
 
 function guardarGeminiApiKey(key) {
@@ -3874,8 +4105,15 @@ function guardarGeminiApiKey(key) {
   const clean = (key || '').trim();
   if (clean) {
     localStorage.setItem('gemini_api_key', clean);
+    localStorage.setItem('bovitrack_global_gemini_api_key', clean);
   } else {
     localStorage.removeItem('gemini_api_key');
+    localStorage.removeItem('bovitrack_global_gemini_api_key');
+  }
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__bovitrackSyncGlobalGeminiKey === 'function') {
+    try {
+      globalThis.__bovitrackSyncGlobalGeminiKey(clean);
+    } catch (_) {}
   }
   return true;
 }
@@ -3883,6 +4121,12 @@ function guardarGeminiApiKey(key) {
 function eliminarGeminiApiKey() {
   if (typeof localStorage === 'undefined') return false;
   localStorage.removeItem('gemini_api_key');
+  localStorage.removeItem('bovitrack_global_gemini_api_key');
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__bovitrackSyncGlobalGeminiKey === 'function') {
+    try {
+      globalThis.__bovitrackSyncGlobalGeminiKey('');
+    } catch (_) {}
+  }
   return true;
 }
 
@@ -11518,9 +11762,11 @@ class ModuloAdmin {
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'whatsapp' ? 'bg-gradient-to-r from-emerald-800 to-green-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-400/40' : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'} cursor-pointer" data-sec="whatsapp">
             <span>💬</span> WhatsApp API
           </button>
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
-            <span>✨</span> IA Gemini
-          </button>
+          ${esSuperAdmin ? `
+            <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
+              <span>✨</span> IA Gemini (Global)
+            </button>
+          ` : ''}
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'backup' ? 'bg-white text-emerald-950 shadow-md border border-slate-200 ring-2 ring-emerald-400/30' : 'text-emerald-800 hover:bg-emerald-100/70'} cursor-pointer" data-sec="backup">
             <span>💾</span> Copia Seg.
           </button>
@@ -11562,7 +11808,18 @@ class ModuloAdmin {
     } else if (this.seccion === 'whatsapp') {
       return this.renderSeccionWhatsApp(fincaActiva);
     } else if (this.seccion === 'gemini') {
-      return this.renderSeccionGemini(fincas, fincaActiva, esAdmin);
+      if (!esSuperAdmin) {
+        return `
+          <div class="max-w-2xl mx-auto bg-rose-50 border border-rose-200 rounded-3xl p-6 text-center space-y-2">
+            <div class="text-3xl">🔒</div>
+            <h4 class="text-base font-black text-rose-900">Acceso Exclusivo del Super Administrador</h4>
+            <p class="text-xs text-rose-700">
+              La conexión global de Inteligencia Artificial está centralizada para todas las empresas y fincas, y solo puede ser administrada por el Super Administrador del sistema.
+            </p>
+          </div>
+        `;
+      }
+      return this.renderSeccionGemini(fincas, fincaActiva, esSuperAdmin);
     } else if (this.seccion === 'backup') {
       return this.renderSeccionBackup();
     } else if (this.seccion === 'supabase') {
@@ -12447,16 +12704,19 @@ class ModuloAdmin {
             </div>
             <div>
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Google Gemini IA Zootécnica</h3>
+                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Conexión Global Google Gemini IA</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-amber-400/20 text-amber-200 border border-amber-400/40">
+                  👑 EXCLUSIVO SUPER ADMINISTRADOR
+                </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
-                  ${tieneKey ? '● CONECTADO' : '○ CLAVE PENDIENTE'}
+                  ${tieneKey ? '● CONECTADO GLOBALMENTE' : '○ MOTOR HÍBRIDO ACTIVO'}
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
                   ${obtenerModeloGeminiActivo()}
                 </span>
               </div>
               <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">
-                Potencia tu ganadería con inteligencia artificial multimodal: escaneo fotográfico corporal, asesoría zootécnica veterinaria y diagnósticos automáticos del hato.
+                Conexión centralizada para <strong>todas las empresas (${(this.getEmpresas ? this.getEmpresas() : []).length || 'todas'}) y todas las fincas (${fincas.length || 'todas'})</strong>. Los usuarios del sistema utilizan la IA automáticamente en Nutrición IA sin tener acceso a esta configuración.
               </p>
             </div>
           </div>
@@ -12475,15 +12735,15 @@ class ModuloAdmin {
           </div>
         </div>
 
-        <!-- TARJETA 1: GESTIÓN DE LA API KEY -->
+        <!-- TARJETA 1: GESTIÓN DE LA API KEY GLOBAL -->
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
               <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
-                <span>🔐</span> Clave de API de Google Gemini (Google AI Studio)
+                <span>🌐</span> Clave Global de API de Google Gemini (Para Todas las Fincas y Empresas)
               </h4>
               <p class="text-xs text-slate-500 mt-0.5">
-                La clave se almacena de forma privada en el almacenamiento local de este dispositivo.
+                Al guardar esta clave como Super Administrador, queda activa automáticamente para todas las empresas y todas las fincas y se sincroniza con Supabase Cloud.
               </p>
             </div>
             ${tieneKey ? `
@@ -15125,7 +15385,7 @@ END $$;
         guardarGeminiApiKey(key);
         this.geminiTestResultado = {
           ok: true,
-          mensaje: 'Clave de Google Gemini guardada exitosamente en este dispositivo.',
+          mensaje: 'Clave Global de Google Gemini guardada y sincronizada para todas las empresas y todas las fincas.',
         };
         this.render();
       });
@@ -15152,6 +15412,9 @@ END $$;
 
         try {
           const resultado = await probarConexionGemini(key);
+          if (resultado && resultado.ok) {
+            guardarGeminiApiKey(key);
+          }
           this.geminiTestResultado = resultado;
         } catch (err) {
           this.geminiTestResultado = {
@@ -20139,108 +20402,6 @@ class ModuloNutricion {
     }
   }
 
-  renderModalConfigGemini() {
-    const keyActual = obtenerGeminiApiKey();
-    const tieneKey = Boolean(keyActual);
-
-    return `
-      <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-        <div class="bg-slate-900 border border-purple-500/40 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-auto text-white p-5 sm:p-6 space-y-4">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div class="flex items-center gap-2.5">
-              <span class="text-2xl p-2 rounded-2xl bg-purple-900/60 border border-purple-500/40 text-purple-300">✨</span>
-              <div>
-                <h3 class="font-black text-base text-white">Google Gemini IA (Visión Multimodal)</h3>
-                <p class="text-xs text-purple-300/80">Configuración de API Key para escaneo corporal y nutrición</p>
-              </div>
-            </div>
-            <button type="button" id="btn-cerrar-modal-config-gemini" class="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer">✕</button>
-          </div>
-
-          ${this.geminiFeedback ? `
-            <div class="p-3 rounded-2xl text-xs font-bold flex items-center justify-between ${
-              this.geminiFeedback.ok ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300' : 'bg-rose-950/80 border border-rose-500/50 text-rose-300'
-            }">
-              <div class="flex items-center gap-2">
-                <span>${this.geminiFeedback.ok ? '✅' : '⚠️'}</span>
-                <span>${this.geminiFeedback.mensaje || this.geminiFeedback.error}</span>
-              </div>
-              <button id="btn-cerrar-feedback-gemini-modal" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
-            </div>
-          ` : ''}
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-bold text-slate-300 uppercase">Clave de API Google AI Studio:</label>
-              <span class="text-[10px] font-mono uppercase font-black px-2 py-0.5 rounded-full ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
-                ${tieneKey ? '● Configurada' : '○ Sin Clave'}
-              </span>
-            </div>
-            <input
-              type="password"
-              id="input-modal-gemini-key"
-              placeholder="Pega aquí tu API Key (AIzaSy...)"
-              value="${keyActual || ''}"
-              class="w-full bg-slate-950 border border-slate-700 text-white font-mono px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-purple-500"
-            />
-          </div>
-
-          <div class="bg-purple-950/40 border border-purple-800/50 rounded-2xl p-3.5 text-[11px] text-purple-200/90 space-y-1.5 leading-relaxed">
-            <p class="font-bold text-white flex items-center gap-1.5">
-              <span>🔑</span> ¿Cómo obtener tu clave gratuita?
-            </p>
-            <p>
-              Obtén tu API Key gratis en 
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline text-purple-300 font-bold hover:text-white">Google AI Studio ↗</a>. 
-              Google otorga cuota gratuita de hasta 1,500 solicitudes diarias sin tarjeta de crédito para modelos <code>gemini-flash</code>.
-            </p>
-          </div>
-
-          <div class="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-probar-modal-gemini"
-                ${this.geminiProbando ? 'disabled' : ''}
-                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold border border-slate-700 transition cursor-pointer ${this.geminiProbando ? 'opacity-50 cursor-wait' : ''}"
-              >
-                <span>${this.geminiProbando ? '⏳' : '⚡'}</span>
-                <span>${this.geminiProbando ? 'Probando...' : 'Probar'}</span>
-              </button>
-
-              ${tieneKey ? `
-                <button
-                  type="button"
-                  id="btn-eliminar-modal-gemini"
-                  class="px-3 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-bold border border-rose-800 transition cursor-pointer"
-                >
-                  🗑️ Eliminar
-                </button>
-              ` : ''}
-            </div>
-
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-cancelar-modal-gemini"
-                class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
-              >
-                Cerrar
-              </button>
-              <button
-                type="button"
-                id="btn-guardar-modal-gemini"
-                class="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black shadow-lg shadow-purple-900/40 transition cursor-pointer"
-              >
-                💾 Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   imprimirPlanNutricional() {
     if (!this.planGenerado) return;
     window.print();
@@ -20255,10 +20416,7 @@ class ModuloNutricion {
     }
 
     if (this.modoModalEvaluacion && this.animalSeleccionado) {
-      let evalHtml = this.renderPanelEvaluacion();
-      if (this.modalConfigGeminiAbierto) {
-        evalHtml += this.renderModalConfigGemini();
-      }
+      const evalHtml = this.renderPanelEvaluacion();
       this.container.innerHTML = evalHtml;
       this.enlazarEventos();
       return;
@@ -20282,19 +20440,18 @@ class ModuloNutricion {
             </p>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              class="btn-abrir-config-gemini-nutri bg-slate-800/90 hover:bg-slate-800 border border-purple-500/40 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-left transition cursor-pointer"
-              title="Configurar Google Gemini IA"
+            <div
+              class="bg-slate-800/90 border border-purple-500/40 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-left"
+              title="Conexión de IA administrada globalmente por el Super Administrador para todas las empresas y fincas"
             >
               <span class="text-xl">✨</span>
               <div>
-                <div class="text-[9px] text-purple-300 font-black uppercase">Google Gemini IA</div>
-                <div class="text-xs font-black ${obtenerGeminiApiKey() ? 'text-emerald-400' : 'text-amber-400'} flex items-center gap-1">
-                  <span>${obtenerGeminiApiKey() ? '● Conectado' : '○ Sin Clave'}</span>
+                <div class="text-[9px] text-purple-300 font-black uppercase">Motor IA Global</div>
+                <div class="text-xs font-black text-emerald-400 flex items-center gap-1">
+                  <span>● Activo (Todas las Fincas)</span>
                 </div>
               </div>
-            </button>
+            </div>
 
             <div class="bg-slate-800/90 border border-slate-700 px-4 py-2 rounded-2xl flex items-center gap-3">
               <div class="text-right">
@@ -20453,10 +20610,6 @@ class ModuloNutricion {
       </div>
     `;
 
-    if (this.modalConfigGeminiAbierto) {
-      html += this.renderModalConfigGemini();
-    }
-
     this.container.innerHTML = html;
     this.enlazarEventos();
   }
@@ -20526,9 +20679,9 @@ class ModuloNutricion {
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" class="btn-abrir-config-gemini-nutri px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900 text-purple-200 text-xs font-bold border border-purple-500/40 transition flex items-center gap-1.5 cursor-pointer">
-                <span>✨</span> <span class="hidden sm:inline">IA Gemini (${obtenerModeloGeminiActivo()})</span>
-              </button>
+              <span class="px-3 py-1.5 rounded-xl bg-purple-950/60 text-purple-200 text-xs font-bold border border-purple-500/40 flex items-center gap-1.5" title="Conexión IA Global administrada en Super Admin">
+                <span>✨</span> <span class="hidden sm:inline">IA Global Activa (${obtenerModeloGeminiActivo()})</span>
+              </span>
               <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                 <span>🖨️</span> <span class="hidden sm:inline">Imprimir Ficha</span>
               </button>
@@ -20543,15 +20696,44 @@ class ModuloNutricion {
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                 <div>
                   <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
-                    <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo
+                    <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo por Edades
                   </h4>
                   <p class="text-[11px] text-slate-400 mt-0.5">
-                    Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso y alzada contra el estándar genético de su raza.
+                    Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso, alzada y ganancia diaria en cada etapa de crecimiento.
                   </p>
                 </div>
                 <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${tieneRazaEnFicha ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/60 border-amber-500/40 text-amber-300'} shrink-0">
                   ${tieneRazaEnFicha ? `📋 En Ficha: ${animal.raza}` : '📋 Sin raza específica en ficha (Confírmala abajo)'}
                 </span>
+              </div>
+
+              <!-- ACCESO RÁPIDO A RAZAS PRIORIZADAS (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO, BRAHMAN) -->
+              <div class="bg-slate-900/90 p-3 rounded-xl border border-amber-500/30 space-y-2">
+                <div class="flex items-center justify-between flex-wrap gap-1">
+                  <span class="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1.5">
+                    <span>⭐</span> Razas Priorizadas (Selección Rápida con Curvas Oficiales ABCZ / Embrapa / Asocebú):
+                  </span>
+                  <span class="text-[10px] text-slate-400">Clic para aplicar estándar genético y curva por edades</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  ${catalogoRazas.filter(r => r.esPriorizada).map(r => {
+                    const activa = r.clave === perfil.clave || r.nombre === perfil.nombre;
+                    return `
+                      <button
+                        type="button"
+                        data-raza-nombre="${r.nombre}"
+                        class="btn-chip-raza-priorizada px-3 py-1.5 rounded-xl text-[11px] font-black transition cursor-pointer flex items-center gap-1.5 ${
+                          activa
+                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 border border-amber-300'
+                            : 'bg-slate-950 hover:bg-slate-800 text-amber-200 border border-amber-500/30'
+                        }"
+                      >
+                        <span>⭐</span>
+                        <span>${r.nombre.split('(')[0].trim()}</span>
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
               </div>
 
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
@@ -20567,7 +20749,7 @@ class ModuloNutricion {
                       <optgroup label="── ${nombreGrupo} ──">
                         ${gruposRazas[nombreGrupo].map(r => `
                           <option value="${r.nombre}" ${r.clave === perfil.clave || r.nombre === perfil.nombre ? 'selected' : ''}>
-                            ${r.especie === 'bufalino' ? '🐃' : '🐄'} ${r.nombre} — (${r.aptitud})
+                            ${r.especie === 'bufalino' ? '🐃' : (r.esPriorizada ? '⭐' : '🐄')} ${r.nombre} — (${r.aptitud})
                           </option>
                         `).join('')}
                       </optgroup>
@@ -20635,6 +20817,26 @@ class ModuloNutricion {
                       <div class="text-[11px] font-black ${esBuf ? 'text-rose-400' : 'text-cyan-400'} font-mono">${perfil.fosforoRequeridoPorc}%P ${esBuf ? '(Bajo Cu)' : ''}</div>
                     </div>
                   </div>
+                  ${des.fichaZootecnicaRaza ? `
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-center">
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">1er Servicio</div>
+                        <div class="text-[10px] font-black text-cyan-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerServicioMeses} (${des.pesoMetaPrimerServicioKg}kg)</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Edad 1er Parto</div>
+                        <div class="text-[10px] font-black text-emerald-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerPartoMeses}</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Lactancia Raza</div>
+                        <div class="text-[10px] font-black text-amber-300 font-mono">${des.fichaZootecnicaRaza.produccionLecheLactancia}</div>
+                      </div>
+                      <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold">Rend. Canal</div>
+                        <div class="text-[10px] font-black text-purple-300 font-mono">${des.fichaZootecnicaRaza.rendimientoCanalPorc}</div>
+                      </div>
+                    </div>
+                  ` : ''}
                   ${perfil.manejoNutricionalEspecial ? `
                     <div class="text-[10px] text-emerald-200/90 bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
                       💡 <strong>Clave Nutricional de la Raza:</strong> ${perfil.manejoNutricionalEspecial}
@@ -20644,9 +20846,9 @@ class ModuloNutricion {
 
                 <!-- Tarjeta B: Análisis Directo del Desarrollo del Animal vs Estándar Racial -->
                 <div class="p-3.5 rounded-xl border ${colorDesarrollo} space-y-2.5 text-xs">
-                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5 flex-wrap gap-1">
                     <span class="font-black text-white flex items-center gap-1.5">
-                      <span>📈</span> Desarrollo Directo a los ${des.edadMesesEvaluada} Meses
+                      <span>📈</span> Desarrollo a los ${des.edadMesesEvaluada} Meses (${des.etapaCrecimientoNombre || 'Crecimiento'})
                     </span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-950/90 border border-slate-700">
                       Índice Racial: ${porcDesarrollo}%
@@ -20669,9 +20871,9 @@ class ModuloNutricion {
                       </div>
                     </div>
                     <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Meta GDP Raza</div>
-                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpMetaCorrectivaGDia} g/d</div>
-                      <div class="text-[9px] text-slate-400">Objetivo diario</div>
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">GDP Etapa vs Meta</div>
+                      <div class="text-xs font-black text-amber-300 font-mono">${des.gdpEsperadaEtapaGDia || des.gdpReferenciaPastoreoGDia} → +${des.gdpMetaCorrectivaGDia} g/d</div>
+                      <div class="text-[9px] text-slate-400">${des.gdpActualAnimalGDia ? `Actual: ${des.gdpActualAnimalGDia} g/d` : 'Objetivo diario'}</div>
                     </div>
                   </div>
 
@@ -20682,7 +20884,91 @@ class ModuloNutricion {
                   <p class="text-[11px] text-slate-200 leading-relaxed">
                     <strong>${des.etiquetaDesarrollo}:</strong> ${des.diagnosticoDesarrollo}
                   </p>
+                  ${des.kgFaltantesPrimerServicio > 0 ? `
+                    <div class="text-[10px] bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-200 font-semibold">
+                      🎯 <strong>Proyección a 1er Servicio (${des.pesoMetaPrimerServicioKg} kg):</strong> Faltan <strong>${des.kgFaltantesPrimerServicio} kg</strong> (aprox. ${Math.ceil(des.kgFaltantesPrimerServicio / ((des.gdpMetaCorrectivaGDia || 650) / 1000))} días con el plan nutricional sugerido).
+                    </div>
+                  ` : ''}
                 </div>
+              </div>
+
+              <!-- CURVA DE DESARROLLO POR EDADES Y GANANCIA DE PESO (GDP) POR ETAPA DE CRECIMIENTO -->
+              <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
+                  <div class="text-xs font-black text-white flex items-center gap-1.5">
+                    <span>📊</span> Curva Oficial de Desarrollo por Edades y Ganancia Diaria (GDP) por Etapa — ${perfil.nombre}
+                  </div>
+                  <span class="text-[10px] text-emerald-400 font-mono">
+                    ${des.fichaZootecnicaRaza?.fuenteReferencia || 'Estándar Zootécnico ABCZ / Embrapa / Asocebú'}
+                  </span>
+                </div>
+
+                <!-- Ganancia Diaria de Peso (GDP) en cada etapa de crecimiento -->
+                ${des.gdpPorEtapaGDia ? `
+                  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada <= 7 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">1. Cría (0-7 m)</div>
+                      <div class="text-xs font-black text-emerald-400 font-mono">+${des.gdpPorEtapaGDia.cria_0_7m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Predestete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 7 && des.edadMesesEvaluada <= 12 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">2. Recría (7-12 m)</div>
+                      <div class="text-xs font-black text-cyan-300 font-mono">+${des.gdpPorEtapaGDia.levante_7_12m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Post-destete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 12 && des.edadMesesEvaluada <= 18 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">3. Levante (12-18 m)</div>
+                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpPorEtapaGDia.levante_12_18m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Entrada Servicio</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 18 && des.edadMesesEvaluada <= 24 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
+                      <div class="text-[9px] text-slate-400 uppercase font-bold">4. Vientre/Ceba (18-24 m)</div>
+                      <div class="text-xs font-black text-purple-300 font-mono">+${des.gdpPorEtapaGDia.vientre_ceba_18_24m} g/día</div>
+                      <div class="text-[9px] text-slate-500">Novilla / Torete</div>
+                    </div>
+                    <div class="bg-slate-950 p-2 rounded-lg border border-amber-500/30">
+                      <div class="text-[9px] text-amber-300 uppercase font-bold">🏆 Pista / Sup. Intensiva</div>
+                      <div class="text-xs font-black text-amber-400 font-mono">+${des.gdpPorEtapaGDia.pista_intensivo} g/día</div>
+                      <div class="text-[9px] text-slate-500">Potencial Genético</div>
+                    </div>
+                  </div>
+                ` : ''}
+
+                <!-- Tabla de hitos de peso y alzada por edades (0m a Adulto) -->
+                ${Array.isArray(des.tablaHitosRaza) && des.tablaHitosRaza.length > 0 ? `
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                      <thead>
+                        <tr class="border-b border-slate-800 text-[9px] uppercase text-slate-400 font-black">
+                          <th class="py-1.5 px-2">Etapa / Edad</th>
+                          ${des.tablaHitosRaza.map(h => `
+                            <th class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/40 rounded-t-lg' : ''}">
+                              ${h.etapa}
+                            </th>
+                          `).join('')}
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-800/60 font-mono">
+                        <tr>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-300">Peso Estándar Raza (${des.sexoEvaluado === 'macho' ? 'Macho' : 'Hembra'})</td>
+                          ${des.tablaHitosRaza.map(h => `
+                            <td class="py-1.5 px-2 text-center font-black ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/30' : 'text-white'}">
+                              ${h.pesoEsperadoKg} kg
+                            </td>
+                          `).join('')}
+                        </tr>
+                        <tr>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-400">Alzada Estándar (Cruz/Grupa)</td>
+                          ${des.tablaHitosRaza.map(h => `
+                            <td class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-cyan-300 font-black bg-emerald-950/30' : 'text-slate-400'}">
+                              ${h.tallaEsperadaCm ? `${h.tallaEsperadaCm} cm` : '—'}
+                            </td>
+                          `).join('')}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ` : ''}
               </div>
             </div>
 
@@ -20806,9 +21092,9 @@ class ModuloNutricion {
                     <span class="text-base">📸</span>
                     <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico & Diagnóstico Gemini IA</span>
                     <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">100% EFÍMERO</span>
-                    <button type="button" class="btn-abrir-config-gemini-nutri text-[10px] font-bold text-purple-300 hover:text-purple-200 underline cursor-pointer">
-                      ${obtenerGeminiApiKey() ? `✨ Conectado a Gemini (${obtenerModeloGeminiActivo()})` : '⚠️ Configurar API Key de Gemini'}
-                    </button>
+                    <span class="text-[10px] font-bold text-purple-300">
+                      ✨ Motor IA Global Activo (${obtenerModeloGeminiActivo()})
+                    </span>
                   </div>
                   <p class="text-[10px] text-slate-400">
                     Sube una foto del ejemplar o pulsa <strong>Actualizar Plan IA</strong> para recalcular dieta, medicamentos y vitaminas según su raza confirmada y curva de desarrollo.
@@ -21111,6 +21397,19 @@ class ModuloNutricion {
       const inputRaza = this.container.querySelector('#input-nutri-raza');
       const checkRaza = this.container.querySelector('#check-nutri-raza-confirmada');
       const inputEdad = this.container.querySelector('#input-nutri-edad-meses');
+
+      // Selección rápida de razas priorizadas (Red Sindhi, Gyr, Guzerat, Nelore, Girolando, Brahman)
+      this.container.querySelectorAll('.btn-chip-raza-priorizada').forEach((btnChip) => {
+        btnChip.addEventListener('click', () => {
+          const razaNombre = btnChip.getAttribute('data-raza-nombre');
+          if (razaNombre && inputRaza) {
+            inputRaza.value = razaNombre;
+            if (checkRaza) checkRaza.checked = true;
+            this.calcularPlanDesdeFormulario(false);
+          }
+        });
+      });
+
       if (inputRaza) {
         inputRaza.addEventListener('change', () => {
           if (checkRaza) checkRaza.checked = true;
@@ -21163,109 +21462,6 @@ class ModuloNutricion {
           this.imprimirPlanNutricional();
         });
       }
-    }
-
-    // --- EVENTOS MODAL CONFIG GEMINI ---
-    this.container.querySelectorAll('.btn-abrir-config-gemini-nutri').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = true;
-        this.render();
-      });
-    });
-
-    const btnCerrarModalGemini = this.container.querySelector('#btn-cerrar-modal-config-gemini');
-    if (btnCerrarModalGemini) {
-      btnCerrarModalGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = false;
-        this.render();
-      });
-    }
-
-    const btnCancelarModalGemini = this.container.querySelector('#btn-cancelar-modal-gemini');
-    if (btnCancelarModalGemini) {
-      btnCancelarModalGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.modalConfigGeminiAbierto = false;
-        this.render();
-      });
-    }
-
-    const btnCerrarFbGemini = this.container.querySelector('#btn-cerrar-feedback-gemini-modal');
-    if (btnCerrarFbGemini) {
-      btnCerrarFbGemini.addEventListener('click', () => {
-        this.geminiFeedback = null;
-        this.render();
-      });
-    }
-
-    const btnGuardarModalGemini = this.container.querySelector('#btn-guardar-modal-gemini');
-    if (btnGuardarModalGemini) {
-      btnGuardarModalGemini.addEventListener('click', () => {
-        const inputKey = this.container.querySelector('#input-modal-gemini-key');
-        const key = inputKey ? inputKey.value.trim() : '';
-        if (!key) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'Por favor ingresa una clave de API válida.',
-          };
-          this.render();
-          return;
-        }
-        guardarGeminiApiKey(key);
-        this.geminiFeedback = {
-          ok: true,
-          mensaje: 'Clave de Google Gemini guardada con éxito.',
-        };
-        this.render();
-      });
-    }
-
-    const btnProbarModalGemini = this.container.querySelector('#btn-probar-modal-gemini');
-    if (btnProbarModalGemini) {
-      btnProbarModalGemini.addEventListener('click', async () => {
-        const inputKey = this.container.querySelector('#input-modal-gemini-key');
-        const key = inputKey ? inputKey.value.trim() : obtenerGeminiApiKey();
-        if (!key) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'No hay clave configurada para probar.',
-          };
-          this.render();
-          return;
-        }
-        this.geminiProbando = true;
-        this.geminiFeedback = null;
-        this.render();
-
-        try {
-          const res = await probarConexionGemini(key);
-          this.geminiFeedback = res;
-        } catch (err) {
-          this.geminiFeedback = {
-            ok: false,
-            mensaje: 'Error probando clave: ' + (err.message || err),
-          };
-        } finally {
-          this.geminiProbando = false;
-          this.render();
-        }
-      });
-    }
-
-    const btnEliminarModalGemini = this.container.querySelector('#btn-eliminar-modal-gemini');
-    if (btnEliminarModalGemini) {
-      btnEliminarModalGemini.addEventListener('click', () => {
-        if (confirm('¿Deseas eliminar la clave de API de Google Gemini de este dispositivo?')) {
-          eliminarGeminiApiKey();
-          this.geminiFeedback = {
-            ok: true,
-            mensaje: 'Clave eliminada del dispositivo.',
-          };
-          this.render();
-        }
-      });
     }
   }
 }
@@ -22878,6 +23074,35 @@ class BoviTrackApp {
     this._syncPendiente = false;
     this._tokenSesion = null;
 
+    if (this.state && this.state.globalGeminiApiKey && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('bovitrack_global_gemini_api_key', this.state.globalGeminiApiKey);
+        localStorage.setItem('gemini_api_key', this.state.globalGeminiApiKey);
+      } catch (_e) {}
+    }
+
+    globalThis.__bovitrackSyncGlobalGeminiKey = (cleanKey) => {
+      if (!this.state) return;
+      this.state.globalGeminiApiKey = cleanKey || '';
+      if (!Array.isArray(this.state.operacionesDiarias)) {
+        this.state.operacionesDiarias = [];
+      }
+      const idx = this.state.operacionesDiarias.findIndex((op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG');
+      const configRow = {
+        id: 'SYS_GEMINI_GLOBAL_CONFIG',
+        fincaId: 'GLOBAL',
+        tipo: 'SYS_GEMINI_GLOBAL_CONFIG',
+        geminiApiKey: cleanKey || '',
+        actualizadoEn: new Date().toISOString()
+      };
+      if (idx >= 0) {
+        this.state.operacionesDiarias[idx] = configRow;
+      } else {
+        this.state.operacionesDiarias.push(configRow);
+      }
+      this.guardarEstado();
+    };
+
     this.iniciarPWA();
     this.iniciarComponentes();
     this.iniciarSincronizacionEnLineaPermanente();
@@ -23691,6 +23916,24 @@ class BoviTrackApp {
     fusionarColeccion('operacionesDiarias', datos.operacionesDiarias);
     fusionarColeccion('pesajes', datos.pesajes);
     fusionarColeccion('nutricion', datos.nutricion);
+
+    // Sincronizar Clave Global de IA Gemini para todas las empresas y todas las fincas
+    const globalGeminiConfig = (this.state.operacionesDiarias || []).find(
+      (op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG' && typeof op.geminiApiKey === 'string'
+    );
+    if (globalGeminiConfig && globalGeminiConfig.geminiApiKey !== undefined) {
+      const cloudKey = globalGeminiConfig.geminiApiKey.trim();
+      if (cloudKey && cloudKey !== this.state.globalGeminiApiKey) {
+        this.state.globalGeminiApiKey = cloudKey;
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem('bovitrack_global_gemini_api_key', cloudKey);
+            localStorage.setItem('gemini_api_key', cloudKey);
+          } catch (_e) {}
+        }
+        huboCambios = true;
+      }
+    }
 
     if (huboCambios) {
       if (typeof localStorage !== 'undefined') {
