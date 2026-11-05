@@ -526,10 +526,10 @@ export class ModuloNutricion {
           <div>
             <div class="flex items-center gap-2">
               <span class="text-2xl sm:text-3xl">🥗</span>
-              <h2 class="text-xl sm:text-2xl font-black text-white">Módulo Especial de Nutrición Animal & Biotecnología IA</h2>
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">PREDICCIÓN IA</span>
+              <h2 class="text-xl sm:text-2xl font-black text-slate-800">Módulo Especial de Nutrición Animal & Biotecnología IA</h2>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-700 border border-emerald-500/40">PREDICCIÓN IA</span>
             </div>
-            <p class="text-xs sm:text-sm text-slate-400 mt-1">
+            <p class="text-xs sm:text-sm text-slate-600 mt-1">
               Programa de precisión para animales seleccionados en manga: raciones por raza y estado reproductivo, medicamentos, minerales quelatados y visión fotográfica efímera.
             </p>
           </div>
@@ -540,8 +540,8 @@ export class ModuloNutricion {
             >
               <span class="text-xl">✨</span>
               <div>
-                <div class="text-[9px] text-purple-300 font-black uppercase">Motor IA Global</div>
-                <div class="text-xs font-black text-emerald-400 flex items-center gap-1">
+                <div class="text-[9px] text-purple-700 font-black uppercase">Motor IA Global</div>
+                <div class="text-xs font-black text-emerald-700 flex items-center gap-1">
                   <span>● Activo (Todas las Fincas)</span>
                 </div>
               </div>
@@ -549,8 +549,8 @@ export class ModuloNutricion {
 
             <div class="bg-slate-800/90 border border-slate-700 px-4 py-2 rounded-2xl flex items-center gap-3">
               <div class="text-right">
-                <div class="text-[10px] text-slate-400 uppercase font-black">Grupo Especial</div>
-                <div class="text-lg font-black text-emerald-400 font-mono">${enrolados.length} <span class="text-xs text-slate-300">Animales</span></div>
+                <div class="text-[10px] text-slate-600 uppercase font-black">Grupo Especial</div>
+                <div class="text-lg font-black text-emerald-700 font-mono">${enrolados.length} <span class="text-xs text-slate-600">Animales</span></div>
               </div>
               <span class="text-2xl">🧬</span>
             </div>
@@ -559,18 +559,12 @@ export class ModuloNutricion {
 
         <!-- MENSAJE FEEDBACK TEMPORAL -->
         ${this.mensajeFeedback ? `
-          <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${
-            this.tipoFeedback === 'exito'
-              ? 'bg-emerald-950/60 border border-emerald-500/50 text-emerald-300'
-              : this.tipoFeedback === 'error'
-              ? 'bg-rose-950/60 border border-rose-500/50 text-rose-300'
-              : 'bg-blue-950/60 border border-blue-500/50 text-blue-300'
-          }">
+          <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${ this.tipoFeedback === 'exito' ? 'bg-emerald-950/60 border border-emerald-500/50 text-emerald-700' : this.tipoFeedback === 'error' ? 'bg-rose-950/60 border border-rose-500/50 text-rose-700' : 'bg-blue-950/60 border border-blue-500/50 text-blue-700' }">
             <div class="flex items-center gap-2">
               <span>${this.tipoFeedback === 'exito' ? '✅' : this.tipoFeedback === 'error' ? '⚠️' : 'ℹ️'}</span>
               <span>${this.mensajeFeedback}</span>
             </div>
-            <button id="btn-cerrar-feedback-nutri" class="text-slate-400 hover:text-white px-2 py-0.5 text-xs font-mono">✕</button>
+            <button id="btn-cerrar-feedback-nutri" class="text-slate-600 hover:text-slate-800 px-2 py-0.5 text-xs font-mono">✕</button>
           </div>
         ` : ''}
 
@@ -579,9 +573,9 @@ export class ModuloNutricion {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
             <div class="flex items-center gap-2">
               <span class="text-base sm:text-lg">🔍</span>
-              <span class="text-xs sm:text-sm font-black text-white uppercase tracking-wider">Buscador Rápido en Manga (Ingreso de Animales al Módulo)</span>
+              <span class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider">Buscador Rápido en Manga (Ingreso de Animales al Módulo)</span>
             </div>
-            <span class="text-[10px] text-slate-400">Escriba el número de arete, tag o nombre para incluir el animal</span>
+            <span class="text-[10px] text-slate-600">Escriba el número de arete, tag o nombre para incluir el animal</span>
           </div>
 
           <div class="flex flex-col sm:flex-row items-stretch gap-2.5">
@@ -591,7 +585,7 @@ export class ModuloNutricion {
                 type="text"
                 autocomplete="off"
                 placeholder="Digitar arete (ej: BV-401, 112, Paloma, Murrah)..."
-                class="w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-2xl text-sm font-black placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition shadow-inner font-mono"
+                class="w-full bg-slate-950 border border-slate-700 text-slate-800 px-4 py-3 rounded-2xl text-sm font-black placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition shadow-inner font-mono"
               />
               <div id="dropdown-nutricion-autosuggest" class="hidden absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-800"></div>
             </div>
@@ -609,18 +603,18 @@ export class ModuloNutricion {
         <div class="bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
-              <h3 class="text-sm sm:text-base font-black text-white flex items-center gap-2">
+              <h3 class="text-sm sm:text-base font-black text-slate-800 flex items-center gap-2">
                 <span>📋</span> Animales Activos en el Módulo (${enrolados.length})
               </h3>
-              <p class="text-[11px] text-slate-400">Solo estos ejemplares específicos reciben seguimiento nutricional avanzado y planes IA</p>
+              <p class="text-[11px] text-slate-600">Solo estos ejemplares específicos reciben seguimiento nutricional avanzado y planes IA</p>
             </div>
           </div>
 
           ${enrolados.length === 0 ? `
-            <div class="py-12 px-4 text-center text-slate-400 space-y-3">
+            <div class="py-12 px-4 text-center text-slate-600 space-y-3">
               <span class="text-4xl block">🌾</span>
-              <p class="text-sm font-bold text-slate-300">No hay animales incluidos en el Módulo Especial de Nutrición aún.</p>
-              <p class="text-xs text-slate-500 max-w-md mx-auto">
+              <p class="text-sm font-bold text-slate-600">No hay animales incluidos en el Módulo Especial de Nutrición aún.</p>
+              <p class="text-xs text-slate-600 max-w-md mx-auto">
                 Utilice el buscador de manga de arriba para seleccionar e incorporar ejemplares que requieran dietas especiales, biotecnología o seguimiento de condición corporal.
               </p>
             </div>
@@ -641,13 +635,13 @@ export class ModuloNutricion {
                       <div>
                         <div class="flex items-center gap-1.5">
                           <span class="text-base">${esBuf ? '🐃' : '🐄'}</span>
-                          <span class="text-sm font-black text-white font-mono">${aSync.identificacionTag || aSync.tag}</span>
-                          ${aSync.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${aSync.nombreAlias}"</span>` : ''}
+                          <span class="text-sm font-black text-slate-800 font-mono">${aSync.identificacionTag || aSync.tag}</span>
+                          ${aSync.nombreAlias ? `<span class="text-xs text-slate-600 font-bold">"${aSync.nombreAlias}"</span>` : ''}
                         </div>
-                        <div class="text-[11px] text-emerald-400 font-semibold mt-0.5">${aSync.raza || 'Comercial'} • ${aSync.sexo || 'Hembra'} • ${edadCard ? `${edadCard} meses` : 'Edad s/f'}</div>
+                        <div class="text-[11px] text-emerald-700 font-semibold mt-0.5">${aSync.raza || 'Comercial'} • ${aSync.sexo || 'Hembra'} • ${edadCard ? `${edadCard} meses` : 'Edad s/f'}</div>
                       </div>
                       <button
-                        class="btn-retirar-nutri text-slate-500 hover:text-rose-400 p-1.5 text-xs transition rounded-lg hover:bg-slate-900"
+                        class="btn-retirar-nutri text-slate-600 hover:text-rose-700 p-1.5 text-xs transition rounded-lg hover:bg-slate-900"
                         data-tag="${aSync.identificacionTag || aSync.tag}"
                         title="Retirar del grupo especial"
                       >
@@ -657,31 +651,31 @@ export class ModuloNutricion {
 
                     <div class="grid grid-cols-4 gap-1.5 bg-slate-900/80 p-2.5 rounded-xl text-center">
                       <div>
-                        <div class="text-[9px] uppercase font-black text-slate-400">Peso (Ficha)</div>
-                        <div class="text-xs font-black text-white font-mono">${pesoCard || reg.pesoActualKg || '---'} kg</div>
+                        <div class="text-[9px] uppercase font-black text-slate-600">Peso (Ficha)</div>
+                        <div class="text-xs font-black text-slate-800 font-mono">${pesoCard || reg.pesoActualKg || '---'} kg</div>
                       </div>
                       <div>
-                        <div class="text-[9px] uppercase font-black text-emerald-400">Talla</div>
-                        <div class="text-xs font-black text-emerald-300 font-mono">${reg.tallaCm ? reg.tallaCm + 'cm' : (reg.tallaFrame && reg.tallaFrame.includes('cm') ? reg.tallaFrame.split(' ')[0] : '---')}</div>
+                        <div class="text-[9px] uppercase font-black text-emerald-700">Talla</div>
+                        <div class="text-xs font-black text-emerald-700 font-mono">${reg.tallaCm ? reg.tallaCm + 'cm' : (reg.tallaFrame && reg.tallaFrame.includes('cm') ? reg.tallaFrame.split(' ')[0] : '---')}</div>
                       </div>
                       <div>
-                        <div class="text-[9px] uppercase font-black text-slate-400">BCS</div>
-                        <div class="text-xs font-black ${bcs < 2.5 ? 'text-rose-400' : bcs > 3.75 ? 'text-amber-400' : 'text-emerald-400'} font-mono">${Number(bcs).toFixed(1)}/5</div>
+                        <div class="text-[9px] uppercase font-black text-slate-600">BCS</div>
+                        <div class="text-xs font-black ${bcs < 2.5 ? 'text-rose-700' : bcs > 3.75 ? 'text-amber-700' : 'text-emerald-700'} font-mono">${Number(bcs).toFixed(1)}/5</div>
                       </div>
                       <div>
-                        <div class="text-[9px] uppercase font-black text-cyan-400">Frame</div>
-                        <div class="text-xs font-black text-cyan-300 font-mono">${reg.frameScore ? 'FS ' + Number(reg.frameScore).toFixed(1) : (reg.sugerenciaDieta?.frameScore ? 'FS ' + Number(reg.sugerenciaDieta.frameScore).toFixed(1) : 'FS 5.0')}</div>
+                        <div class="text-[9px] uppercase font-black text-cyan-700">Frame</div>
+                        <div class="text-xs font-black text-cyan-700 font-mono">${reg.frameScore ? 'FS ' + Number(reg.frameScore).toFixed(1) : (reg.sugerenciaDieta?.frameScore ? 'FS ' + Number(reg.sugerenciaDieta.frameScore).toFixed(1) : 'FS 5.0')}</div>
                       </div>
                     </div>
 
-                    <div class="text-[11px] text-slate-300 bg-slate-900/50 p-2 rounded-xl border border-slate-800/60">
-                      <div class="font-black text-slate-200 truncate">🌾 ${reg.etapaProductiva || a.categoria || 'Mantenimiento'}</div>
-                      <div class="text-[10px] text-slate-400 truncate mt-0.5">Sal: ${reg.sugerenciaDieta?.formulaSalMineral ? reg.sugerenciaDieta.formulaSalMineral.slice(0, 38) + '...' : 'Sal mineralizada balanceada'}</div>
+                    <div class="text-[11px] text-slate-600 bg-slate-900/50 p-2 rounded-xl border border-slate-800/60">
+                      <div class="font-black text-slate-600 truncate">🌾 ${reg.etapaProductiva || a.categoria || 'Mantenimiento'}</div>
+                      <div class="text-[10px] text-slate-600 truncate mt-0.5">Sal: ${reg.sugerenciaDieta?.formulaSalMineral ? reg.sugerenciaDieta.formulaSalMineral.slice(0, 38) + '...' : 'Sal mineralizada balanceada'}</div>
                     </div>
 
                     <div class="flex items-center gap-2 pt-1 border-t border-slate-800/80">
                       <button
-                        class="btn-evaluar-nutri flex-1 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        class="btn-evaluar-nutri flex-1 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-700 border border-emerald-500/40 text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer"
                         data-tag="${a.identificacionTag || a.tag}"
                       >
                         <span>🔬</span>
@@ -689,7 +683,7 @@ export class ModuloNutricion {
                       </button>
                       ${this.onVerFicha ? `
                         <button
-                          class="btn-ver-ficha-nutri p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                          class="btn-ver-ficha-nutri p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-600 text-xs font-bold transition cursor-pointer"
                           data-id="${a.id}"
                           title="Ver Ficha Zootécnica General"
                         >
@@ -744,17 +738,17 @@ export class ModuloNutricion {
     const porcDesarrollo = des.indiceDesarrolloPorc || 100;
     const colorDesarrollo =
       des.estadoDesarrollo === 'rezago_severo'
-        ? 'text-rose-400 border-rose-500/40 bg-rose-950/30'
+        ? 'text-rose-700 border-rose-500/40 bg-rose-950/30'
         : des.estadoDesarrollo === 'rezago_moderado'
-        ? 'text-amber-300 border-amber-500/40 bg-amber-950/30'
+        ? 'text-amber-700 border-amber-500/40 bg-amber-950/30'
         : des.estadoDesarrollo === 'superior'
-        ? 'text-cyan-300 border-cyan-500/40 bg-cyan-950/30'
-        : 'text-emerald-300 border-emerald-500/40 bg-emerald-950/30';
+        ? 'text-cyan-700 border-cyan-500/40 bg-cyan-950/30'
+        : 'text-emerald-700 border-emerald-500/40 bg-emerald-950/30';
 
     return `
       <div id="panel-evaluacion-nutricion" class="w-full flex flex-col space-y-4 fade-in">
         <div class="flex items-center">
-          <button id="btn-cerrar-modal-nutri" class="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold transition flex items-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-slate-700">
+          <button id="btn-cerrar-modal-nutri" class="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-600 text-sm font-bold transition flex items-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-slate-700">
             <span>⬅️</span> <span>Regresar a la Tabla de Todos los Animales</span>
           </button>
         </div>
@@ -767,21 +761,21 @@ export class ModuloNutricion {
               <span class="text-2xl">${esBuf ? '🐃' : '🐄'}</span>
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="text-base sm:text-lg font-black text-white font-mono">${animal.identificacionTag || animal.tag}</h3>
-                  ${animal.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${animal.nombreAlias}"</span>` : ''}
-                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">${perfil.nombre}</span>
-                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${razaConfirmada ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                  <h3 class="text-base sm:text-lg font-black text-slate-800 font-mono">${animal.identificacionTag || animal.tag}</h3>
+                  ${animal.nombreAlias ? `<span class="text-xs text-slate-600 font-bold">"${animal.nombreAlias}"</span>` : ''}
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-700 border border-emerald-500/40">${perfil.nombre}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${razaConfirmada ? 'bg-cyan-500/20 text-cyan-700 border border-cyan-500/40' : 'bg-amber-500/20 text-amber-700 border border-amber-500/40'}">
                     ${razaConfirmada ? '✓ RAZA CONFIRMADA' : '⚠️ CONFIRMAR RAZA'}
                   </span>
                 </div>
-                <p class="text-[11px] text-slate-400">Análisis Directo de Desarrollo Racial, Nutrición de Precisión, Medicamentos y Vitaminas con IA</p>
+                <p class="text-[11px] text-slate-600">Análisis Directo de Desarrollo Racial, Nutrición de Precisión, Medicamentos y Vitaminas con IA</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="px-3 py-1.5 rounded-xl bg-purple-950/60 text-purple-200 text-xs font-bold border border-purple-500/40 flex items-center gap-1.5" title="Conexión IA Global administrada en Super Admin">
+              <span class="px-3 py-1.5 rounded-xl bg-purple-950/60 text-purple-700 text-xs font-bold border border-purple-500/40 flex items-center gap-1.5" title="Conexión IA Global administrada en Super Admin">
                 <span>✨</span> <span class="hidden sm:inline">IA Global Activa (${obtenerModeloGeminiActivo()})</span>
               </span>
-              <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+              <button id="btn-imprimir-nutri" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                 <span>🖨️</span> <span class="hidden sm:inline">Imprimir Ficha</span>
               </button>
             </div>
@@ -791,17 +785,17 @@ export class ModuloNutricion {
           <div class="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
             
             <!-- SECCIÓN 0: CASILLA DE CONFIRMACIÓN DE RAZA (GANADO Y BÚFALOS) & ANÁLISIS DIRECTO DE DESARROLLO -->
-            <div class="bg-gradient-to-br from-slate-950 via-emerald-950/20 to-slate-950 p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-4">
+            <div class="bovi-module-header p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-4">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-800">
                 <div>
-                  <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                  <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2">
                     <span>🧬</span> Confirmación de Raza (Bovinos & Búfalos) y Análisis Directo de Desarrollo por Edades
                   </h4>
-                  <p class="text-[11px] text-slate-400 mt-0.5">
+                  <p class="text-[11px] text-slate-600 mt-0.5">
                     Selecciona y confirma la raza del animal (esté o no registrada en su ficha) para comparar su peso, alzada y ganancia diaria en cada etapa de crecimiento.
                   </p>
                 </div>
-                <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${tieneRazaEnFicha ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-amber-950/60 border-amber-500/40 text-amber-300'} shrink-0">
+                <span class="px-2.5 py-1 rounded-xl text-[10px] font-black border ${tieneRazaEnFicha ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-700' : 'bg-amber-950/60 border-amber-500/40 text-amber-700'} shrink-0">
                   ${tieneRazaEnFicha ? `📋 En Ficha: ${animal.raza}` : '📋 Sin raza específica en ficha (Confírmala abajo)'}
                 </span>
               </div>
@@ -809,10 +803,10 @@ export class ModuloNutricion {
               <!-- ACCESO RÁPIDO A RAZAS PRIORIZADAS (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO, BRAHMAN) -->
               <div class="bg-slate-900/90 p-3 rounded-xl border border-amber-500/30 space-y-2">
                 <div class="flex items-center justify-between flex-wrap gap-1">
-                  <span class="text-[10px] font-black uppercase text-amber-300 flex items-center gap-1.5">
+                  <span class="text-[10px] font-black uppercase text-amber-700 flex items-center gap-1.5">
                     <span>⭐</span> Razas Priorizadas (Selección Rápida con Curvas Oficiales ABCZ / Embrapa / Asocebú):
                   </span>
-                  <span class="text-[10px] text-slate-400">Clic para aplicar estándar genético y curva por edades</span>
+                  <span class="text-[10px] text-slate-600">Clic para aplicar estándar genético y curva por edades</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   ${catalogoRazas.filter(r => r.esPriorizada).map(r => {
@@ -821,11 +815,7 @@ export class ModuloNutricion {
                       <button
                         type="button"
                         data-raza-nombre="${r.nombre}"
-                        class="btn-chip-raza-priorizada px-3 py-1.5 rounded-xl text-[11px] font-black transition cursor-pointer flex items-center gap-1.5 ${
-                          activa
-                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 border border-amber-300'
-                            : 'bg-slate-950 hover:bg-slate-800 text-amber-200 border border-amber-500/30'
-                        }"
+                        class="btn-chip-raza-priorizada px-3 py-1.5 rounded-xl text-[11px] font-black transition cursor-pointer flex items-center gap-1.5 ${ activa ? 'bg-amber-500 text-slate-800 shadow-md shadow-amber-500/20 border border-amber-300' : 'bg-slate-950 hover:bg-slate-800 text-amber-700 border border-amber-500/30' }"
                       >
                         <span>⭐</span>
                         <span>${r.nombre.split('(')[0].trim()}</span>
@@ -837,12 +827,12 @@ export class ModuloNutricion {
 
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
                 <div class="lg:col-span-5">
-                  <label class="block text-[10px] font-black uppercase text-emerald-400 mb-1">
+                  <label class="block text-[10px] font-black uppercase text-emerald-700 mb-1">
                     Raza del Ejemplar (Catálogo Completo Ganado & Búfalos):
                   </label>
                   <select
                     id="input-nutri-raza"
-                    class="bovi-select-raza w-full bg-slate-950 border border-emerald-500/60 text-slate-100 px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
+                    class="bovi-select-raza w-full bg-slate-950 border border-emerald-500/60 text-slate-600 px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
                   >
                     ${Object.keys(gruposRazas).map(nombreGrupo => `
                       <optgroup label="── ${nombreGrupo} ──">
@@ -857,7 +847,7 @@ export class ModuloNutricion {
                 </div>
 
                 <div class="lg:col-span-2">
-                  <label class="block text-[10px] font-black uppercase text-cyan-400 mb-1">
+                  <label class="block text-[10px] font-black uppercase text-cyan-700 mb-1">
                     Edad Actual (Meses):
                   </label>
                   <input
@@ -869,9 +859,9 @@ export class ModuloNutricion {
                     value="${edadSincronizada}"
                     readonly
                     title="Calculada automáticamente en tiempo real desde la fecha de nacimiento registrada en la ficha del animal"
-                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed"
+                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-700 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed"
                   />
-                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Nac: ${formatearFecha(animal.fechaNacimiento || animal.fecha_nacimiento, 'Según Ficha')}</span>
+                  <span class="text-[9px] text-slate-600 mt-0.5 block truncate">📅 Nac: ${formatearFecha(animal.fechaNacimiento || animal.fecha_nacimiento, 'Según Ficha')}</span>
                 </div>
 
                 <div class="lg:col-span-5">
@@ -882,8 +872,8 @@ export class ModuloNutricion {
                       ${razaConfirmada ? 'checked' : ''}
                       class="mt-0.5 w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"
                     />
-                    <span class="text-[11px] leading-snug text-slate-200">
-                      <strong class="text-emerald-300 block">✓ Confirmar Raza para Diagnóstico IA y Guardar en Ficha</strong>
+                    <span class="text-[11px] leading-snug text-slate-600">
+                      <strong class="text-emerald-700 block">✓ Confirmar Raza para Diagnóstico IA y Guardar en Ficha</strong>
                       Usa todos los parámetros genéticos de <strong>${perfil.nombre}</strong> para calcular su desarrollo, alimentación, medicamentos y vitaminas.
                     </span>
                   </label>
@@ -895,52 +885,52 @@ export class ModuloNutricion {
                 <!-- Tarjeta A: Características Zootécnicas de la Raza -->
                 <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
                   <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                    <span class="font-black text-emerald-300 flex items-center gap-1.5">
+                    <span class="font-black text-emerald-700 flex items-center gap-1.5">
                       <span>${esBuf ? '🐃' : '🐄'}</span> Perfil Genético: ${perfil.nombre}
                     </span>
-                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">${perfil.aptitud || 'Doble Propósito'}</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-600">${perfil.aptitud || 'Doble Propósito'}</span>
                   </div>
-                  <p class="text-[11px] text-slate-300 leading-relaxed">${perfil.caracteristicas}</p>
+                  <p class="text-[11px] text-slate-600 leading-relaxed">${perfil.caracteristicas}</p>
                   <div class="grid grid-cols-4 gap-1.5 pt-1 text-center">
                     <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Peso Adulto</div>
-                      <div class="text-[11px] font-black text-white font-mono">H:${perfil.pesoAdultoHembraKg} / M:${perfil.pesoAdultoMachoKg}kg</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Peso Adulto</div>
+                      <div class="text-[11px] font-black text-slate-800 font-mono">H:${perfil.pesoAdultoHembraKg} / M:${perfil.pesoAdultoMachoKg}kg</div>
                     </div>
                     <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Consumo MS</div>
-                      <div class="text-[11px] font-black text-emerald-400 font-mono">${perfil.consumoMsPorcPV}% PV</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Consumo MS</div>
+                      <div class="text-[11px] font-black text-emerald-700 font-mono">${perfil.consumoMsPorcPV}% PV</div>
                     </div>
                     <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Proteína Req.</div>
-                      <div class="text-[11px] font-black text-amber-400 font-mono">${perfil.pcMantenimientoPorc}-${perfil.pcProduccionPorc}% PC</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Proteína Req.</div>
+                      <div class="text-[11px] font-black text-amber-700 font-mono">${perfil.pcMantenimientoPorc}-${perfil.pcProduccionPorc}% PC</div>
                     </div>
                     <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Fósforo / Cu</div>
-                      <div class="text-[11px] font-black ${esBuf ? 'text-rose-400' : 'text-cyan-400'} font-mono">${perfil.fosforoRequeridoPorc}%P ${esBuf ? '(Bajo Cu)' : ''}</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Fósforo / Cu</div>
+                      <div class="text-[11px] font-black ${esBuf ? 'text-rose-700' : 'text-cyan-700'} font-mono">${perfil.fosforoRequeridoPorc}%P ${esBuf ? '(Bajo Cu)' : ''}</div>
                     </div>
                   </div>
                   ${des.fichaZootecnicaRaza ? `
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-center">
                       <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
-                        <div class="text-[9px] text-slate-400 uppercase font-bold">1er Servicio</div>
-                        <div class="text-[10px] font-black text-cyan-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerServicioMeses} (${des.pesoMetaPrimerServicioKg}kg)</div>
+                        <div class="text-[9px] text-slate-600 uppercase font-bold">1er Servicio</div>
+                        <div class="text-[10px] font-black text-cyan-700 font-mono">${des.fichaZootecnicaRaza.edadPrimerServicioMeses} (${des.pesoMetaPrimerServicioKg}kg)</div>
                       </div>
                       <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
-                        <div class="text-[9px] text-slate-400 uppercase font-bold">Edad 1er Parto</div>
-                        <div class="text-[10px] font-black text-emerald-300 font-mono">${des.fichaZootecnicaRaza.edadPrimerPartoMeses}</div>
+                        <div class="text-[9px] text-slate-600 uppercase font-bold">Edad 1er Parto</div>
+                        <div class="text-[10px] font-black text-emerald-700 font-mono">${des.fichaZootecnicaRaza.edadPrimerPartoMeses}</div>
                       </div>
                       <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
-                        <div class="text-[9px] text-slate-400 uppercase font-bold">Lactancia Raza</div>
-                        <div class="text-[10px] font-black text-amber-300 font-mono">${des.fichaZootecnicaRaza.produccionLecheLactancia}</div>
+                        <div class="text-[9px] text-slate-600 uppercase font-bold">Lactancia Raza</div>
+                        <div class="text-[10px] font-black text-amber-700 font-mono">${des.fichaZootecnicaRaza.produccionLecheLactancia}</div>
                       </div>
                       <div class="bg-slate-950/90 p-1.5 rounded-lg border border-slate-800/80">
-                        <div class="text-[9px] text-slate-400 uppercase font-bold">Rend. Canal</div>
-                        <div class="text-[10px] font-black text-purple-300 font-mono">${des.fichaZootecnicaRaza.rendimientoCanalPorc}</div>
+                        <div class="text-[9px] text-slate-600 uppercase font-bold">Rend. Canal</div>
+                        <div class="text-[10px] font-black text-purple-700 font-mono">${des.fichaZootecnicaRaza.rendimientoCanalPorc}</div>
                       </div>
                     </div>
                   ` : ''}
                   ${perfil.manejoNutricionalEspecial ? `
-                    <div class="text-[10px] text-emerald-200/90 bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                    <div class="text-[10px] text-slate-600 bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
                       💡 <strong>Clave Nutricional de la Raza:</strong> ${perfil.manejoNutricionalEspecial}
                     </div>
                   ` : ''}
@@ -949,7 +939,7 @@ export class ModuloNutricion {
                 <!-- Tarjeta B: Análisis Directo del Desarrollo del Animal vs Estándar Racial -->
                 <div class="p-3.5 rounded-xl border ${colorDesarrollo} space-y-2.5 text-xs">
                   <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5 flex-wrap gap-1">
-                    <span class="font-black text-white flex items-center gap-1.5">
+                    <span class="font-black text-slate-800 flex items-center gap-1.5">
                       <span>📈</span> Desarrollo a los ${des.edadMesesEvaluada} Meses (${des.etapaCrecimientoNombre || 'Crecimiento'})
                     </span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-950/90 border border-slate-700">
@@ -959,23 +949,23 @@ export class ModuloNutricion {
 
                   <div class="grid grid-cols-3 gap-2 text-center">
                     <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Peso Actual vs Raza</div>
-                      <div class="text-xs font-black text-white font-mono">${des.pesoActualKg} vs ${des.pesoEsperadoRazaKg} kg</div>
-                      <div class="text-[10px] font-bold ${des.diferenciaPesoKg >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-mono">
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Peso Actual vs Raza</div>
+                      <div class="text-xs font-black text-slate-800 font-mono">${des.pesoActualKg} vs ${des.pesoEsperadoRazaKg} kg</div>
+                      <div class="text-[10px] font-bold ${des.diferenciaPesoKg >= 0 ? 'text-emerald-700' : 'text-rose-700'} font-mono">
                         ${des.diferenciaPesoKg >= 0 ? `+${des.diferenciaPesoKg} kg` : `${des.diferenciaPesoKg} kg`}
                       </div>
                     </div>
                     <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">Talla Actual vs Raza</div>
-                      <div class="text-xs font-black text-emerald-300 font-mono">${des.tallaActualCm} vs ${des.tallaEsperadaRazaCm} cm</div>
-                      <div class="text-[10px] font-bold text-slate-400 font-mono">
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">Talla Actual vs Raza</div>
+                      <div class="text-xs font-black text-emerald-700 font-mono">${des.tallaActualCm} vs ${des.tallaEsperadaRazaCm} cm</div>
+                      <div class="text-[10px] font-bold text-slate-600 font-mono">
                         ${des.diferenciaTallaCm >= 0 ? `+${des.diferenciaTallaCm} cm` : `${des.diferenciaTallaCm} cm`}
                       </div>
                     </div>
                     <div class="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">GDP Etapa vs Meta</div>
-                      <div class="text-xs font-black text-amber-300 font-mono">${des.gdpEsperadaEtapaGDia || des.gdpReferenciaPastoreoGDia} → +${des.gdpMetaCorrectivaGDia} g/d</div>
-                      <div class="text-[9px] text-slate-400">${des.gdpActualAnimalGDia ? `Actual: ${des.gdpActualAnimalGDia} g/d` : 'Objetivo diario'}</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">GDP Etapa vs Meta</div>
+                      <div class="text-xs font-black text-amber-700 font-mono">${des.gdpEsperadaEtapaGDia || des.gdpReferenciaPastoreoGDia} → +${des.gdpMetaCorrectivaGDia} g/d</div>
+                      <div class="text-[9px] text-slate-600">${des.gdpActualAnimalGDia ? `Actual: ${des.gdpActualAnimalGDia} g/d` : 'Objetivo diario'}</div>
                     </div>
                   </div>
 
@@ -983,11 +973,11 @@ export class ModuloNutricion {
                     <div class="h-full ${porcDesarrollo < 78 ? 'bg-rose-500' : porcDesarrollo < 90 ? 'bg-amber-500' : 'bg-emerald-500'}" style="width: ${Math.min(100, Math.max(15, porcDesarrollo))}%"></div>
                   </div>
 
-                  <p class="text-[11px] text-slate-200 leading-relaxed">
+                  <p class="text-[11px] text-slate-600 leading-relaxed">
                     <strong>${des.etiquetaDesarrollo}:</strong> ${des.diagnosticoDesarrollo}
                   </p>
                   ${des.kgFaltantesPrimerServicio > 0 ? `
-                    <div class="text-[10px] bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-200 font-semibold">
+                    <div class="text-[10px] bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-700 font-semibold">
                       🎯 <strong>Proyección a 1er Servicio (${des.pesoMetaPrimerServicioKg} kg):</strong> Faltan <strong>${des.kgFaltantesPrimerServicio} kg</strong> (aprox. ${Math.ceil(des.kgFaltantesPrimerServicio / ((des.gdpMetaCorrectivaGDia || 650) / 1000))} días con el plan nutricional sugerido).
                     </div>
                   ` : ''}
@@ -997,10 +987,10 @@ export class ModuloNutricion {
               <!-- CURVA DE DESARROLLO POR EDADES Y GANANCIA DE PESO (GDP) POR ETAPA DE CRECIMIENTO -->
               <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-3">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800 pb-2">
-                  <div class="text-xs font-black text-white flex items-center gap-1.5">
+                  <div class="text-xs font-black text-slate-800 flex items-center gap-1.5">
                     <span>📊</span> Curva Oficial de Desarrollo por Edades y Ganancia Diaria (GDP) por Etapa — ${perfil.nombre}
                   </div>
-                  <span class="text-[10px] text-emerald-400 font-mono">
+                  <span class="text-[10px] text-emerald-700 font-mono">
                     ${des.fichaZootecnicaRaza?.fuenteReferencia || 'Estándar Zootécnico ABCZ / Embrapa / Asocebú'}
                   </span>
                 </div>
@@ -1009,29 +999,29 @@ export class ModuloNutricion {
                 ${des.gdpPorEtapaGDia ? `
                   <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
                     <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada <= 7 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">1. Cría (0-7 m)</div>
-                      <div class="text-xs font-black text-emerald-400 font-mono">+${des.gdpPorEtapaGDia.cria_0_7m} g/día</div>
-                      <div class="text-[9px] text-slate-500">Predestete</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">1. Cría (0-7 m)</div>
+                      <div class="text-xs font-black text-emerald-700 font-mono">+${des.gdpPorEtapaGDia.cria_0_7m} g/día</div>
+                      <div class="text-[9px] text-slate-600">Predestete</div>
                     </div>
                     <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 7 && des.edadMesesEvaluada <= 12 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">2. Recría (7-12 m)</div>
-                      <div class="text-xs font-black text-cyan-300 font-mono">+${des.gdpPorEtapaGDia.levante_7_12m} g/día</div>
-                      <div class="text-[9px] text-slate-500">Post-destete</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">2. Recría (7-12 m)</div>
+                      <div class="text-xs font-black text-cyan-700 font-mono">+${des.gdpPorEtapaGDia.levante_7_12m} g/día</div>
+                      <div class="text-[9px] text-slate-600">Post-destete</div>
                     </div>
                     <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 12 && des.edadMesesEvaluada <= 18 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">3. Levante (12-18 m)</div>
-                      <div class="text-xs font-black text-amber-300 font-mono">+${des.gdpPorEtapaGDia.levante_12_18m} g/día</div>
-                      <div class="text-[9px] text-slate-500">Entrada Servicio</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">3. Levante (12-18 m)</div>
+                      <div class="text-xs font-black text-amber-700 font-mono">+${des.gdpPorEtapaGDia.levante_12_18m} g/día</div>
+                      <div class="text-[9px] text-slate-600">Entrada Servicio</div>
                     </div>
                     <div class="bg-slate-950 p-2 rounded-lg border ${des.edadMesesEvaluada > 18 && des.edadMesesEvaluada <= 24 ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-slate-800'}">
-                      <div class="text-[9px] text-slate-400 uppercase font-bold">4. Vientre/Ceba (18-24 m)</div>
-                      <div class="text-xs font-black text-purple-300 font-mono">+${des.gdpPorEtapaGDia.vientre_ceba_18_24m} g/día</div>
-                      <div class="text-[9px] text-slate-500">Novilla / Torete</div>
+                      <div class="text-[9px] text-slate-600 uppercase font-bold">4. Vientre/Ceba (18-24 m)</div>
+                      <div class="text-xs font-black text-purple-700 font-mono">+${des.gdpPorEtapaGDia.vientre_ceba_18_24m} g/día</div>
+                      <div class="text-[9px] text-slate-600">Novilla / Torete</div>
                     </div>
                     <div class="bg-slate-950 p-2 rounded-lg border border-amber-500/30">
-                      <div class="text-[9px] text-amber-300 uppercase font-bold">🏆 Pista / Sup. Intensiva</div>
-                      <div class="text-xs font-black text-amber-400 font-mono">+${des.gdpPorEtapaGDia.pista_intensivo} g/día</div>
-                      <div class="text-[9px] text-slate-500">Potencial Genético</div>
+                      <div class="text-[9px] text-amber-700 uppercase font-bold">🏆 Pista / Sup. Intensiva</div>
+                      <div class="text-xs font-black text-amber-700 font-mono">+${des.gdpPorEtapaGDia.pista_intensivo} g/día</div>
+                      <div class="text-[9px] text-slate-600">Potencial Genético</div>
                     </div>
                   </div>
                 ` : ''}
@@ -1041,10 +1031,10 @@ export class ModuloNutricion {
                   <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-[11px]">
                       <thead>
-                        <tr class="border-b border-slate-800 text-[9px] uppercase text-slate-400 font-black">
+                        <tr class="border-b border-slate-800 text-[9px] uppercase text-slate-600 font-black">
                           <th class="py-1.5 px-2">Etapa / Edad</th>
                           ${des.tablaHitosRaza.map(h => `
-                            <th class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/40 rounded-t-lg' : ''}">
+                            <th class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-700 bg-emerald-950/40 rounded-t-lg' : ''}">
                               ${h.etapa}
                             </th>
                           `).join('')}
@@ -1052,17 +1042,17 @@ export class ModuloNutricion {
                       </thead>
                       <tbody class="divide-y divide-slate-800/60 font-mono">
                         <tr>
-                          <td class="py-1.5 px-2 font-sans font-bold text-slate-300">Peso Estándar Raza (${des.sexoEvaluado === 'macho' ? 'Macho' : 'Hembra'})</td>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-600">Peso Estándar Raza (${des.sexoEvaluado === 'macho' ? 'Macho' : 'Hembra'})</td>
                           ${des.tablaHitosRaza.map(h => `
-                            <td class="py-1.5 px-2 text-center font-black ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-300 bg-emerald-950/30' : 'text-white'}">
+                            <td class="py-1.5 px-2 text-center font-black ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-emerald-700 bg-emerald-950/30' : 'text-slate-800'}">
                               ${h.pesoEsperadoKg} kg
                             </td>
                           `).join('')}
                         </tr>
                         <tr>
-                          <td class="py-1.5 px-2 font-sans font-bold text-slate-400">Alzada Estándar (Cruz/Grupa)</td>
+                          <td class="py-1.5 px-2 font-sans font-bold text-slate-600">Alzada Estándar (Cruz/Grupa)</td>
                           ${des.tablaHitosRaza.map(h => `
-                            <td class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-cyan-300 font-black bg-emerald-950/30' : 'text-slate-400'}">
+                            <td class="py-1.5 px-2 text-center ${Math.abs((des.edadMesesEvaluada || 24) - h.edadMeses) <= 3 ? 'text-cyan-700 font-black bg-emerald-950/30' : 'text-slate-600'}">
                               ${h.tallaEsperadaCm ? `${h.tallaEsperadaCm} cm` : '—'}
                             </td>
                           `).join('')}
@@ -1077,30 +1067,30 @@ export class ModuloNutricion {
             <!-- FORMULARIO DE PARÁMETROS DE CAMPO -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
               <div class="flex items-center justify-between">
-                <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2">
                   <span>⚙️</span> Parámetros Fisiológicos y de Campo
                 </h4>
-                <span class="text-[10px] text-slate-400">Actualice datos para regenerar la formulación</span>
+                <span class="text-[10px] text-slate-600">Actualice datos para regenerar la formulación</span>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
-                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">1. Peso en Ficha (kg)</label>
+                  <label class="block text-[10px] font-black uppercase text-slate-600 mb-1">1. Peso en Ficha (kg)</label>
                   <input
                     id="input-nutri-peso"
                     type="number"
                     value="${pesoSincronizado}"
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-90"
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-600 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-90"
                     readonly
                     title="Sincronizado automáticamente con el último pesaje válido de la ficha técnica."
                   />
-                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Ficha: ${formatearFecha(animal.fechaUltimoPesaje, 'Último pesaje')}</span>
+                  <span class="text-[9px] text-slate-600 mt-0.5 block truncate">📅 Ficha: ${formatearFecha(animal.fechaUltimoPesaje, 'Último pesaje')}</span>
                 </div>
 
                 <div>
                   <div class="flex items-center justify-between mb-1">
-                    <label class="text-[10px] font-black uppercase text-emerald-400">2. Talla (cm) *</label>
-                    <span id="badge-frame-calc" class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">FS ${Number(plan.frameScore || 5.0).toFixed(1)}</span>
+                    <label class="text-[10px] font-black uppercase text-emerald-700">2. Talla (cm) *</label>
+                    <span id="badge-frame-calc" class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 font-mono font-bold">FS ${Number(plan.frameScore || 5.0).toFixed(1)}</span>
                   </div>
                   <input
                     id="input-nutri-talla-cm"
@@ -1110,16 +1100,16 @@ export class ModuloNutricion {
                     max="190"
                     placeholder="ej. 138"
                     value="${plan.tallaCm || 135}"
-                    class="w-full bg-slate-900 border border-emerald-500/60 text-emerald-300 px-3 py-2 rounded-xl text-sm font-black font-mono focus:border-emerald-400 outline-none shadow-sm"
+                    class="w-full bg-slate-900 border border-emerald-500/60 text-emerald-700 px-3 py-2 rounded-xl text-sm font-black font-mono focus:border-emerald-400 outline-none shadow-sm"
                   />
-                  <span class="text-[9px] text-slate-400 mt-0.5 block">Alzada cruz/grupa</span>
+                  <span class="text-[9px] text-slate-600 mt-0.5 block">Alzada cruz/grupa</span>
                 </div>
 
                 <div>
-                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">3. Categoría Frame</label>
+                  <label class="block text-[10px] font-black uppercase text-slate-600 mb-1">3. Categoría Frame</label>
                   <select
                     id="input-nutri-talla"
-                    class="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none cursor-pointer"
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none cursor-pointer"
                   >
                     <option value="Bajo (Frame 1-3) - Compacto" ${String(plan.tallaFrame).includes('Bajo') ? 'selected' : ''}>Bajo (Frame 1-3) - Compacto</option>
                     <option value="Medio (Frame 4-6) - Estándar" ${!String(plan.tallaFrame).includes('Bajo') && !String(plan.tallaFrame).includes('Alto') ? 'selected' : ''}>Medio (Frame 4-6) - Estándar Pista</option>
@@ -1129,8 +1119,8 @@ export class ModuloNutricion {
 
                 <div>
                   <div class="flex items-center justify-between mb-1">
-                    <label class="text-[10px] font-black uppercase text-slate-400">4. Condición Corporal</label>
-                    <span id="label-nutri-bcs" class="text-xs font-black text-emerald-400 font-mono">${Number(plan.condicionCorporal || 3.0).toFixed(2)}</span>
+                    <label class="text-[10px] font-black uppercase text-slate-600">4. Condición Corporal</label>
+                    <span id="label-nutri-bcs" class="text-xs font-black text-emerald-700 font-mono">${Number(plan.condicionCorporal || 3.0).toFixed(2)}</span>
                   </div>
                   <input
                     id="input-nutri-bcs"
@@ -1141,7 +1131,7 @@ export class ModuloNutricion {
                     value="${plan.condicionCorporal || 3.0}"
                     class="w-full accent-emerald-500 cursor-pointer"
                   />
-                  <div class="flex justify-between text-[9px] text-slate-500 font-bold mt-0.5">
+                  <div class="flex justify-between text-[9px] text-slate-600 font-bold mt-0.5">
                     <span>1 (Flaca)</span>
                     <span>3 (Óptima Pista)</span>
                     <span>5 (Obesa)</span>
@@ -1149,10 +1139,10 @@ export class ModuloNutricion {
                 </div>
 
                 <div>
-                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">5. Etapa Exposición / Repro</label>
+                  <label class="block text-[10px] font-black uppercase text-slate-600 mb-1">5. Etapa Exposición / Repro</label>
                   <select
                     id="input-nutri-etapa"
-                    class="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none cursor-pointer"
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold focus:border-emerald-500 outline-none cursor-pointer"
                   >
                     <option value="Terneros (0 - 7 meses) - Creep Feeding & Rumen" ${String(plan.etapaProductiva).includes('Ternero') ? 'selected' : ''}>1. Terneros (0-7 m) Creep Feeding & Rumen</option>
                     <option value="Novillas en Desarrollo (8 - 16 meses) - Altura de Pista" ${String(plan.etapaProductiva).includes('Novilla') ? 'selected' : ''}>2. Novillas Desarrollo (8-16 m) Altura Pista</option>
@@ -1170,20 +1160,20 @@ export class ModuloNutricion {
               <div class="bg-gradient-to-r from-slate-900 via-emerald-950/20 to-slate-900 p-3.5 rounded-xl border border-emerald-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
                 <div class="flex items-center gap-3 flex-wrap">
                   <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                    <span class="text-slate-400 text-[10px] uppercase font-bold">Alzada:</span>
-                    <span class="font-black text-emerald-300 font-mono">${plan.tallaCm || 135} cm</span>
+                    <span class="text-slate-600 text-[10px] uppercase font-bold">Alzada:</span>
+                    <span class="font-black text-emerald-700 font-mono">${plan.tallaCm || 135} cm</span>
                   </div>
                   <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                    <span class="text-slate-400 text-[10px] uppercase font-bold">Frame Score:</span>
-                    <span class="font-black text-cyan-300 font-mono">${Number(plan.frameScore || 5.0).toFixed(1)} / 9.0</span>
-                    <span class="text-[10px] text-slate-300 font-semibold">(${plan.categoriaFrame || 'Estándar'})</span>
+                    <span class="text-slate-600 text-[10px] uppercase font-bold">Frame Score:</span>
+                    <span class="font-black text-cyan-700 font-mono">${Number(plan.frameScore || 5.0).toFixed(1)} / 9.0</span>
+                    <span class="text-[10px] text-slate-600 font-semibold">(${plan.categoriaFrame || 'Estándar'})</span>
                   </div>
                   <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                    <span class="text-slate-400 text-[10px] uppercase font-bold">Relación Peso/Talla:</span>
-                    <span class="font-black text-amber-300 font-mono">${plan.indiceCompacidadKgCm ? Number(plan.indiceCompacidadKgCm).toFixed(2) + ' kg/cm' : (plan.pesoActualKg && plan.tallaCm ? (plan.pesoActualKg / plan.tallaCm).toFixed(2) + ' kg/cm' : '---')}</span>
+                    <span class="text-slate-600 text-[10px] uppercase font-bold">Relación Peso/Talla:</span>
+                    <span class="font-black text-amber-700 font-mono">${plan.indiceCompacidadKgCm ? Number(plan.indiceCompacidadKgCm).toFixed(2) + ' kg/cm' : (plan.pesoActualKg && plan.tallaCm ? (plan.pesoActualKg / plan.tallaCm).toFixed(2) + ' kg/cm' : '---')}</span>
                   </div>
                 </div>
-                <div class="text-[11px] text-slate-300 italic">
+                <div class="text-[11px] text-slate-600 italic">
                   🎯 ${plan.sugerenciaDieta?.statusCompacidad === 'sobrepeso_riesgo' ? '⚠️ Precaución: Evitar depósitos grasos en ubre o cuello' : (plan.sugerenciaDieta?.statusCompacidad === 'subdesarrollo' ? '📈 Consolidar desarrollo muscular y arqueo' : '✨ Conformación y alzada óptimas de pista')}
                 </div>
               </div>
@@ -1193,19 +1183,19 @@ export class ModuloNutricion {
                 <div class="space-y-0.5">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="text-base">📸</span>
-                    <span class="text-xs font-black text-white">Escaneo Morfológico Fotográfico & Diagnóstico Gemini IA</span>
-                    <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">100% EFÍMERO</span>
-                    <span class="text-[10px] font-bold text-purple-300">
+                    <span class="text-xs font-black text-slate-800">Escaneo Morfológico Fotográfico & Diagnóstico Gemini IA</span>
+                    <span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-700 border border-emerald-500/40">100% EFÍMERO</span>
+                    <span class="text-[10px] font-bold text-purple-700">
                       ✨ Motor IA Global Activo (${obtenerModeloGeminiActivo()})
                     </span>
                   </div>
-                  <p class="text-[10px] text-slate-400">
+                  <p class="text-[10px] text-slate-600">
                     Sube una foto del ejemplar o pulsa <strong>Actualizar Plan IA</strong> para recalcular dieta, medicamentos y vitaminas según su raza confirmada y curva de desarrollo.
                   </p>
                 </div>
 
                 <div class="flex items-center gap-2 shrink-0 flex-wrap">
-                  <label class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs flex items-center gap-2 cursor-pointer border border-slate-700 transition">
+                  <label class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-800 font-bold text-xs flex items-center gap-2 cursor-pointer border border-slate-700 transition">
                     <span>${this.analisisFotoEnCurso ? '⏳' : '📷'}</span>
                     <span>${this.analisisFotoEnCurso ? 'Analizando...' : 'Subir / Tomar Foto'}</span>
                     <input id="input-foto-nutri-efimera" type="file" accept="image/*" capture="environment" class="hidden" />
@@ -1213,7 +1203,7 @@ export class ModuloNutricion {
                   <button
                     id="btn-recalcular-plan"
                     ${this.consultaGeminiEnCurso ? 'disabled' : ''}
-                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow transition cursor-pointer ${this.consultaGeminiEnCurso ? 'opacity-60 cursor-wait' : ''}"
+                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow transition cursor-pointer ${this.consultaGeminiEnCurso ? ' cursor-wait' : ''}"
                   >
                     <span>${this.consultaGeminiEnCurso ? '⏳' : '⚡'}</span>
                     <span>${this.consultaGeminiEnCurso ? 'Consultando IA...' : 'Actualizar Plan IA'}</span>
@@ -1225,56 +1215,56 @@ export class ModuloNutricion {
             <!-- RESULTADO 1: DIETA & RACIÓN ZOOTÉCNICA -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
               <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-                <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2">
                   <span>🌾</span> 1. Ración & Dieta Zootécnica de Precisión (${perfil.nombre})
                 </h4>
-                <span class="text-[10px] font-mono text-emerald-400 font-bold">GDP Proyectada: +${plan.gdpEsperadaGDia || 450} g/día</span>
+                <span class="text-[10px] font-mono text-emerald-700 font-bold">GDP Proyectada: +${plan.gdpEsperadaGDia || 450} g/día</span>
               </div>
 
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div class="bg-slate-900 p-3 rounded-xl border border-slate-800/80">
-                  <div class="text-[9px] uppercase font-black text-slate-400">Materia Seca (CMS)</div>
-                  <div class="text-base font-black text-white font-mono mt-0.5">${dieta.materiaSecaKgDia || 0} <span class="text-xs text-slate-400">kg/día</span></div>
-                  <div class="text-[9px] text-slate-400 mt-0.5">Requerimiento base</div>
+                  <div class="text-[9px] uppercase font-black text-slate-600">Materia Seca (CMS)</div>
+                  <div class="text-base font-black text-slate-800 font-mono mt-0.5">${dieta.materiaSecaKgDia || 0} <span class="text-xs text-slate-600">kg/día</span></div>
+                  <div class="text-[9px] text-slate-600 mt-0.5">Requerimiento base</div>
                 </div>
 
                 <div class="bg-slate-900 p-3 rounded-xl border border-slate-800/80">
-                  <div class="text-[9px] uppercase font-black text-slate-400">Forraje Verde Fresco</div>
-                  <div class="text-base font-black text-emerald-400 font-mono mt-0.5">${dieta.forrajeVerdeKgDia || 0} <span class="text-xs text-slate-400">kg/día</span></div>
-                  <div class="text-[9px] text-slate-400 mt-0.5">Base fresca 22% MS</div>
+                  <div class="text-[9px] uppercase font-black text-slate-600">Forraje Verde Fresco</div>
+                  <div class="text-base font-black text-emerald-700 font-mono mt-0.5">${dieta.forrajeVerdeKgDia || 0} <span class="text-xs text-slate-600">kg/día</span></div>
+                  <div class="text-[9px] text-slate-600 mt-0.5">Base fresca 22% MS</div>
                 </div>
 
                 <div class="bg-slate-900 p-3 rounded-xl border border-slate-800/80">
-                  <div class="text-[9px] uppercase font-black text-slate-400">Concentrado Formulado</div>
-                  <div class="text-base font-black text-amber-400 font-mono mt-0.5">${dieta.concentradoKgDia || 0} <span class="text-xs text-slate-400">kg/día</span></div>
-                  <div class="text-[9px] text-slate-400 mt-0.5">${dieta.proteinaCrudaPorc || 14}% Prot. Cruda</div>
+                  <div class="text-[9px] uppercase font-black text-slate-600">Concentrado Formulado</div>
+                  <div class="text-base font-black text-amber-700 font-mono mt-0.5">${dieta.concentradoKgDia || 0} <span class="text-xs text-slate-600">kg/día</span></div>
+                  <div class="text-[9px] text-slate-600 mt-0.5">${dieta.proteinaCrudaPorc || 14}% Prot. Cruda</div>
                 </div>
 
                 <div class="bg-slate-900 p-3 rounded-xl border border-slate-800/80">
-                  <div class="text-[9px] uppercase font-black text-slate-400">Sal Mineralizada</div>
-                  <div class="text-base font-black text-cyan-400 font-mono mt-0.5">${dieta.salMineralizadaGramosDia || 80} <span class="text-xs text-slate-400">g/día</span></div>
-                  <div class="text-[9px] text-slate-400 mt-0.5">Con Fósforo y Selenio</div>
+                  <div class="text-[9px] uppercase font-black text-slate-600">Sal Mineralizada</div>
+                  <div class="text-base font-black text-cyan-700 font-mono mt-0.5">${dieta.salMineralizadaGramosDia || 80} <span class="text-xs text-slate-600">g/día</span></div>
+                  <div class="text-[9px] text-slate-600 mt-0.5">Con Fósforo y Selenio</div>
                 </div>
               </div>
 
               <div class="bg-slate-900/60 p-3.5 rounded-xl text-xs space-y-1.5 border border-slate-800">
-                <div class="text-slate-300 font-bold">🌿 Forraje Base: <span class="text-slate-200 font-normal">${dieta.tipoForrajeRecomendado || 'Pastura fresca y heno de excelente calidad'}</span></div>
-                <div class="text-slate-300 font-bold">🥣 Ración Concentrada: <span class="text-slate-200 font-normal">${dieta.tipoConcentrado || 'Suplemento formulado'}</span></div>
-                <div class="text-amber-300 font-bold">⏱️ Manejo de Comedero: <span class="text-slate-200 font-normal">${dieta.fraccionamientoRacion || (dieta.tomasAlimentacionDia ? `${dieta.tomasAlimentacionDia} tomas diarias` : '2 tomas diarias')}</span></div>
+                <div class="text-slate-600 font-bold">🌿 Forraje Base: <span class="text-slate-600 font-normal">${dieta.tipoForrajeRecomendado || 'Pastura fresca y heno de excelente calidad'}</span></div>
+                <div class="text-slate-600 font-bold">🥣 Ración Concentrada: <span class="text-slate-600 font-normal">${dieta.tipoConcentrado || 'Suplemento formulado'}</span></div>
+                <div class="text-amber-700 font-bold">⏱️ Manejo de Comedero: <span class="text-slate-600 font-normal">${dieta.fraccionamientoRacion || (dieta.tomasAlimentacionDia ? `${dieta.tomasAlimentacionDia} tomas diarias` : '2 tomas diarias')}</span></div>
                 ${dieta.aditivosPista && dieta.aditivosPista.length > 0 ? `
-                  <div class="text-emerald-300 font-bold flex items-start gap-1">
+                  <div class="text-emerald-700 font-bold flex items-start gap-1">
                     <span class="shrink-0">✨ Aditivos de Pista:</span>
-                    <span class="text-slate-300 font-normal">${dieta.aditivosPista.join(' • ')}</span>
+                    <span class="text-slate-600 font-normal">${dieta.aditivosPista.join(' • ')}</span>
                   </div>
                 ` : ''}
-                <div class="text-slate-300 font-bold">🧂 Sal Mineralizada: <span class="text-emerald-300 font-normal">${dieta.formulaSalMineral || 'Sal mineralizada balanceada'}</span></div>
-                <div class="text-slate-300 font-bold">💧 Agua Requerida: <span class="text-cyan-300 font-mono font-bold">${dieta.recomendacionAguaLitrosDia || 50} litros/día</span> <span class="text-slate-400 font-normal">(limpia, fresca y a voluntad)</span></div>
+                <div class="text-slate-600 font-bold">🧂 Sal Mineralizada: <span class="text-emerald-700 font-normal">${dieta.formulaSalMineral || 'Sal mineralizada balanceada'}</span></div>
+                <div class="text-slate-600 font-bold">💧 Agua Requerida: <span class="text-cyan-700 font-mono font-bold">${dieta.recomendacionAguaLitrosDia || 50} litros/día</span> <span class="text-slate-600 font-normal">(limpia, fresca y a voluntad)</span></div>
               </div>
             </div>
 
             <!-- RESULTADO 2: MEDICAMENTOS & MODULADORES RUMINALES -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
-              <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2 pb-2 border-b border-slate-800">
+              <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-800">
                 <span>💊</span> 2. Prescripción de Medicamentos & Sanidad Ruminal
               </h4>
 
@@ -1282,16 +1272,16 @@ export class ModuloNutricion {
                 ${medicamentos.map(m => `
                   <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
                     <div class="flex items-center justify-between">
-                      <span class="font-black text-white">${m.nombre}</span>
-                      <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-300">${m.tipo}</span>
+                      <span class="font-black text-slate-800">${m.nombre}</span>
+                      <span class="px-2 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-700">${m.tipo}</span>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-slate-300 pt-1">
-                      <div><strong class="text-slate-400">Dosis:</strong> ${m.dosis}</div>
-                      <div><strong class="text-slate-400">Vía:</strong> ${m.via}</div>
-                      <div><strong class="text-slate-400">Frecuencia:</strong> ${m.frecuencia}</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-slate-600 pt-1">
+                      <div><strong class="text-slate-600">Dosis:</strong> ${m.dosis}</div>
+                      <div><strong class="text-slate-600">Vía:</strong> ${m.via}</div>
+                      <div><strong class="text-slate-600">Frecuencia:</strong> ${m.frecuencia}</div>
                     </div>
                     ${m.advertenciaRetiro ? `
-                      <div class="text-[10px] text-amber-300 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/20 mt-1">
+                      <div class="text-[10px] text-amber-700 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/20 mt-1">
                         ⚠️ ${m.advertenciaRetiro}
                       </div>
                     ` : ''}
@@ -1302,7 +1292,7 @@ export class ModuloNutricion {
 
             <!-- RESULTADO 3: SUPLEMENTOS NUTRICIONALES, VITAMINAS & MINERALES QUELATADOS -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
-              <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2 pb-2 border-b border-slate-800">
+              <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-800">
                 <span>💉</span> 3. Suplementos Nutricionales & Vitaminas de Alta Asimilación
               </h4>
 
@@ -1310,11 +1300,11 @@ export class ModuloNutricion {
                 ${suplementos.map(s => `
                   <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
                     <div class="flex items-center justify-between">
-                      <span class="font-black text-emerald-400">${s.nombre}</span>
-                      <span class="text-[10px] text-slate-400 font-bold">${s.via}</span>
+                      <span class="font-black text-emerald-700">${s.nombre}</span>
+                      <span class="text-[10px] text-slate-600 font-bold">${s.via}</span>
                     </div>
-                    <p class="text-slate-300 text-[11px]">${s.objetivo}</p>
-                    <div class="text-slate-400 text-[10px]"><strong class="text-slate-300">Dosis sugerida:</strong> ${s.dosisRecomendada}</div>
+                    <p class="text-slate-600 text-[11px]">${s.objetivo}</p>
+                    <div class="text-slate-600 text-[10px]"><strong class="text-slate-600">Dosis sugerida:</strong> ${s.dosisRecomendada}</div>
                   </div>
                 `).join('')}
               </div>
@@ -1322,7 +1312,7 @@ export class ModuloNutricion {
 
             <!-- RESULTADO 4: BIOTECNOLOGÍA & HORMONAS (IATF / SINCRONIZACIÓN) -->
             <div class="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
-              <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-2 pb-2 border-b border-slate-800">
+              <h4 class="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-800">
                 <span>🧬</span> 4. Protocolos Biotecnológicos & Hormonas Reproductivas
               </h4>
 
@@ -1330,19 +1320,19 @@ export class ModuloNutricion {
                 ${hormonas.map(h => `
                   <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
                     <div class="flex items-center justify-between">
-                      <span class="font-black text-purple-300">${h.nombre}</span>
-                      <span class="text-[10px] text-purple-400 font-bold">${h.diasAplicacion}</span>
+                      <span class="font-black text-purple-700">${h.nombre}</span>
+                      <span class="text-[10px] text-purple-700 font-bold">${h.diasAplicacion}</span>
                     </div>
-                    <p class="text-slate-300 text-[11px]">${h.indicacion}</p>
+                    <p class="text-slate-600 text-[11px]">${h.indicacion}</p>
                     
                     ${Array.isArray(h.protocolo) ? `
-                      <ul class="space-y-1 pl-4 list-disc text-slate-400 text-[11px]">
+                      <ul class="space-y-1 pl-4 list-disc text-slate-600 text-[11px]">
                         ${h.protocolo.map(p => `<li>${p}</li>`).join('')}
                       </ul>
                     ` : ''}
 
                     ${h.advertenciaSeguridad ? `
-                      <div class="text-[10px] text-purple-300/90 bg-purple-950/40 px-2.5 py-1 rounded border border-purple-500/20">
+                      <div class="text-[10px] text-slate-600 bg-purple-950/40 px-2.5 py-1 rounded border border-purple-500/20">
                         🛡️ ${h.advertenciaSeguridad}
                       </div>
                     ` : ''}
@@ -1352,12 +1342,12 @@ export class ModuloNutricion {
             </div>
 
             <!-- RESULTADO 5: DIAGNÓSTICO INTEGRAL IA -->
-            <div class="bg-gradient-to-br from-emerald-950/40 via-slate-950 to-slate-950 p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-2">
+            <div class="bovi-module-header p-4 sm:p-5 rounded-2xl border border-emerald-500/40 space-y-2">
               <div class="flex items-center gap-2">
                 <span class="text-lg">🤖</span>
-                <h4 class="text-xs sm:text-sm font-black text-emerald-300">Diagnóstico Zootécnico Integral & de Desarrollo Racial (IA)</h4>
+                <h4 class="text-xs sm:text-sm font-black text-emerald-700">Diagnóstico Zootécnico Integral & de Desarrollo Racial (IA)</h4>
               </div>
-              <p class="text-xs text-slate-300 leading-relaxed font-sans whitespace-pre-line">
+              <p class="text-xs text-slate-600 leading-relaxed font-sans whitespace-pre-line">
                 ${plan.analisisIA || 'Análisis no disponible.'}
               </p>
             </div>
@@ -1366,7 +1356,7 @@ export class ModuloNutricion {
 
           <!-- MODAL FOOTER -->
           <div class="bg-slate-950 p-4 border-t border-slate-800 flex items-center justify-end gap-3 shrink-0">
-            <button id="btn-cerrar-modal-nutri-footer" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer">
+            <button id="btn-cerrar-modal-nutri-footer" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-600 text-xs font-bold transition cursor-pointer">
               Regresar a la Tabla
             </button>
             <button id="btn-guardar-plan-modal" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition flex items-center gap-1.5 shadow cursor-pointer">

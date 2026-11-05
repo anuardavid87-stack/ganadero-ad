@@ -45,10 +45,10 @@ export class PanelAlertas {
     this.container.innerHTML = `
       <div class="space-y-4">
         <!-- HEADER DE ALERTAS INTELIGENTES -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 rounded-2xl shadow-xl border border-slate-800">
+        <div class="bovi-module-header p-5 rounded-2xl shadow-xl border border-slate-800">
           <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-2xl shadow">
+              <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-700 border border-rose-500/30 flex items-center justify-center text-2xl shadow">
                 🚨
               </div>
               <div>
@@ -56,22 +56,22 @@ export class PanelAlertas {
                   Panel de Alertas Inteligentes & Auditoría IA
                   <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-rose-600 text-white font-mono font-bold">${alertas.length} ACTIVAS</span>
                 </h2>
-                <p class="text-xs text-slate-400">Detección de animales improductivos, días abiertos excesivos y vacas próximas al secado.</p>
+                <p class="text-xs text-slate-600">Detección de animales improductivos, días abiertos excesivos y vacas próximas al secado.</p>
               </div>
             </div>
 
             <!-- FILTROS POR SEVERIDAD -->
             <div class="flex items-center gap-1.5 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 text-xs w-full md:w-auto overflow-x-auto">
-              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'todas' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:text-white'}" data-sev="todas">
+              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'todas' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-white'}" data-sev="todas">
                 Todas (${alertas.length})
               </button>
-              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'critica' ? 'bg-rose-600 text-white' : 'text-rose-300 hover:text-white'}" data-sev="critica">
+              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'critica' ? 'bg-rose-600 text-white' : 'text-rose-700 hover:text-white'}" data-sev="critica">
                 🔴 Críticas (${criticas.length})
               </button>
-              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'advertencia' ? 'bg-amber-600 text-white' : 'text-amber-300 hover:text-white'}" data-sev="advertencia">
+              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'advertencia' ? 'bg-amber-600 text-white' : 'text-amber-700 hover:text-white'}" data-sev="advertencia">
                 🟡 Advertencias (${advertencias.length})
               </button>
-              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'sanidad_preventiva' ? 'bg-sky-600 text-white' : 'text-sky-300 hover:text-white'}" data-sev="sanidad_preventiva">
+              <button class="btn-filtro-alerta px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${this.filtroSeveridad === 'sanidad_preventiva' ? 'bg-sky-600 text-white' : 'text-sky-700 hover:text-white'}" data-sev="sanidad_preventiva">
                 🔵 Secado 7 Meses (${sanidad.length})
               </button>
             </div>
@@ -80,27 +80,27 @@ export class PanelAlertas {
           <!-- RESUMEN DE LOS 4 PILARES ZOOTÉCNICOS REQUERIDOS -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800 text-xs">
             <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-              <span class="text-slate-400 block text-[10px] uppercase font-bold">1. Crecimiento (GDP &lt; 300g/d)</span>
-              <span class="text-xl font-black text-rose-400">
-                ${alertas.filter((a) => a.tipo === 'crecimiento_bajo_gdp').length} <span class="text-xs text-slate-400 font-normal">animales</span>
+              <span class="text-slate-600 block text-[10px] uppercase font-bold">1. Crecimiento (GDP &lt; 300g/d)</span>
+              <span class="text-xl font-black text-rose-700">
+                ${alertas.filter((a) => a.tipo === 'crecimiento_bajo_gdp').length} <span class="text-xs text-slate-600 font-normal">animales</span>
               </span>
             </div>
             <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-              <span class="text-slate-400 block text-[10px] uppercase font-bold">2. Vacas Vacías (&gt; 200 Días)</span>
-              <span class="text-xl font-black text-rose-400">
-                ${alertas.filter((a) => a.tipo === 'vaca_vacia_dias_abiertos').length} <span class="text-xs text-slate-400 font-normal">vientres</span>
+              <span class="text-slate-600 block text-[10px] uppercase font-bold">2. Vacas Vacías (&gt; 200 Días)</span>
+              <span class="text-xl font-black text-rose-700">
+                ${alertas.filter((a) => a.tipo === 'vaca_vacia_dias_abiertos').length} <span class="text-xs text-slate-600 font-normal">vientres</span>
               </span>
             </div>
             <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-              <span class="text-slate-400 block text-[10px] uppercase font-bold">3. Novillas Vacías (&gt; 36 Meses)</span>
-              <span class="text-xl font-black text-amber-400">
-                ${alertas.filter((a) => a.tipo === 'novilla_vacia_edad').length} <span class="text-xs text-slate-400 font-normal">novillas</span>
+              <span class="text-slate-600 block text-[10px] uppercase font-bold">3. Novillas Vacías (&gt; 36 Meses)</span>
+              <span class="text-xl font-black text-amber-700">
+                ${alertas.filter((a) => a.tipo === 'novilla_vacia_edad').length} <span class="text-xs text-slate-600 font-normal">novillas</span>
               </span>
             </div>
             <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-              <span class="text-slate-400 block text-[10px] uppercase font-bold">4. Secado Gestación (~7 Meses)</span>
-              <span class="text-xl font-black text-sky-400">
-                ${alertas.filter((a) => a.tipo === 'secado_7_meses').length} <span class="text-xs text-slate-400 font-normal">vacas</span>
+              <span class="text-slate-600 block text-[10px] uppercase font-bold">4. Secado Gestación (~7 Meses)</span>
+              <span class="text-xl font-black text-sky-700">
+                ${alertas.filter((a) => a.tipo === 'secado_7_meses').length} <span class="text-xs text-slate-600 font-normal">vacas</span>
               </span>
             </div>
           </div>
@@ -114,7 +114,7 @@ export class PanelAlertas {
                 ✨
               </div>
               <h3 class="text-base font-black text-slate-800">Sin Alertas en esta Categoría</h3>
-              <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">Los animales cumplen los estándares zootécnicos establecidos.</p>
+              <p class="text-xs text-slate-600 mt-1 max-w-md mx-auto">Los animales cumplen los estándares zootécnicos establecidos.</p>
             </div>
           `}
         </div>
@@ -147,16 +147,16 @@ export class PanelAlertas {
       <div class="bg-white rounded-2xl border ${border} shadow-md hover:shadow-lg transition overflow-hidden">
         <div class="${bgHeader} p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div class="flex items-center gap-3">
-            <span class="font-mono font-black text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-sm shadow-sm">
+            <span class="font-mono font-black text-slate-800 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-sm shadow-sm">
               Tag: ${a.tag}
             </span>
             <div>
               <div class="flex items-center gap-2">
                 <span class="font-bold text-slate-800 text-sm">${a.nombre}</span>
-                <span class="text-xs text-slate-400">• ${a.categoria}</span>
-                <span class="text-xs text-slate-400">• ${a.lote}</span>
+                <span class="text-xs text-slate-600">• ${a.categoria}</span>
+                <span class="text-xs text-slate-600">• ${a.lote}</span>
               </div>
-              <h4 class="font-black text-slate-900 text-sm mt-0.5">${a.titulo}</h4>
+              <h4 class="font-black text-slate-800 text-sm mt-0.5">${a.titulo}</h4>
             </div>
           </div>
           <div>${badge}</div>
@@ -176,7 +176,7 @@ export class PanelAlertas {
             <button class="btn-resolver-alerta px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition" data-id="${a.id}">
               ✓ Marcar Resuelta
             </button>
-            <button class="btn-accion-directa px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow transition active:scale-95" data-animal="${a.animalId}" data-tipo="${a.tipo}">
+            <button class="btn-accion-directa px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold rounded-xl text-xs shadow transition active:scale-95" data-animal="${a.animalId}" data-tipo="${a.tipo}">
               ⚡ Tomar Acción
             </button>
           </div>

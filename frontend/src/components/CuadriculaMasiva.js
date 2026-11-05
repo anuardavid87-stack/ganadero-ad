@@ -270,31 +270,31 @@ export class CuadriculaMasiva {
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
         <!-- BARRA SUPERIOR -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div class="bovi-module-header p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div>
             <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
               <span>📋</span> Cuadrícula Masiva: Ingreso de Campo en Báscula / Brete
-              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">Modo Uno a Uno</span>
+              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 border border-emerald-400/30">Modo Uno a Uno</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-0.5">Ingresa el número de cada animal individualmente al pasar por la manga.</p>
+            <p class="text-xs text-slate-600 mt-0.5">Ingresa el número de cada animal individualmente al pasar por la manga.</p>
           </div>
 
           <!-- Controles superiores: Fecha en que se hace el trabajo, Ordeños de la Finca y Filtro rápido de Lote -->
           <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-200 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
-              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha en que se hace el trabajo (pesajes, palpaciones, partos, destetes...)" class="bg-slate-900 border border-slate-600 text-emerald-300 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:border-emerald-400">
+              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-600 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
+              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha en que se hace el trabajo (pesajes, palpaciones, partos, destetes...)" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:border-emerald-400">
             </div>
             <div class="flex items-center gap-1.5 bg-slate-800/90 border border-sky-700/80 px-3 py-1.5 rounded-xl shadow-inner" title="Configura si esta finca hace 1 Ordeño (1 casilla) o Doble Ordeño (2 casillas)">
-              <span class="text-xs font-bold text-sky-300 whitespace-nowrap">🥛 Ordeño Finca:</span>
-              <select id="select-ordeno-manga-header" class="bg-slate-900 border border-sky-600 text-sky-300 font-bold text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer">
+              <span class="text-xs font-bold text-sky-700 whitespace-nowrap">🥛 Ordeño Finca:</span>
+              <select id="select-ordeno-manga-header" class="bg-slate-900 border border-sky-600 text-sky-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer">
                 <option value="1" ${this.esUnSoloOrdeno() ? 'selected' : ''}>1 Ordeño (1 Casilla)</option>
                 <option value="2" ${!this.esUnSoloOrdeno() ? 'selected' : ''}>Doble Ordeño (2 Casillas)</option>
               </select>
             </div>
             <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <span class="text-xs font-bold text-slate-300 whitespace-nowrap">📍 Lote:</span>
-              <select id="select-filtro-lote" class="bg-slate-900 border border-slate-600 text-emerald-300 font-bold text-xs rounded-lg px-2 py-0.5 outline-none w-32 md:w-36">
+              <span class="text-xs font-bold text-slate-600 whitespace-nowrap">📍 Lote:</span>
+              <select id="select-filtro-lote" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none w-32 md:w-36">
                 <option value="todos" ${this.loteFiltro === 'todos' ? 'selected' : ''}>Todos los Lotes</option>
                 ${lotes.map((l) => `<option value="${l}" ${this.loteFiltro === l ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
@@ -330,8 +330,8 @@ export class CuadriculaMasiva {
             <!-- BUSCADOR RÁPIDO DE ARETE -->
             <div class="flex flex-col sm:flex-row items-center gap-3">
               <div class="relative w-full">
-                <span class="absolute left-3.5 top-3 text-slate-400 text-sm">🔍</span>
-                <input type="text" id="input-tag-manga" autofocus placeholder="Digite o escanee No. de animal (Ej. BV-401, 102)..." class="w-full pl-10 pr-4 py-3 bg-white text-slate-900 font-mono font-black text-base rounded-xl border-2 border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none uppercase shadow-sm">
+                <span class="absolute left-3.5 top-3 text-slate-600 text-sm">🔍</span>
+                <input type="text" id="input-tag-manga" autofocus placeholder="Digite o escanee No. de animal (Ej. BV-401, 102)..." class="w-full pl-10 pr-4 py-3 bg-white text-slate-800 font-mono font-black text-base rounded-xl border-2 border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none uppercase shadow-sm">
               </div>
               <button id="btn-buscar-manga" class="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shadow transition whitespace-nowrap active:scale-95 flex items-center justify-center gap-1.5">
                 <span>🔍</span> Buscar
@@ -348,7 +348,7 @@ export class CuadriculaMasiva {
         <!-- LISTA DE REGISTROS DE LA SESIÓN ACTUAL (PLANILLA DE CAMPO ACUMULADA) -->
         <div class="p-4 sm:p-5">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
-            <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
+            <h3 class="font-black text-slate-800 text-sm flex items-center gap-2">
               <span>📝</span> Planilla de la Sesión Actual
               <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                 ${this.registrosSesion.length} Registros Capturados
@@ -362,7 +362,7 @@ export class CuadriculaMasiva {
               <button id="btn-limpiar-sesion" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition ${this.registrosSesion.length === 0 ? 'hidden' : ''}">
                 Limpiar Sesión
               </button>
-              <button id="btn-guardar-sesion" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs shadow transition active:scale-95 flex items-center justify-center gap-1.5 ${this.registrosSesion.length === 0 ? 'opacity-50 pointer-events-none' : ''}">
+              <button id="btn-guardar-sesion" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs shadow transition active:scale-95 flex items-center justify-center gap-1.5 ${this.registrosSesion.length === 0 ? ' pointer-events-none' : ''}">
                 <span>💾</span> Guardar Todo en Base de Datos (${this.registrosSesion.length})
               </button>
             </div>
@@ -384,8 +384,8 @@ export class CuadriculaMasiva {
               <tbody class="divide-y divide-slate-100">
                 ${this.registrosSesion.length > 0 ? this.registrosSesion.map((reg, idx) => `
                   <tr class="hover:bg-slate-50">
-                    <td class="p-2.5 text-center font-mono text-slate-400">${idx + 1}</td>
-                    <td class="p-2.5 font-black font-mono text-slate-900">${reg.tag}</td>
+                    <td class="p-2.5 text-center font-mono text-slate-600">${idx + 1}</td>
+                    <td class="p-2.5 font-black font-mono text-slate-800">${reg.tag}</td>
                     <td class="p-2.5 font-mono text-slate-600 font-bold whitespace-nowrap">${formatearFecha(reg.fecha || this.fechaJornada)}</td>
                     <td class="p-2.5">
                       <span class="px-2 py-0.5 rounded text-[10px] font-bold ${reg.especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
@@ -395,12 +395,12 @@ export class CuadriculaMasiva {
                     <td class="p-2.5">${this.renderResumenMedicion(reg)}</td>
                     <td class="p-2.5 text-center">${this.renderBadgeMedicion(reg)}</td>
                     <td class="p-2.5 text-center">
-                      <button data-action="delete-sesion-row" data-idx="${idx}" class="text-slate-300 hover:text-rose-600 transition p-1 cursor-pointer">✕</button>
+                      <button data-action="delete-sesion-row" data-idx="${idx}" class="text-slate-600 hover:text-rose-600 transition p-1 cursor-pointer">✕</button>
                     </td>
                   </tr>
                 `).join('') : `
                   <tr>
-                    <td colspan="7" class="p-8 text-center text-slate-400">
+                    <td colspan="7" class="p-8 text-center text-slate-600">
                       <span class="text-2xl block mb-1">🎯</span>
                       Digite el primer animal arriba para cargarlo y registrar su medición.
                     </td>
@@ -445,7 +445,7 @@ export class CuadriculaMasiva {
             </div>
             <div class="grid grid-cols-1 ${esUnOrd ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2 pt-1 opacity-85">
               <div class="p-2 bg-white rounded-lg border border-sky-200 text-[11px]">
-                <span class="font-bold text-slate-500 block">1. Fecha (Enter)</span>
+                <span class="font-bold text-slate-600 block">1. Fecha (Enter)</span>
                 <span class="font-mono font-black text-slate-800">📅 Fecha Pesaje Leche</span>
               </div>
               <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
@@ -473,11 +473,11 @@ export class CuadriculaMasiva {
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
               <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
                 <span class="font-bold text-amber-700 block">Paso 1 (Enter)</span>
-                <span class="font-black text-slate-900">📅 Fecha del Destete</span>
+                <span class="font-black text-slate-800">📅 Fecha del Destete</span>
               </div>
               <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
                 <span class="font-bold text-amber-700 block">Paso 2 (Enter)</span>
-                <span class="font-black text-slate-900">🔗 Relación Madre ↔ Cría</span>
+                <span class="font-black text-slate-800">🔗 Relación Madre ↔ Cría</span>
               </div>
               <div class="p-2 bg-white rounded-lg border-2 border-amber-400 text-[11px]">
                 <span class="font-bold text-amber-800 block">Paso 3 (Enter)</span>
@@ -517,13 +517,13 @@ export class CuadriculaMasiva {
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
             <input type="date" id="form-peso-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            <span class="text-[10px] text-slate-400 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
+            <span class="text-[10px] text-slate-600 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
           </div>
 
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Nuevo Peso en Báscula (kg):</label>
             <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
-            <div id="live-gdp-indicator" class="text-xs font-bold mt-1 text-slate-500"></div>
+            <div id="live-gdp-indicator" class="text-xs font-bold mt-1 text-slate-600"></div>
           </div>
 
           <div>
@@ -789,16 +789,16 @@ export class CuadriculaMasiva {
         <!-- FICHA RESUMEN DEL ANIMAL EN LA MANGA -->
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div class="flex items-center gap-3">
-            <span class="text-base sm:text-lg font-mono font-black bg-slate-900 text-white px-3 py-1 rounded-xl">
+            <span class="text-base sm:text-lg font-mono font-black bg-slate-900 text-slate-800 px-3 py-1 rounded-xl">
               Tag: ${tag}
             </span>
             <div>
               <div class="flex items-center gap-2">
-                <span class="font-bold text-slate-900 text-sm">${a.nombreAlias || a.nombre || 'Sin Alias'}</span>
-                <span class="text-xs text-slate-500">• ${a.raza}</span>
-                <span class="text-xs text-slate-500">• ${a.categoria}</span>
+                <span class="font-bold text-slate-800 text-sm">${a.nombreAlias || a.nombre || 'Sin Alias'}</span>
+                <span class="text-xs text-slate-600">• ${a.raza}</span>
+                <span class="text-xs text-slate-600">• ${a.categoria}</span>
               </div>
-              <div class="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+              <div class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5">
                 <span class="px-2 py-0.2 rounded text-[10px] font-bold ${especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                   ${especie === 'bufalino' ? '🦬 Especie Bufalina' : '🐂 Especie Vacuna'}
                 </span>
@@ -810,7 +810,7 @@ export class CuadriculaMasiva {
 
           <div class="flex items-center gap-2 flex-wrap">
             ${this.onVerFicha ? `
-              <button type="button" id="btn-manga-ver-ficha" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Ver Ficha Técnica del Animal">
+              <button type="button" id="btn-manga-ver-ficha" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-800 font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer" title="Ver Ficha Técnica del Animal">
                 <span>🔍</span> Ver Ficha
               </button>
             ` : ''}
@@ -819,7 +819,7 @@ export class CuadriculaMasiva {
                 <span>🚪</span> Extraer Animal
               </button>
             ` : ''}
-            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
+            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-600 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
               ✕ Cancelar
             </button>
           </div>
@@ -841,7 +841,7 @@ export class CuadriculaMasiva {
             </div>
             <div class="flex flex-wrap items-center gap-2 pt-1">
               ${this.onVerFicha ? `
-                <button type="button" id="btn-manga-ver-ficha-otra-finca" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+                <button type="button" id="btn-manga-ver-ficha-otra-finca" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-800 font-black text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
                   <span>🔍</span> Ver Ficha Técnica (Sin Trasladar)
                 </button>
               ` : ''}
@@ -923,9 +923,9 @@ export class CuadriculaMasiva {
             ? `🌱 Desde nacimiento (${res.dias} días de vida, peso base ${res.pesoBase || 0} kg)`
             : `⚖️ En ${res.dias} días contra pesaje anterior de ${res.pesoBase} kg`;
 
-          gdpIndicador.innerHTML = `GDP (${fPes}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-500 block">${detalleOrigen}</span>`;
+          gdpIndicador.innerHTML = `GDP (${fPes}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-600 block">${detalleOrigen}</span>`;
         } else {
-          gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-400">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
+          gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-600">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
         }
       } else {
         gdpIndicador.innerHTML = '';
@@ -1316,7 +1316,7 @@ export class CuadriculaMasiva {
         else if (r.gdp < 600) b = 'bg-amber-100 text-amber-800';
         return `<span class="px-2 py-0.5 rounded-full text-xs ${b}">${r.gdp > 0 ? '+' : ''}${r.gdp} g/d</span>`;
       }
-      return '<span class="text-slate-400 text-xs">Pesaje</span>';
+      return '<span class="text-slate-600 text-xs">Pesaje</span>';
     } else if (r.modulo === 'palpaciones') {
       return `<span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.resultado === 'Preñada' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${r.resultado}</span>`;
     } else if (r.modulo === 'destetes') {

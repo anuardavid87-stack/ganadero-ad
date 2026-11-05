@@ -49,7 +49,7 @@ export class ModuloReproduccion {
     this.container.innerHTML = `
       <div class="space-y-6">
         <!-- CABECERA PRINCIPAL DEL MÓDULO -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 rounded-3xl shadow-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="bovi-module-header p-5 rounded-3xl shadow-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div class="flex items-center gap-3.5">
             <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl shadow-lg">
               🧬
@@ -57,21 +57,21 @@ export class ModuloReproduccion {
             <div>
               <h2 class="text-xl font-black tracking-tight flex items-center gap-2">
                 <span>Reproducción & Servicios Genéticos</span>
-                <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">IA • TE • Monta</span>
+                <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-700 border border-indigo-400/30">IA • TE • Monta</span>
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Control de inseminaciones artificiales, transferencia de embriones y servicios con toro.</p>
+              <p class="text-xs text-slate-600 mt-0.5">Control de inseminaciones artificiales, transferencia de embriones y servicios con toro.</p>
             </div>
           </div>
 
           <!-- SELECTOR DE SUBPESTAÑAS -->
           <div class="flex bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 w-full md:w-auto overflow-x-auto text-xs gap-1">
-            <button id="tab-repro-form" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'formulario' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}">
+            <button id="tab-repro-form" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'formulario' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-white'}">
               <span>➕</span> Registrar Servicio
             </button>
-            <button id="tab-repro-hist" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'historial' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}">
+            <button id="tab-repro-hist" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'historial' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-white'}">
               <span>📋</span> Historial (${servicios.length})
             </button>
-            <button id="tab-repro-kpis" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'kpis' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}">
+            <button id="tab-repro-kpis" class="btn-subtab-repro px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${this.subvistaActiva === 'kpis' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-white'}">
               <span>📊</span> Indicadores
             </button>
           </div>
@@ -105,31 +105,31 @@ export class ModuloReproduccion {
       <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <!-- SELECTOR DE TIPO DE SERVICIO -->
         <div class="p-5 bg-slate-50 border-b border-slate-200">
-          <label class="block text-xs font-black uppercase text-slate-500 tracking-wider mb-2.5">
+          <label class="block text-xs font-black uppercase text-slate-600 tracking-wider mb-2.5">
             Selecciona la Modalidad de Servicio Reproductivo:
           </label>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button type="button" class="btn-tipo-srv p-4 rounded-2xl border-2 text-left transition flex items-center gap-3 ${this.tipoServicioSeleccionado === 'inseminacion_artificial' ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}" data-tipo="inseminacion_artificial">
               <span class="text-3xl">💉</span>
               <div>
-                <div class="font-black text-slate-900 text-sm">Inseminación Artificial</div>
-                <div class="text-[11px] text-slate-500 font-medium">IA Convencional / IATF con Pajilla</div>
+                <div class="font-black text-slate-800 text-sm">Inseminación Artificial</div>
+                <div class="text-[11px] text-slate-600 font-medium">IA Convencional / IATF con Pajilla</div>
               </div>
             </button>
 
             <button type="button" class="btn-tipo-srv p-4 rounded-2xl border-2 text-left transition flex items-center gap-3 ${this.tipoServicioSeleccionado === 'transferencia_embriones' ? 'border-purple-600 bg-purple-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}" data-tipo="transferencia_embriones">
               <span class="text-3xl">🔬</span>
               <div>
-                <div class="font-black text-slate-900 text-sm">Transferencia de Embriones</div>
-                <div class="text-[11px] text-slate-500 font-medium">TE / FIV Receptora + Donadora</div>
+                <div class="font-black text-slate-800 text-sm">Transferencia de Embriones</div>
+                <div class="text-[11px] text-slate-600 font-medium">TE / FIV Receptora + Donadora</div>
               </div>
             </button>
 
             <button type="button" class="btn-tipo-srv p-4 rounded-2xl border-2 text-left transition flex items-center gap-3 ${this.tipoServicioSeleccionado === 'monta_natural' ? 'border-amber-600 bg-amber-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}" data-tipo="monta_natural">
               <span class="text-3xl">🐂</span>
               <div>
-                <div class="font-black text-slate-900 text-sm">Servicio con Toro</div>
-                <div class="text-[11px] text-slate-500 font-medium">Monta Natural / Monta Dirigida</div>
+                <div class="font-black text-slate-800 text-sm">Servicio con Toro</div>
+                <div class="text-[11px] text-slate-600 font-medium">Monta Natural / Monta Dirigida</div>
               </div>
             </button>
           </div>
@@ -142,7 +142,7 @@ export class ModuloReproduccion {
             <div class="md:col-span-2">
               <label class="block text-xs font-bold text-slate-700 mb-1.5 flex justify-between">
                 <span>🏷️ Hembra Servida (Arete / Tag):</span>
-                <span class="text-slate-400 font-normal">Solo hembras activas</span>
+                <span class="text-slate-600 font-normal">Solo hembras activas</span>
               </label>
               <div class="flex flex-col sm:flex-row gap-2">
                 <select id="select-hembra-servicio" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500">
@@ -170,7 +170,7 @@ export class ModuloReproduccion {
 
           <!-- CAMPOS DINÁMICOS POR MODALIDAD -->
           <div class="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-4">
-            <h4 class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+            <h4 class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
               <span>🧬</span> Parámetros Genéticos y Operativos: ${this.getTituloModalidad()}
             </h4>
 
@@ -184,19 +184,19 @@ export class ModuloReproduccion {
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div class="bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
-                <span class="block text-[10px] font-bold text-slate-500 uppercase">Ecografía Temprana (30-35 d)</span>
+                <span class="block text-[10px] font-bold text-slate-600 uppercase">Ecografía Temprana (30-35 d)</span>
                 <span id="proj-ecografia" class="text-sm font-black font-mono text-emerald-800 mt-0.5 block">-</span>
-                <span class="text-[10px] text-slate-400">Detección de vesícula embrionaria</span>
+                <span class="text-[10px] text-slate-600">Detección de vesícula embrionaria</span>
               </div>
               <div class="bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
-                <span class="block text-[10px] font-bold text-slate-500 uppercase">Palpación Confirmatoria (60 d)</span>
+                <span class="block text-[10px] font-bold text-slate-600 uppercase">Palpación Confirmatoria (60 d)</span>
                 <span id="proj-palpacion" class="text-sm font-black font-mono text-emerald-800 mt-0.5 block">-</span>
-                <span class="text-[10px] text-slate-400">Chequeo manual ginecológico</span>
+                <span class="text-[10px] text-slate-600">Chequeo manual ginecológico</span>
               </div>
               <div class="bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
-                <span class="block text-[10px] font-bold text-slate-500 uppercase">Fecha Probable de Parto</span>
+                <span class="block text-[10px] font-bold text-slate-600 uppercase">Fecha Probable de Parto</span>
                 <span id="proj-parto" class="text-sm font-black font-mono text-emerald-800 mt-0.5 block">-</span>
-                <span class="text-[10px] text-slate-400">283 d bovino / 310 d bufalino</span>
+                <span class="text-[10px] text-slate-600">283 d bovino / 310 d bufalino</span>
               </div>
             </div>
           </div>
@@ -387,7 +387,7 @@ export class ModuloReproduccion {
 
         <!-- TABLA DE HISTORIAL -->
         ${filtrados.length === 0 ? `
-          <div class="p-10 text-center text-slate-400">
+          <div class="p-10 text-center text-slate-600">
             <span class="text-4xl block mb-2">🧬</span>
             <span class="font-bold">No se encontraron registros de servicios con los filtros aplicados.</span>
           </div>
@@ -431,7 +431,7 @@ export class ModuloReproduccion {
                     <tr class="hover:bg-slate-50 transition">
                       <td class="p-3 font-bold font-mono text-slate-800">${formatearFecha(s.fecha)}</td>
                       <td class="p-3">
-                        <span class="font-mono font-black text-slate-900 px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                        <span class="font-mono font-black text-slate-800 px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
                           ${s.tag || s.animalTag}
                         </span>
                       </td>
@@ -460,7 +460,7 @@ export class ModuloReproduccion {
                             ✗ Vacía
                           </button>
                         ` : ''}
-                        <button class="btn-eliminar-srv px-2 py-1 bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 font-bold rounded-lg text-[10px] transition" data-id="${s.id}" title="Eliminar Registro">
+                        <button class="btn-eliminar-srv px-2 py-1 bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 font-bold rounded-lg text-[10px] transition" data-id="${s.id}" title="Eliminar Registro">
                           🗑️
                         </button>
                       </td>
@@ -493,25 +493,25 @@ export class ModuloReproduccion {
         <!-- TARJETAS PRINCIPALES -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <span class="text-[10px] font-bold text-slate-400 uppercase">Total Servicios Registrados</span>
-            <div class="text-2xl font-black text-slate-900 mt-1 font-mono">${total}</div>
+            <span class="text-[10px] font-bold text-slate-600 uppercase">Total Servicios Registrados</span>
+            <div class="text-2xl font-black text-slate-800 mt-1 font-mono">${total}</div>
             <span class="text-[10px] text-indigo-600 font-bold">En el predio activo</span>
           </div>
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <span class="text-[10px] font-bold text-slate-400 uppercase">Tasa de Concepción Evaluada</span>
+            <span class="text-[10px] font-bold text-slate-600 uppercase">Tasa de Concepción Evaluada</span>
             <div class="text-2xl font-black text-emerald-600 mt-1 font-mono">${tasaConcepcion}%</div>
-            <span class="text-[10px] text-slate-500">${prenadas} preñadas de ${evaluados} evaluadas</span>
+            <span class="text-[10px] text-slate-600">${prenadas} preñadas de ${evaluados} evaluadas</span>
           </div>
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <span class="text-[10px] font-bold text-slate-400 uppercase">Pendientes de Chequeo</span>
+            <span class="text-[10px] font-bold text-slate-600 uppercase">Pendientes de Chequeo</span>
             <div class="text-2xl font-black text-amber-600 mt-1 font-mono">${pendientes}</div>
             <span class="text-[10px] text-amber-700">Ecografía / Palpación en espera</span>
           </div>
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <span class="text-[10px] font-bold text-slate-400 uppercase">Repetición de Celo / Vacías</span>
+            <span class="text-[10px] font-bold text-slate-600 uppercase">Repetición de Celo / Vacías</span>
             <div class="text-2xl font-black text-rose-600 mt-1 font-mono">${vacias}</div>
             <span class="text-[10px] text-rose-600">Servicios fallidos</span>
           </div>
@@ -524,9 +524,9 @@ export class ModuloReproduccion {
               💉
             </div>
             <div>
-              <span class="text-xs font-bold text-slate-500 block">Inseminación Artificial (IA)</span>
-              <span class="text-xl font-black text-slate-900 font-mono">${iaCount}</span>
-              <span class="text-[10px] text-slate-400 block">${total > 0 ? ((iaCount / total) * 100).toFixed(0) : 0}% del total</span>
+              <span class="text-xs font-bold text-slate-600 block">Inseminación Artificial (IA)</span>
+              <span class="text-xl font-black text-slate-800 font-mono">${iaCount}</span>
+              <span class="text-[10px] text-slate-600 block">${total > 0 ? ((iaCount / total) * 100).toFixed(0) : 0}% del total</span>
             </div>
           </div>
 
@@ -535,9 +535,9 @@ export class ModuloReproduccion {
               🔬
             </div>
             <div>
-              <span class="text-xs font-bold text-slate-500 block">Transferencia de Embriones (TE)</span>
-              <span class="text-xl font-black text-slate-900 font-mono">${teCount}</span>
-              <span class="text-[10px] text-slate-400 block">${total > 0 ? ((teCount / total) * 100).toFixed(0) : 0}% del total</span>
+              <span class="text-xs font-bold text-slate-600 block">Transferencia de Embriones (TE)</span>
+              <span class="text-xl font-black text-slate-800 font-mono">${teCount}</span>
+              <span class="text-[10px] text-slate-600 block">${total > 0 ? ((teCount / total) * 100).toFixed(0) : 0}% del total</span>
             </div>
           </div>
 
@@ -546,9 +546,9 @@ export class ModuloReproduccion {
               🐂
             </div>
             <div>
-              <span class="text-xs font-bold text-slate-500 block">Servicios con Toro (Monta)</span>
-              <span class="text-xl font-black text-slate-900 font-mono">${montaCount}</span>
-              <span class="text-[10px] text-slate-400 block">${total > 0 ? ((montaCount / total) * 100).toFixed(0) : 0}% del total</span>
+              <span class="text-xs font-bold text-slate-600 block">Servicios con Toro (Monta)</span>
+              <span class="text-xl font-black text-slate-800 font-mono">${montaCount}</span>
+              <span class="text-[10px] text-slate-600 block">${total > 0 ? ((montaCount / total) * 100).toFixed(0) : 0}% del total</span>
             </div>
           </div>
         </div>
@@ -851,7 +851,7 @@ export class ModuloReproduccion {
           </div>
           <div class="flex items-center gap-2">
             ${this.onVerFicha ? `
-              <button type="button" id="btn-repro-ver-ficha-hembra" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
+              <button type="button" id="btn-repro-ver-ficha-hembra" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold text-xs rounded-xl shadow transition flex items-center gap-1 cursor-pointer">
                 <span>🔍</span> Ver Ficha
               </button>
             ` : ''}

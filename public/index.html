@@ -81,7 +81,7 @@
                 title="Supabase Cloud: Sincronizado en línea"
                 aria-label="Estado de sincronización con Supabase Cloud"
               >
-                <span id="status-dot-ping" class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+                <span id="status-dot-ping" class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping"></span>
                 <span id="status-dot-supabase" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </button>
             </div>
@@ -157,7 +157,7 @@
               <div class="px-3 py-2.5 border-b bovi-dropdown-divider">
                 <div id="user-nombre-nav" class="text-xs font-black bovi-dropdown-title truncate">Administrador</div>
                 <div class="flex items-center gap-1.5 mt-1 flex-wrap">
-                  <span id="user-rol-badge-nav" class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                  <span id="user-rol-badge-nav" class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-700 border border-emerald-500/30">
                     Super Admin
                   </span>
                   <span id="user-empresa-nav" class="text-[11px] font-semibold bovi-dropdown-subtitle truncate">
@@ -202,7 +202,7 @@
                 <button
                   id="btn-logout"
                   type="button"
-                  class="w-full px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition cursor-pointer"
+                  class="w-full px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-700 hover:bg-rose-500/10 flex items-center gap-2.5 transition cursor-pointer"
                   title="Cerrar sesión en este dispositivo"
                 >
                   <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -218,38 +218,38 @@
 
       <!-- NAVEGACIÓN DESKTOP -->
       <nav id="app-desktop-nav" class="hidden md:flex items-center gap-1 py-1.5 border-t bovi-header-nav-border overflow-x-auto">
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-emerald-400 bg-slate-800" data-vista="animales">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-emerald-700 bg-slate-800" data-vista="animales">
           <span>🏷️</span> Animales
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="masivo">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="masivo">
           <span>📋</span> Cuadrícula Masiva
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="alertas">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="alertas">
           <span>🚨</span> Alertas & IA
           <span id="contador-alertas-header" class="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-rose-500 text-white font-bold">0</span>
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="dinamica">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="dinamica">
           <span>📈</span> Informes
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="reproduccion">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="reproduccion">
           <span>🧬</span> Reproducción
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="nutricion">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="nutricion">
           <span>🥗</span> Nutrición IA
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="dashboard">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="dashboard">
           <span>📊</span> Dashboard & Finanzas
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="excel">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="excel">
           <span>📤</span> Plantilla Excel
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="traslados">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="traslados">
           <span>🚚</span> Traslados
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-300 hover:text-white" data-vista="ingresos">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-800" data-vista="ingresos">
           <span>📅</span> Ingresos Diarios
         </button>
-        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-purple-300 hover:text-purple-100" data-vista="admin">
+        <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-purple-700 hover:text-purple-700" data-vista="admin">
           <span>🔐</span> Administración
         </button>
       </nav>
@@ -257,7 +257,7 @@
   </header>
 
   <!-- BANNER PROPIETARIO / SOLO LECTURA -->
-  <div id="banner-modo-propietario" class="bg-amber-500 text-slate-950 px-4 py-1.5 text-xs font-bold text-center hidden">
+  <div id="banner-modo-propietario" class="bg-amber-500 text-slate-800 px-4 py-1.5 text-xs font-bold text-center hidden">
     👁️ Modo Consulta Activo: Permisos de sólo lectura habilitados.
   </div>
 
@@ -328,23 +328,23 @@
   <!-- NAVEGACIÓN INFERIOR MOBILE FIRST (ERGONÓMICA EN CAMPO)                  -->
   <!-- ====================================================================== -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t border-slate-800 z-40 px-1 py-1 flex justify-around items-center bottom-mobile-nav">
-    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-emerald-400 active transition" data-vista="animales">
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-emerald-700 active transition" data-vista="animales">
       <span class="text-xl">🏷️</span>
       <span class="text-[9px] font-black mt-0.5">Animales</span>
     </button>
-    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="masivo">
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-600 hover:text-slate-800 transition" data-vista="masivo">
       <span class="text-xl">📋</span>
       <span class="text-[9px] font-black mt-0.5">Manga</span>
     </button>
-    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="traslados">
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-600 hover:text-slate-800 transition" data-vista="traslados">
       <span class="text-xl">🚚</span>
       <span class="text-[9px] font-black mt-0.5">Traslados</span>
     </button>
-    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition" data-vista="ingresos">
+    <button class="btn-nav-bovi flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-600 hover:text-slate-800 transition" data-vista="ingresos">
       <span class="text-xl">📅</span>
       <span class="text-[9px] font-black mt-0.5">Ingresos</span>
     </button>
-    <button id="btn-toggle-mas-mobile" class="flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-400 hover:text-white transition cursor-pointer">
+    <button id="btn-toggle-mas-mobile" class="flex-1 flex flex-col items-center py-1.5 px-0.5 text-slate-600 hover:text-slate-800 transition cursor-pointer">
       <span class="text-xl">☰</span>
       <span class="text-[9px] font-black mt-0.5">Más</span>
     </button>
@@ -354,59 +354,59 @@
   <div id="backdrop-mas-mobile" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 hidden md:hidden"></div>
   <div id="menu-mas-opciones-mobile" class="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl z-50 p-4 space-y-3 hidden md:hidden">
     <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-      <div class="font-black text-white text-xs flex items-center gap-2">
+      <div class="font-black text-slate-800 text-xs flex items-center gap-2">
         <span class="text-base">✨</span> Módulos y Herramientas Adicionales
       </div>
-      <button id="btn-cerrar-mas-mobile" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-sm font-bold cursor-pointer">✕ Cerrar</button>
+      <button id="btn-cerrar-mas-mobile" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 text-sm font-bold cursor-pointer">✕ Cerrar</button>
     </div>
     <div class="grid grid-cols-2 gap-2.5 pt-1">
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="reproduccion">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="reproduccion">
         <span class="text-2xl">🧬</span>
         <div>
-          <div class="font-black text-slate-100">Reproducción</div>
-          <div class="text-[9px] text-slate-400">IA / TE / Monta</div>
+          <div class="font-black text-slate-600">Reproducción</div>
+          <div class="text-[9px] text-slate-600">IA / TE / Monta</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="nutricion">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="nutricion">
         <span class="text-2xl">🥗</span>
         <div>
-          <div class="font-black text-slate-100">Nutrición IA</div>
-          <div class="text-[9px] text-slate-400">Dietas & Biotecnología</div>
+          <div class="font-black text-slate-600">Nutrición IA</div>
+          <div class="text-[9px] text-slate-600">Dietas & Biotecnología</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="alertas">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="alertas">
         <span class="text-2xl">🚨</span>
         <div>
-          <div class="font-black text-slate-100">Alertas & IA</div>
-          <div class="text-[9px] text-slate-400">Diagnóstico hato</div>
+          <div class="font-black text-slate-600">Alertas & IA</div>
+          <div class="text-[9px] text-slate-600">Diagnóstico hato</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dinamica">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dinamica">
         <span class="text-2xl">📈</span>
         <div>
-          <div class="font-black text-slate-100">Informes</div>
-          <div class="text-[9px] text-slate-400">Rankings, Razas & Cruces</div>
+          <div class="font-black text-slate-600">Informes</div>
+          <div class="text-[9px] text-slate-600">Rankings, Razas & Cruces</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dashboard">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="dashboard">
         <span class="text-2xl">📊</span>
         <div>
-          <div class="font-black text-slate-100">Finanzas</div>
-          <div class="text-[9px] text-slate-400">Costos & Métricas</div>
+          <div class="font-black text-slate-600">Finanzas</div>
+          <div class="text-[9px] text-slate-600">Costos & Métricas</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="excel">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-600 text-xs font-bold text-left transition cursor-pointer border border-slate-700/50" data-vista="excel">
         <span class="text-2xl">📤</span>
         <div>
-          <div class="font-black text-slate-100">Plantilla Excel</div>
-          <div class="text-[9px] text-slate-400">Importar / Exportar</div>
+          <div class="font-black text-slate-600">Plantilla Excel</div>
+          <div class="text-[9px] text-slate-600">Importar / Exportar</div>
         </div>
       </button>
-      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 border border-purple-500/30 active:scale-95 text-purple-200 text-xs font-bold text-left transition cursor-pointer" data-vista="admin">
+      <button class="btn-nav-bovi flex items-center gap-2.5 p-3 rounded-2xl bg-purple-900/40 hover:bg-purple-800/50 border border-purple-500/30 active:scale-95 text-purple-700 text-xs font-bold text-left transition cursor-pointer" data-vista="admin">
         <span class="text-2xl">🔐</span>
         <div>
-          <div class="font-black text-purple-100">Administración</div>
-          <div class="text-[9px] text-purple-300">Empresas & Accesos</div>
+          <div class="font-black text-purple-700">Administración</div>
+          <div class="text-[9px] text-purple-700">Empresas & Accesos</div>
         </div>
       </button>
     </div>
@@ -419,12 +419,12 @@
   <div id="pantalla-login" class="fixed inset-0 bg-slate-950 z-[100] flex items-center justify-center p-4 overflow-y-auto">
     <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto">
       <!-- HEADER LOGIN -->
-      <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 text-white text-center border-b border-purple-900/40">
+      <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 text-slate-800 text-center border-b border-purple-900/40">
         <div class="w-20 h-20 mx-auto rounded-2xl overflow-hidden mb-3 shadow-xl border-2 border-emerald-500/50 flex items-center justify-center bg-slate-900">
           <img src="./icon.png" alt="Ganadero AD" class="w-full h-full object-cover">
         </div>
         <h2 class="text-xl font-black tracking-tight">Ganadero AD</h2>
-        <p class="text-xs text-purple-200 mt-1">Control Ganadero, Multi-Tenant & Gestión de Campo</p>
+        <p class="text-xs text-purple-700 mt-1">Control Ganadero, Multi-Tenant & Gestión de Campo</p>
       </div>
 
       <!-- FORMULARIO DE ACCESO (SOLO USUARIO Y CONTRASEÑA) -->
@@ -432,7 +432,7 @@
         <div>
           <label class="block font-bold text-slate-700 mb-1">Usuario de Acceso *:</label>
           <div class="relative">
-            <span class="absolute left-3 top-2.5 text-slate-400 font-mono">@</span>
+            <span class="absolute left-3 top-2.5 text-slate-600 font-mono">@</span>
             <input type="text" id="login-usuario" required placeholder="ej. anuardavid o tu usuario" autocomplete="username" class="w-full pl-8 pr-3 py-2.5 font-mono font-bold rounded-xl border border-slate-300 outline-none bg-slate-50 focus:bg-white focus:border-purple-600 transition">
           </div>
         </div>
@@ -441,7 +441,7 @@
           <label class="block font-bold text-slate-700 mb-1">Clave / Contraseña *:</label>
           <div class="relative">
             <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password" class="w-full pl-3 pr-10 py-2.5 font-mono font-bold rounded-xl border border-slate-300 outline-none bg-slate-50 focus:bg-white focus:border-purple-600 transition">
-            <button type="button" id="btn-toggle-login-pass" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 font-bold cursor-pointer" tabindex="-1">
+            <button type="button" id="btn-toggle-login-pass" class="absolute right-3 top-2.5 text-slate-600 hover:text-slate-700 font-bold cursor-pointer" tabindex="-1">
               👁️
             </button>
           </div>
@@ -459,6 +459,6 @@
     </div>
   </div>
 
-  <script src="./bundle.js?v=1793896290080"></script>
+  <script src="./bundle.js?v=1793897153914"></script>
 </body>
 </html>

@@ -203,14 +203,14 @@ export class ModuloAdmin {
             🤠
           </div>
           <div class="space-y-1">
-            <h3 class="text-xl font-black text-slate-900">Módulo Administrativo Restringido</h3>
+            <h3 class="text-xl font-black text-slate-800">Módulo Administrativo Restringido</h3>
             <p class="text-xs font-mono uppercase font-bold text-amber-700">Rol Activo: Encargado de Campo</p>
           </div>
           <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
             Tu perfil está configurado para la <strong>operación directa en campo</strong> del ganado. Cuentas con permisos para ingresar información en báscula, partos, servicios y palpaciones, pero la administración corporativa y financiera está reservada al Administrador.
           </p>
           <div class="p-4 bg-slate-50 rounded-2xl text-xs text-slate-700 border border-slate-200 inline-block text-left space-y-2">
-            <div class="font-black text-slate-900 flex items-center gap-1.5">
+            <div class="font-black text-slate-800 flex items-center gap-1.5">
               <span>📋</span> Tus Módulos Operativos Habilitados:
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
@@ -228,7 +228,7 @@ export class ModuloAdmin {
               </div>
             </div>
           </div>
-          <div class="pt-2 text-xs text-slate-400">
+          <div class="pt-2 text-xs text-slate-600">
             Si requieres ajustes de empresa, predios o contraseñas, comunícate con tu <strong>Administrador</strong>.
           </div>
         </div>
@@ -244,13 +244,13 @@ export class ModuloAdmin {
             ⛔
           </div>
           <div class="space-y-1">
-            <h3 class="text-xl font-black text-slate-900">Módulo Administrativo Restringido</h3>
+            <h3 class="text-xl font-black text-slate-800">Módulo Administrativo Restringido</h3>
             <p class="text-xs font-mono uppercase font-bold text-rose-700">Acceso No Autorizado</p>
           </div>
           <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
             Este módulo contiene la gestión de credenciales de acceso, usuarios, predios, costos y mantenimiento de base de datos. Está reservado estrictamente para los roles de <strong>Administrador</strong> y <strong>Superadministrador</strong>.
           </p>
-          <div class="pt-2 text-xs text-slate-400">
+          <div class="pt-2 text-xs text-slate-600">
             Si requieres ajustes en los parámetros de la empresa o en los accesos del sistema, comunícate con tu <strong>Administrador</strong>.
           </div>
         </div>
@@ -269,7 +269,7 @@ export class ModuloAdmin {
     this.container.innerHTML = `
       <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
         <!-- HEADER DEL MÓDULO ADMINISTRATIVO -->
-        <div class="bg-gradient-to-r from-slate-950 via-purple-950 to-slate-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div class="bovi-module-header p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div class="flex items-center gap-3.5">
             <span class="text-3xl sm:text-4xl p-2.5 bg-purple-900/50 rounded-2xl border border-purple-600/60 shadow-inner">
               ${esSuperAdmin ? '👑' : '🏢'}
@@ -279,11 +279,11 @@ export class ModuloAdmin {
                 <h3 class="text-lg sm:text-xl font-black tracking-tight">
                   ${esSuperAdmin ? 'Panel Super Administrador (Global)' : 'Administración de Empresa'}
                 </h3>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${esSuperAdmin ? 'bg-purple-500/30 text-purple-200 border border-purple-400/50' : 'bg-blue-500/30 text-blue-200 border border-blue-400/50'}">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${esSuperAdmin ? 'bg-purple-500/30 text-purple-700 border border-purple-400/50' : 'bg-blue-500/30 text-blue-700 border border-blue-400/50'}">
                   ${esSuperAdmin ? 'SaaS Multi-Tenant' : (empresaActiva ? empresaActiva.nombre : 'Tenant')}
                 </span>
               </div>
-              <p class="text-xs text-purple-200/80 mt-0.5 max-w-xl">
+              <p class="text-xs text-slate-600 mt-0.5 max-w-xl">
                 ${esSuperAdmin 
                   ? 'Control supremo: gestión de empresas, creación de usuarios, fincas, bases de datos y sincronización central.'
                   : 'Gestión de la empresa ganadera, predios, inventarios zootécnicos, costos fijos y equipo de trabajo.'
@@ -294,8 +294,8 @@ export class ModuloAdmin {
 
           <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
             <div class="text-right font-mono text-xs">
-              <span class="text-[10px] text-purple-300/70 block uppercase">Usuario en Sesión:</span>
-              <span class="font-black text-white flex items-center gap-1">
+              <span class="text-[10px] text-slate-600 block uppercase">Usuario en Sesión:</span>
+              <span class="font-black text-slate-800 flex items-center gap-1">
                 ${this.getBadgeRolHtml(rol)} @${uActual ? uActual.usuario : 'admin'}
               </span>
             </div>
@@ -304,20 +304,20 @@ export class ModuloAdmin {
 
         <!-- PESTAÑAS DE NAVEGACIÓN ADMINISTRATIVA -->
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="empresas">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800'} cursor-pointer" data-sec="empresas">
             <span>🏢</span> Empresas & Fincas
           </button>
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'usuarios' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="usuarios">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'usuarios' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800'} cursor-pointer" data-sec="usuarios">
             <span>👥</span> Usuarios & Accesos
           </button>
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'} cursor-pointer" data-sec="finanzas">
+          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800'} cursor-pointer" data-sec="finanzas">
             <span>💰</span> Precios & Costos
           </button>
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'whatsapp' ? 'bg-gradient-to-r from-emerald-800 to-green-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-400/40' : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'} cursor-pointer" data-sec="whatsapp">
             <span>💬</span> WhatsApp API
           </button>
           ${esSuperAdmin ? `
-            <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-200 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
+            <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-700 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">
               <span>✨</span> IA Gemini (Global)
             </button>
           ` : ''}
@@ -413,7 +413,7 @@ export class ModuloAdmin {
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-purple-50/70 p-5 rounded-3xl border border-purple-200">
           <div>
             <div class="flex items-center gap-2">
-              <h4 class="font-black text-slate-900 text-sm sm:text-base">
+              <h4 class="font-black text-slate-800 text-sm sm:text-base">
                 Gestión Jerárquica de Empresas Ganaderas (${empresasAMostrar.length})
               </h4>
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${esSuperAdmin ? 'bg-purple-200 text-purple-900' : 'bg-blue-200 text-blue-900'}">
@@ -444,14 +444,14 @@ export class ModuloAdmin {
             return `
               <div class="bg-white rounded-3xl border-2 ${esActiva ? 'border-purple-500 ring-4 ring-purple-400/20 shadow-xl' : 'border-slate-200 shadow-md'} overflow-hidden transition">
                 <!-- TARJETA EMPRESA: CABECERA -->
-                <div class="p-5 ${esActiva ? 'bg-gradient-to-r from-purple-950 via-slate-900 to-purple-950 text-white' : 'bg-slate-900 text-white'} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div class="p-5 ${esActiva ? 'bovi-module-header' : 'bg-slate-900 text-slate-800'} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div class="flex items-center gap-3.5">
-                    <div class="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center text-2xl font-black border border-white/20 shadow-inner">
+                    <div class="w-12 h-12 rounded-2xl bg-white/10 text-slate-800 flex items-center justify-center text-2xl font-black border border-white/20 shadow-inner">
                       🏢
                     </div>
                     <div>
                       ${(() => {
-                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${formatearFecha(emp.fechaVencimiento)}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-300' };
+                        const vig = this.calcularVigencia ? this.calcularVigencia(emp) : { texto: emp.fechaVencimiento ? `Vence: ${formatearFecha(emp.fechaVencimiento)}` : 'Activa', clase: 'bg-emerald-500/20 text-emerald-700' };
                         return `
                           <div class="flex items-center gap-2 flex-wrap">
                             <h3 class="text-base font-black tracking-tight">${emp.nombre}</h3>
@@ -462,10 +462,10 @@ export class ModuloAdmin {
                           </div>
                         `;
                       })()}
-                      <div class="text-xs text-purple-200 font-mono mt-0.5">
+                      <div class="text-xs text-purple-700 font-mono mt-0.5">
                         NIT: <strong>${emp.nit || 'Sin NIT'}</strong> • País: <strong>${emp.pais || 'Colombia'}</strong> • Moneda: <strong>${emp.moneda || 'COP'}</strong>
                       </div>
-                      <div class="text-[11px] text-slate-300 mt-1">
+                      <div class="text-[11px] text-slate-600 mt-1">
                         📍 ${emp.direccion || 'Sin dirección'} • 📞 ${emp.telefono || 'Sin teléfono'} • ✉️ ${emp.email || 'Sin correo'}
                       </div>
                     </div>
@@ -478,14 +478,14 @@ export class ModuloAdmin {
                       const esIndef = emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido';
                       return `
                         <div class="flex items-center gap-1.5 bg-white/10 p-1.5 rounded-xl border border-white/10 flex-wrap">
-                          <span class="text-[9px] font-bold text-purple-200 px-1">⏱️ Activar:</span>
+                          <span class="text-[9px] font-bold text-purple-700 px-1">⏱️ Activar:</span>
                           <button class="btn-renovar-empresa px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-[10px] transition cursor-pointer" data-id="${emp.id}" data-meses="1" title="Activar o ampliar por 1 Mes">+1 Mes</button>
                           <button class="btn-renovar-empresa px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-[10px] transition cursor-pointer" data-id="${emp.id}" data-meses="3" title="Activar o ampliar por 3 Meses">+3 Meses</button>
                           <button class="btn-renovar-empresa px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-[10px] transition cursor-pointer" data-id="${emp.id}" data-meses="6" title="Activar o ampliar por 6 Meses">+6 Meses</button>
                           <button class="btn-renovar-empresa px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-bold text-[10px] transition cursor-pointer" data-id="${emp.id}" data-meses="12" title="Activar o ampliar por 1 Año">+1 Año</button>
                           <button class="btn-indefinido-empresa px-2 py-0.5 rounded ${esIndef ? 'bg-emerald-600 ring-2 ring-emerald-300 font-black' : 'bg-amber-600 hover:bg-amber-500 font-bold'} active:scale-95 text-white text-[10px] transition cursor-pointer" data-id="${emp.id}" title="Habilitar por tiempo indefinido (Permanente)">♾️ Indefinido</button>
                           ${emp.activa !== false && !vig.esVencida ? `
-                            <button class="btn-bloquear-empresa px-2 py-0.5 rounded bg-rose-500/40 hover:bg-rose-600 text-rose-100 font-bold text-[10px] transition cursor-pointer ml-0.5" data-id="${emp.id}" title="Bloquear o suspender acceso inmediatamente">⛔ Bloquear</button>
+                            <button class="btn-bloquear-empresa px-2 py-0.5 rounded bg-rose-500/40 hover:bg-rose-600 text-rose-700 font-bold text-[10px] transition cursor-pointer ml-0.5" data-id="${emp.id}" title="Bloquear o suspender acceso inmediatamente">⛔ Bloquear</button>
                           ` : `
                             <button class="btn-reactivar-empresa px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] transition cursor-pointer ml-0.5" data-id="${emp.id}" title="Reactivar acceso a la empresa">⚡ Reactivar</button>
                           `}
@@ -498,12 +498,12 @@ export class ModuloAdmin {
                       </button>
                     ` : ''}
                     ${!esConsultor ? `
-                      <button class="btn-abrir-editar-empresa px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer" data-id="${emp.id}" title="Editar Datos de la Empresa">
+                      <button class="btn-abrir-editar-empresa px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer" data-id="${emp.id}" title="Editar Datos de la Empresa">
                         ✏️ Editar
                       </button>
                     ` : ''}
                     ${esSuperAdmin ? `
-                      <button class="btn-eliminar-empresa p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs transition cursor-pointer" data-id="${emp.id}" data-nombre="${emp.nombre}" title="Eliminar Empresa y Fincas">
+                      <button class="btn-eliminar-empresa p-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 border border-rose-500/40 text-xs transition cursor-pointer" data-id="${emp.id}" data-nombre="${emp.nombre}" title="Eliminar Empresa y Fincas">
                         🗑️
                       </button>
                     ` : ''}
@@ -519,7 +519,7 @@ export class ModuloAdmin {
                         <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
                           <span>🏡</span> Predios & Fincas de ${emp.nombre} (${fincasDeEmpresa.length})
                         </h5>
-                        <p class="text-[11px] text-slate-500">Cada predio administra su hato zootécnico independiente y costos propios (100% aislado de otras empresas).</p>
+                        <p class="text-[11px] text-slate-600">Cada predio administra su hato zootécnico independiente y costos propios (100% aislado de otras empresas).</p>
                       </div>
                       ${!esConsultor ? `
                         <button class="btn-crear-finca-empresa px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}" data-empresa-nombre="${emp.nombre}">
@@ -543,10 +543,10 @@ export class ModuloAdmin {
                                 <div class="flex justify-between items-start gap-2">
                                   <div>
                                     <div class="flex items-center gap-2">
-                                      <span class="font-black text-slate-900 text-sm">${f.nombre}</span>
+                                      <span class="font-black text-slate-800 text-sm">${f.nombre}</span>
                                       ${esFincaActiva ? '<span class="px-2 py-0.5 rounded bg-emerald-700 text-white text-[9px] font-black uppercase">Activa</span>' : ''}
                                     </div>
-                                    <div class="text-[10px] text-slate-400 font-mono mt-0.5">Código: ${f.codigo || f.id} • 📍 ${f.ubicacion || 'Colombia'}</div>
+                                    <div class="text-[10px] text-slate-600 font-mono mt-0.5">Código: ${f.codigo || f.id} • 📍 ${f.ubicacion || 'Colombia'}</div>
                                   </div>
                                   <span class="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">
                                     ${f.areaHa || 0} Ha
@@ -569,7 +569,7 @@ export class ModuloAdmin {
                                   </div>
                                 </div>
 
-                                <div class="text-[10px] text-slate-500 mt-2.5 font-mono flex flex-wrap justify-between items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div class="text-[10px] text-slate-600 mt-2.5 font-mono flex flex-wrap justify-between items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                   <span>Leche: <strong>$${f.precioLecheLitro || 2450}/L</strong></span>
                                   <span>Carne: <strong>$${f.precioCarneKgPie || 8900}/kg</strong></span>
                                   <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
@@ -610,7 +610,7 @@ export class ModuloAdmin {
                         }).join('')}
                       </div>
                     ` : `
-                      <div class="p-6 text-center text-slate-500 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-300 text-xs">
+                      <div class="p-6 text-center text-slate-600 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-300 text-xs">
                         🌱 <strong>Empresa en blanco (0 fincas registradas):</strong> Esta empresa está completamente aislada y lista para iniciar desde cero. Presiona <strong>"+ Nueva Finca"</strong> para crear su primer predio e ingresar su inventario.
                       </div>
                     `}
@@ -623,7 +623,7 @@ export class ModuloAdmin {
                         <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
                           <span>👥</span> Usuarios con Acceso a ${emp.nombre} (${usuariosDeEmpresa.length})
                         </h5>
-                        <p class="text-[11px] text-slate-500">Credenciales delimitadas estrictamente a los datos de esta empresa ganadera.</p>
+                        <p class="text-[11px] text-slate-600">Credenciales delimitadas estrictamente a los datos de esta empresa ganadera.</p>
                       </div>
                       ${!esConsultor ? `
                         <button class="btn-crear-usuario-empresa px-3.5 py-1.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer" data-empresa-id="${emp.id}" data-empresa-nombre="${emp.nombre}">
@@ -652,12 +652,12 @@ export class ModuloAdmin {
                               const passwordText = u.password || 'BoviPass123';
                               return `
                                 <tr class="hover:bg-purple-50/20 transition">
-                                  <td class="p-2.5 font-mono font-bold text-slate-900">
+                                  <td class="p-2.5 font-mono font-bold text-slate-800">
                                     @${u.usuario}
                                   </td>
                                   <td class="p-2.5">
-                                    <div class="font-bold text-slate-900">${u.nombre}</div>
-                                    <div class="text-[10px] text-slate-400">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
+                                    <div class="font-bold text-slate-800">${u.nombre}</div>
+                                    <div class="text-[10px] text-slate-600">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
                                   </td>
                                   <td class="p-2.5">
                                     ${this.getBadgeRolHtml(u.rol)}
@@ -669,16 +669,16 @@ export class ModuloAdmin {
                                   </td>
                                   <td class="p-2.5">
                                     <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 w-fit">
-                                      <span class="font-mono font-bold text-[11px] ${passVisible ? 'text-slate-900' : 'text-slate-400 tracking-widest'}">
+                                      <span class="font-mono font-bold text-[11px] ${passVisible ? 'text-slate-800' : 'text-slate-600 tracking-widest'}">
                                         ${passVisible ? passwordText : '••••••••'}
                                       </span>
-                                      <button class="btn-toggle-ver-pass text-[10px] p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer" data-id="${u.id}">
+                                      <button class="btn-toggle-ver-pass text-[10px] p-0.5 text-slate-600 hover:text-slate-700 cursor-pointer" data-id="${u.id}">
                                         ${passVisible ? '🙈' : '👁️'}
                                       </button>
                                     </div>
                                   </td>
                                   <td class="p-2.5 text-center">
-                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${u.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}">
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${u.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}">
                                       ${u.activo !== false ? '● Activo' : '○ Inactivo'}
                                     </span>
                                   </td>
@@ -704,7 +704,7 @@ export class ModuloAdmin {
                         </table>
                       </div>
                     ` : `
-                      <div class="p-4 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
+                      <div class="p-4 text-center text-slate-600 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
                         No hay usuarios asignados a esta empresa. Haz clic en <strong>"+ Nuevo Usuario"</strong> para crear administradores, encargados o consultores.
                       </div>
                     `}
@@ -716,7 +716,7 @@ export class ModuloAdmin {
                     <span class="px-2.5 py-1 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 shadow-sm">
                       🏡 ${fincasDeEmpresa.length} Finca(s) • 🏷️ ${totalAnimalesEmpresa} Cabezas • 👥 ${usuariosDeEmpresa.length} Usuario(s)
                     </span>
-                    <span class="text-[11px] text-slate-500">
+                    <span class="text-[11px] text-slate-600">
                       🔒 <strong>Aislamiento Multi-Tenant Activo:</strong> Las fincas y el hato de esta empresa están ocultos y protegidos mientras trabajas en otra empresa.
                     </span>
                   </div>
@@ -738,7 +738,7 @@ export class ModuloAdmin {
             <div class="p-10 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 space-y-3 shadow-sm">
               <span class="text-4xl block">🏢</span>
               <h4 class="font-black text-slate-800 text-sm">No hay empresas registradas</h4>
-              <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">El sistema se encuentra en blanco (0 datos). Haz clic en "Crear Nueva Empresa" para ingresar tu ganadería real.</p>
+              <p class="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">El sistema se encuentra en blanco (0 datos). Haz clic en "Crear Nueva Empresa" para ingresar tu ganadería real.</p>
               ${esSuperAdmin ? `
                 <button id="btn-crear-primera-empresa" class="px-5 py-2.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition inline-flex items-center gap-2 cursor-pointer">
                   <span>➕</span> Crear Mi Primera Empresa
@@ -770,7 +770,7 @@ export class ModuloAdmin {
       }).join(' ');
     }
 
-    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">Sin fincas asignadas</span>';
+    return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Sin fincas asignadas</span>';
   }
 
   // ==========================================================================
@@ -800,10 +800,10 @@ export class ModuloAdmin {
       <div class="space-y-4">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
+            <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
               <span>Gestión de Usuarios & Control de Roles (${usuarios.length} Registrados)</span>
             </h4>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p class="text-xs text-slate-600 mt-0.5">
               Administración de credenciales de acceso. Cada usuario cuenta con un rol estricto asignado en su perfil.
             </p>
           </div>
@@ -855,36 +855,36 @@ export class ModuloAdmin {
                 return `
                   <tr class="hover:bg-purple-50/20 transition">
                     <td class="p-3">
-                      <span class="font-black font-mono text-slate-900 block">@${u.usuario}</span>
-                      <span class="text-[10px] text-slate-400 font-mono">${u.id}</span>
+                      <span class="font-black font-mono text-slate-800 block">@${u.usuario}</span>
+                      <span class="text-[10px] text-slate-600 font-mono">${u.id}</span>
                     </td>
                     <td class="p-3">
-                      <div class="font-bold text-slate-900">${u.nombre}</div>
-                      <div class="text-[10px] text-slate-500">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
+                      <div class="font-bold text-slate-800">${u.nombre}</div>
+                      <div class="text-[10px] text-slate-600">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
                     </td>
                     <td class="p-3">
                       <span class="font-bold text-slate-800 block">${emp ? emp.nombre : (u.rol === 'superadmin' ? '🌐 Acceso Global' : 'Sin asignar')}</span>
-                      <span class="text-[10px] text-slate-400 font-mono">${emp ? emp.nit || emp.id : (u.empresaId || '')}</span>
+                      <span class="text-[10px] text-slate-600 font-mono">${emp ? emp.nit || emp.id : (u.empresaId || '')}</span>
                       <div class="mt-1.5 flex flex-wrap gap-1 items-center">
                         ${this.renderBadgeFincasUsuario(u, fincas)}
                       </div>
                     </td>
                     <td class="p-3">
                       ${this.getBadgeRolHtml(u.rol)}
-                      <div class="text-[10px] text-slate-400 mt-1 max-w-xs">${this.getDetalleRol(u.rol)}</div>
+                      <div class="text-[10px] text-slate-600 mt-1 max-w-xs">${this.getDetalleRol(u.rol)}</div>
                     </td>
                     <td class="p-3">
                       <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 w-fit">
-                        <span class="font-mono font-bold text-xs ${passVisible ? 'text-slate-900' : 'text-slate-400 tracking-widest'}">
+                        <span class="font-mono font-bold text-xs ${passVisible ? 'text-slate-800' : 'text-slate-600 tracking-widest'}">
                           ${passVisible ? passwordText : '••••••••'}
                         </span>
-                        <button class="btn-toggle-ver-pass text-[10px] p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer" data-id="${u.id}">
+                        <button class="btn-toggle-ver-pass text-[10px] p-0.5 text-slate-600 hover:text-slate-700 cursor-pointer" data-id="${u.id}">
                           ${passVisible ? '🙈' : '👁️'}
                         </button>
                       </div>
                     </td>
                     <td class="p-3 text-center">
-                      <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${u.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}">
+                      <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${u.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}">
                         ${u.activo !== false ? '● Activo' : '○ Inactivo'}
                       </span>
                     </td>
@@ -907,7 +907,7 @@ export class ModuloAdmin {
                 `;
               }).join('') : `
                 <tr>
-                  <td colspan="7" class="p-8 text-center text-slate-400">
+                  <td colspan="7" class="p-8 text-center text-slate-600">
                     No se encontraron usuarios con el filtro seleccionado.
                   </td>
                 </tr>
@@ -963,22 +963,22 @@ export class ModuloAdmin {
     return `
       <div class="space-y-6">
         <!-- SELECTOR DE PREDIO PARA FINANZAS -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl shadow-lg border border-purple-700/50">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bovi-module-header p-5 rounded-3xl shadow-lg border border-purple-700/50">
           <div class="flex items-center gap-3.5">
             <span class="text-3xl p-2.5 bg-white/10 rounded-2xl border border-white/20">🏡</span>
             <div>
               <div class="flex items-center gap-2 flex-wrap">
                 <h4 class="font-black text-sm sm:text-base">Finanzas & Costos Operativos por Finca</h4>
-                ${esFincaActivaEnSesion ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 text-[10px] font-mono font-bold border border-emerald-400/40">● Predio Activo en Sesión</span>' : ''}
+                ${esFincaActivaEnSesion ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-700 text-[10px] font-mono font-bold border border-emerald-400/40">● Predio Activo en Sesión</span>' : ''}
               </div>
-              <p class="text-xs text-purple-200/80 mt-0.5">
+              <p class="text-xs text-slate-600 mt-0.5">
                 Cada predio administra sus costos fijos, cuotas de inversión diferida y precios de mercado de manera 100% aislada.
               </p>
             </div>
           </div>
 
           <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
-            <label for="select-finca-finanzas" class="text-xs font-bold text-purple-200 whitespace-nowrap">Predio:</label>
+            <label for="select-finca-finanzas" class="text-xs font-bold text-purple-700 whitespace-nowrap">Predio:</label>
             <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-300 bg-white text-slate-800 shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400">
               ${fincas.map((f) => {
                 const emp = empresas.find(e => e.id === f.empresaId);
@@ -990,16 +990,16 @@ export class ModuloAdmin {
         </div>
 
         ${!finca ? `
-          <div class="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
+          <div class="p-8 text-center text-slate-600 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
             No hay predios registrados en el sistema. Registra primero una finca en la pestaña "Empresas & Fincas".
           </div>
         ` : `
           <!-- RESUMEN FINANCIERO DEL PREDIO SELECCIONADO -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
-              <span class="text-[10px] font-bold text-slate-500 uppercase block">Costos Fijos / Mes</span>
-              <div class="text-xl font-black text-slate-900 mt-1 font-mono">$${Math.round(totalFijos).toLocaleString('es-CO')}</div>
-              <span class="text-[10px] text-slate-400 font-medium">Nómina, insumos y mantenimiento</span>
+              <span class="text-[10px] font-bold text-slate-600 uppercase block">Costos Fijos / Mes</span>
+              <div class="text-xl font-black text-slate-800 mt-1 font-mono">$${Math.round(totalFijos).toLocaleString('es-CO')}</div>
+              <span class="text-[10px] text-slate-600 font-medium">Nómina, insumos y mantenimiento</span>
             </div>
 
             <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
@@ -1025,10 +1025,10 @@ export class ModuloAdmin {
             <!-- TARJETA 1: PRECIOS DE MERCADO DEL PREDIO -->
             <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
               <div class="flex justify-between items-center">
-                <h5 class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <h5 class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                   <span>🏷️</span> Precios de Venta
                 </h5>
-                <span class="text-[10px] font-bold text-slate-500 font-mono">${finca.nombre}</span>
+                <span class="text-[10px] font-bold text-slate-600 font-mono">${finca.nombre}</span>
               </div>
               <form id="form-mercado-precios" class="space-y-3.5 text-xs">
                 <div>
@@ -1053,14 +1053,14 @@ export class ModuloAdmin {
                   <button type="submit" class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-bold rounded-xl shadow transition cursor-pointer">
                     Actualizar Precios y Ordeño (${finca.nombre})
                   </button>
-                ` : '<div class="text-[11px] text-slate-400 py-1 text-center">Solo lectura</div>'}
+                ` : '<div class="text-[11px] text-slate-600 py-1 text-center">Solo lectura</div>'}
               </form>
             </div>
 
             <!-- TARJETA 2: COSTOS FIJOS MENSUALES DEL PREDIO -->
             <div class="lg:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
               <div class="flex justify-between items-center">
-                <h5 class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <h5 class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                   <span>🧾</span> Costos Fijos Mensuales
                 </h5>
                 <div class="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-lg">
@@ -1099,7 +1099,7 @@ export class ModuloAdmin {
                       Guardar Costos Fijos de "${finca.nombre}"
                     </button>
                   </div>
-                ` : '<div class="sm:col-span-2 text-[11px] text-slate-400 py-1 text-center">Solo lectura</div>'}
+                ` : '<div class="sm:col-span-2 text-[11px] text-slate-600 py-1 text-center">Solo lectura</div>'}
               </form>
             </div>
           </div>
@@ -1108,10 +1108,10 @@ export class ModuloAdmin {
           <div class="space-y-3 pt-2">
             <div class="flex justify-between items-center">
               <div>
-                <h5 class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <h5 class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                   <span>🏗️</span> Inversiones Amortizables de "${finca.nombre}" (${inversionesFinca.length})
                 </h5>
-                <p class="text-xs text-slate-500">Amortización mensual diferida e imputada específicamente a este predio.</p>
+                <p class="text-xs text-slate-600">Amortización mensual diferida e imputada específicamente a este predio.</p>
               </div>
               ${!esConsultor ? `
                 <button id="btn-modal-inversion" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
@@ -1130,16 +1130,16 @@ export class ModuloAdmin {
                   <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
                     <div>
                       <div class="flex justify-between items-start gap-2">
-                        <h5 class="font-black text-slate-900 text-sm">${inv.descripcionActivo || inv.concepto}</h5>
+                        <h5 class="font-black text-slate-800 text-sm">${inv.descripcionActivo || inv.concepto}</h5>
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0">Activa</span>
                       </div>
                       <div class="grid grid-cols-2 gap-2 mt-3 text-xs">
                         <div>
-                          <span class="text-slate-400 block text-[10px] uppercase font-bold">Monto Total</span>
+                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Monto Total</span>
                           <span class="font-mono font-black text-slate-800">$${monto.toLocaleString('es-CO')}</span>
                         </div>
                         <div>
-                          <span class="text-slate-400 block text-[10px] uppercase font-bold">Plazo</span>
+                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Plazo</span>
                           <span class="font-bold text-slate-800">${meses} Meses</span>
                         </div>
                       </div>
@@ -1159,7 +1159,7 @@ export class ModuloAdmin {
                   </div>
                 `;
               }).join('') : `
-                <div class="col-span-full p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
+                <div class="col-span-full p-6 text-center text-slate-600 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs">
                   No hay inversiones registradas en este predio. Presiona <strong>"+ Registrar Inversión"</strong> para agregar una.
                 </div>
               `}
@@ -1169,7 +1169,7 @@ export class ModuloAdmin {
           <!-- TARJETA 4: CUADRO COMPARATIVO MULTI-PREDIO -->
           ${fincas.length > 1 ? `
             <div class="space-y-3 pt-4 border-t border-slate-100">
-              <h5 class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <h5 class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <span>📊</span> Cuadro Comparativo Financiero Entre Predios
               </h5>
               <div class="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
@@ -1208,10 +1208,10 @@ export class ModuloAdmin {
                         <tr class="${esSeleccionada ? 'bg-purple-50/50 font-bold' : 'hover:bg-slate-50'} transition">
                           <td class="p-3 flex items-center gap-2">
                             <span>🏡</span>
-                            <span class="font-black text-slate-900">${fItem.nombre}</span>
+                            <span class="font-black text-slate-800">${fItem.nombre}</span>
                             ${fItem.id === fincaActiva?.id ? '<span class="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold">Activa</span>' : ''}
                           </td>
-                          <td class="p-3 text-slate-500">${empItem ? empItem.nombre : 'S/E'}</td>
+                          <td class="p-3 text-slate-600">${empItem ? empItem.nombre : 'S/E'}</td>
                           <td class="p-3 text-right font-mono">${fItem.areaHa || 0} Ha</td>
                           <td class="p-3 text-right font-mono">${anmsItem.length} Cab</td>
                           <td class="p-3 text-right font-mono font-bold">$${Math.round(fijosItem).toLocaleString('es-CO')}</td>
@@ -1251,25 +1251,25 @@ export class ModuloAdmin {
     return `
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- HEADER GEMINI IA -->
-        <div class="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 rounded-3xl border border-purple-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="bovi-module-header p-5 sm:p-6 rounded-3xl border border-purple-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex items-center gap-4">
             <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-3xl shadow-lg border border-purple-300/40 shrink-0">
               ✨
             </div>
             <div>
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-lg sm:text-xl font-black tracking-tight text-white">Conexión Global Google Gemini IA</h3>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-amber-400/20 text-amber-200 border border-amber-400/40">
+                <h3 class="text-lg sm:text-xl font-black tracking-tight text-slate-800">Conexión Global Google Gemini IA</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-amber-400/20 text-amber-700 border border-amber-400/40">
                   👑 EXCLUSIVO SUPER ADMINISTRADOR
                 </span>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${tieneKey ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase ${tieneKey ? 'bg-emerald-500/20 text-emerald-700 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-700 border border-amber-500/40'}">
                   ${tieneKey ? '● CONECTADO GLOBALMENTE' : '○ MOTOR HÍBRIDO ACTIVO'}
                 </span>
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-700 border border-purple-500/40">
                   ${obtenerModeloGeminiActivo()}
                 </span>
               </div>
-              <p class="text-xs text-purple-200/80 mt-1 max-w-xl leading-relaxed">
+              <p class="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
                 Conexión centralizada para <strong>todas las empresas (${(this.getEmpresas ? this.getEmpresas() : []).length || 'todas'}) y todas las fincas (${fincas.length || 'todas'})</strong>. Los usuarios del sistema utilizan la IA automáticamente en Nutrición IA sin tener acceso a esta configuración.
               </p>
             </div>
@@ -1280,7 +1280,7 @@ export class ModuloAdmin {
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noopener noreferrer"
-              class="px-4 py-2.5 rounded-2xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 text-xs font-black border border-purple-400/40 transition flex items-center gap-1.5"
+              class="px-4 py-2.5 rounded-2xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-700 text-xs font-black border border-purple-400/40 transition flex items-center gap-1.5"
             >
               <span>🔑</span>
               <span>Obtener Clave Gratis</span>
@@ -1293,10 +1293,10 @@ export class ModuloAdmin {
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
-              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+              <h4 class="text-sm sm:text-base font-black text-slate-800 flex items-center gap-2">
                 <span>🌐</span> Clave Global de API de Google Gemini (Para Todas las Fincas y Empresas)
               </h4>
-              <p class="text-xs text-slate-500 mt-0.5">
+              <p class="text-xs text-slate-600 mt-0.5">
                 Al guardar esta clave como Super Administrador, queda activa automáticamente para todas las empresas y todas las fincas y se sincroniza con Supabase Cloud.
               </p>
             </div>
@@ -1322,12 +1322,12 @@ export class ModuloAdmin {
                   type="${this.geminiApiKeyVisible ? 'text' : 'password'}"
                   placeholder="Pega aquí tu clave (ej: AIzaSy...)"
                   value="${tieneKey ? keyActual : ''}"
-                  class="w-full bg-slate-50 border border-slate-300 text-slate-900 px-4 py-3 pr-10 rounded-2xl text-sm font-mono focus:outline-none focus:border-purple-600 focus:bg-white transition"
+                  class="w-full bg-slate-50 border border-slate-300 text-slate-800 px-4 py-3 pr-10 rounded-2xl text-sm font-mono focus:outline-none focus:border-purple-600 focus:bg-white transition"
                 />
                 <button
                   type="button"
                   id="btn-toggle-ver-gemini-key"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-sm cursor-pointer p-1"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-700 text-sm cursor-pointer p-1"
                   title="${this.geminiApiKeyVisible ? 'Ocultar clave' : 'Mostrar clave'}"
                 >
                   ${this.geminiApiKeyVisible ? '🙈' : '👁️'}
@@ -1347,7 +1347,7 @@ export class ModuloAdmin {
                 type="button"
                 id="btn-probar-gemini-key"
                 ${this.geminiProbando ? 'disabled' : ''}
-                class="px-5 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shrink-0 ${this.geminiProbando ? 'opacity-50 cursor-wait' : ''}"
+                class="px-5 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shrink-0 ${this.geminiProbando ? ' cursor-wait' : ''}"
               >
                 <span>${this.geminiProbando ? '⏳' : '⚡'}</span>
                 <span>${this.geminiProbando ? 'Verificando...' : 'Probar Conexión'}</span>
@@ -1368,16 +1368,12 @@ export class ModuloAdmin {
 
             <!-- RESULTADO DE PRUEBA -->
             ${this.geminiTestResultado ? `
-              <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${
-                this.geminiTestResultado.ok
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                  : 'bg-rose-50 border border-rose-200 text-rose-800'
-              }">
+              <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${ this.geminiTestResultado.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800' }">
                 <div class="flex items-center gap-2">
                   <span>${this.geminiTestResultado.ok ? '✅' : '❌'}</span>
                   <span>${this.geminiTestResultado.mensaje || this.geminiTestResultado.error || 'Respuesta recibida'}</span>
                 </div>
-                <button id="btn-cerrar-resultado-gemini" class="text-slate-400 hover:text-slate-700 text-xs px-2 cursor-pointer">✕</button>
+                <button id="btn-cerrar-resultado-gemini" class="text-slate-600 hover:text-slate-700 text-xs px-2 cursor-pointer">✕</button>
               </div>
             ` : ''}
 
@@ -1403,19 +1399,19 @@ export class ModuloAdmin {
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
-              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+              <h4 class="text-sm sm:text-base font-black text-slate-800 flex items-center gap-2">
                 <span>💬</span> Consultor Zootécnico & Veterinario IA
               </h4>
-              <p class="text-xs text-slate-500 mt-0.5">
+              <p class="text-xs text-slate-600 mt-0.5">
                 Formula preguntas sobre nutrición, sanidad, reproducción o manejo para tu finca activa <strong>(${finca?.nombre || 'General'})</strong>.
               </p>
             </div>
-            <span class="text-[11px] font-bold text-slate-400">Contexto: ${animales.length} animales registrados</span>
+            <span class="text-[11px] font-bold text-slate-600">Contexto: ${animales.length} animales registrados</span>
           </div>
 
           <div class="space-y-3">
             <div class="flex flex-wrap gap-1.5 text-[11px]">
-              <span class="text-slate-400 font-bold self-center">Consultas rápidas:</span>
+              <span class="text-slate-600 font-bold self-center">Consultas rápidas:</span>
               <button type="button" class="btn-chip-consulta-gemini px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-purple-100 hover:text-purple-900 text-slate-700 transition font-medium cursor-pointer" data-q="¿Cuál es la ración balanceada diaria recomendada para vacas de ordeño en trópico bajo?">
                 🥛 Dieta vacas de leche
               </button>
@@ -1435,14 +1431,14 @@ export class ModuloAdmin {
                 id="input-consulta-gemini"
                 rows="2"
                 placeholder="Escribe tu consulta zootécnica (ej: ¿Qué suplemento dar a vacas horras en época seca?)..."
-                class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 p-3.5 rounded-2xl text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:bg-white transition resize-none"
+                class="flex-1 bg-slate-50 border border-slate-300 text-slate-800 p-3.5 rounded-2xl text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:bg-white transition resize-none"
               >${this.consultaZootecnicaTexto || ''}</textarea>
 
               <button
                 type="button"
                 id="btn-enviar-consulta-gemini"
                 ${this.asistenteGeminiCargando ? 'disabled' : ''}
-                class="px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-950/20 transition cursor-pointer shrink-0 ${this.asistenteGeminiCargando ? 'opacity-50 cursor-wait' : ''}"
+                class="px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-950/20 transition cursor-pointer shrink-0 ${this.asistenteGeminiCargando ? ' cursor-wait' : ''}"
               >
                 <span>${this.asistenteGeminiCargando ? '⏳' : '🚀'}</span>
                 <span>${this.asistenteGeminiCargando ? 'Consultando...' : 'Consultar'}</span>
@@ -1459,7 +1455,7 @@ export class ModuloAdmin {
                         <span>❓</span>
                         <span>"${item.pregunta}"</span>
                       </div>
-                      <span class="text-[10px] text-slate-400 font-mono">${item.hora}</span>
+                      <span class="text-[10px] text-slate-600 font-mono">${item.hora}</span>
                     </div>
                     <div class="prose prose-sm max-w-none text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
                       ${item.respuesta}
@@ -1480,10 +1476,10 @@ export class ModuloAdmin {
         <div class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-md space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
-              <h4 class="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+              <h4 class="text-sm sm:text-base font-black text-slate-800 flex items-center gap-2">
                 <span>📊</span> Diagnóstico Situacional del Hato con Gemini IA
               </h4>
-              <p class="text-xs text-slate-500 mt-0.5">
+              <p class="text-xs text-slate-600 mt-0.5">
                 Genera una auditoría zootécnica integral automática cruzando inventario, pesos, fertilidad y costos de <strong>${finca?.nombre || 'la finca activa'}</strong>.
               </p>
             </div>
@@ -1492,7 +1488,7 @@ export class ModuloAdmin {
               type="button"
               id="btn-generar-informe-hato-gemini"
               ${this.informeHatoCargando ? 'disabled' : ''}
-              class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20 transition cursor-pointer ${this.informeHatoCargando ? 'opacity-50 cursor-wait' : ''}"
+              class="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20 transition cursor-pointer ${this.informeHatoCargando ? ' cursor-wait' : ''}"
             >
               <span>${this.informeHatoCargando ? '⏳' : '⚡'}</span>
               <span>${this.informeHatoCargando ? 'Generando Diagnóstico...' : 'Generar Diagnóstico del Hato'}</span>
@@ -1501,11 +1497,11 @@ export class ModuloAdmin {
 
           <!-- CONTENIDO DEL INFORME GENERADO -->
           ${this.informeHatoGemini ? `
-            <div class="bg-emerald-950 text-emerald-100 rounded-3xl p-5 sm:p-7 border border-emerald-500/40 shadow-2xl space-y-4 font-sans">
+            <div class="bg-emerald-950 text-emerald-700 rounded-3xl p-5 sm:p-7 border border-emerald-500/40 shadow-2xl space-y-4 font-sans">
               <div class="flex items-center justify-between pb-3 border-b border-emerald-800/80 flex-wrap gap-2">
                 <div class="flex items-center gap-2">
                   <span class="text-2xl">📋</span>
-                  <span class="font-black text-sm uppercase text-white tracking-wider">Informe Zootécnico Oficial generado por Gemini IA</span>
+                  <span class="font-black text-sm uppercase text-slate-800 tracking-wider">Informe Zootécnico Oficial generado por Gemini IA</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <button type="button" id="btn-copiar-informe-hato" class="px-3 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer">
@@ -1516,15 +1512,15 @@ export class ModuloAdmin {
                   </button>
                 </div>
               </div>
-              <div id="contenedor-texto-informe-hato" class="prose prose-invert prose-emerald max-w-none text-xs sm:text-sm leading-relaxed whitespace-pre-line text-emerald-100/90 font-sans">
+              <div id="contenedor-texto-informe-hato" class="prose prose-invert prose-emerald max-w-none text-xs sm:text-sm leading-relaxed whitespace-pre-line text-slate-600 font-sans">
                 ${this.informeHatoGemini}
               </div>
             </div>
           ` : `
-            <div class="py-8 text-center text-slate-400 space-y-2 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <div class="py-8 text-center text-slate-600 space-y-2 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               <span class="text-3xl block">📋</span>
               <p class="text-xs sm:text-sm font-bold text-slate-600">No se ha generado un informe reciente del hato para esta finca.</p>
-              <p class="text-[11px] text-slate-400 max-w-md mx-auto">
+              <p class="text-[11px] text-slate-600 max-w-md mx-auto">
                 Haz clic en el botón superior para que Gemini analice los ${animales.length} animales activos y redacte el diagnóstico veterinario y nutricional.
               </p>
             </div>
@@ -1557,33 +1553,27 @@ export class ModuloAdmin {
                   ${estaConectado ? 'Configurado & Listo' : 'Sin Credenciales'}
                 </span>
               </div>
-              <p class="text-xs text-slate-500 mt-0.5">Última sincronización: <strong>${ultimoSync}</strong></p>
+              <p class="text-xs text-slate-600 mt-0.5">Última sincronización: <strong>${ultimoSync}</strong></p>
             </div>
           </div>
-          <button id="btn-abrir-sql-modal" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
+          <button id="btn-abrir-sql-modal" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
             <span>📋</span> Ver Script SQL
           </button>
         </div>
 
         ${this.supabaseFeedback ? `
-          <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 ${
-            this.supabaseFeedback.tipo === 'success' 
-              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
-              : this.supabaseFeedback.tipo === 'error'
-              ? 'bg-rose-100 text-rose-900 border border-rose-300'
-              : 'bg-blue-100 text-blue-900 border border-blue-300'
-          }">
+          <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 ${ this.supabaseFeedback.tipo === 'success' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : this.supabaseFeedback.tipo === 'error' ? 'bg-rose-100 text-rose-900 border border-rose-300' : 'bg-blue-100 text-blue-900 border border-blue-300' }">
             <div class="flex items-center gap-2">
               <span>${this.supabaseFeedback.tipo === 'success' ? '✅' : this.supabaseFeedback.tipo === 'error' ? '❌' : 'ℹ️'}</span>
               <span>${this.supabaseFeedback.mensaje}</span>
             </div>
-            <button id="btn-cerrar-feedback-supabase" class="text-slate-400 hover:text-slate-700 font-black cursor-pointer">✕</button>
+            <button id="btn-cerrar-feedback-supabase" class="text-slate-600 hover:text-slate-700 font-black cursor-pointer">✕</button>
           </div>
         ` : ''}
 
         <!-- FORMULARIO DE CREDENCIALES -->
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
-          <h5 class="font-black text-slate-900 text-xs uppercase tracking-wider">
+          <h5 class="font-black text-slate-800 text-xs uppercase tracking-wider">
             Credenciales de Conexión (Project Settings > API)
           </h5>
 
@@ -1599,7 +1589,7 @@ export class ModuloAdmin {
             </div>
 
             <div class="pt-2 flex justify-between items-center gap-2">
-              <button type="button" id="btn-probar-supabase" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer">
+              <button type="button" id="btn-probar-supabase" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-800 font-bold text-xs rounded-xl shadow transition cursor-pointer">
                 🔌 Probar Conexión
               </button>
               <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition cursor-pointer">
@@ -1616,7 +1606,7 @@ export class ModuloAdmin {
               <div class="font-black text-emerald-900 text-sm">⬆️ Subir Datos Locales (Push)</div>
               <p class="text-xs text-emerald-800 mt-1">Sube predios, animales, pesajes y servicios a Supabase Cloud.</p>
             </div>
-            <button id="btn-push-supabase" ${!estaConectado || this.sincronizandoSupabase ? 'disabled' : ''} class="mt-4 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow transition cursor-pointer">
+            <button id="btn-push-supabase" ${!estaConectado || this.sincronizandoSupabase ? 'disabled' : ''} class="mt-4 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 disabled: text-white font-black text-xs rounded-xl shadow transition cursor-pointer">
               ${this.sincronizandoSupabase ? '⏳ Sincronizando...' : 'Subir Todo (Push)'}
             </button>
           </div>
@@ -1626,7 +1616,7 @@ export class ModuloAdmin {
               <div class="font-black text-blue-900 text-sm">⬇️ Descargar Datos (Pull)</div>
               <p class="text-xs text-blue-800 mt-1">Descarga el inventario centralizado para trabajar sin conexión.</p>
             </div>
-            <button id="btn-pull-supabase" ${!estaConectado || this.sincronizandoSupabase ? 'disabled' : ''} class="mt-4 py-2.5 px-4 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow transition cursor-pointer">
+            <button id="btn-pull-supabase" ${!estaConectado || this.sincronizandoSupabase ? 'disabled' : ''} class="mt-4 py-2.5 px-4 bg-blue-700 hover:bg-blue-600 disabled: text-white font-black text-xs rounded-xl shadow transition cursor-pointer">
               ${this.sincronizandoSupabase ? '⏳ Descargando...' : 'Descargar de Nube (Pull)'}
             </button>
           </div>
@@ -1650,23 +1640,23 @@ export class ModuloAdmin {
     return `
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- BANNER PRINCIPAL COPIA DE SEGURIDAD -->
-        <div class="p-6 bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 text-white rounded-3xl shadow-xl border border-emerald-500/40 relative overflow-hidden">
+        <div class="p-6 bovi-module-header rounded-3xl shadow-xl border border-emerald-500/40 relative overflow-hidden">
           <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
             <div class="flex items-center gap-4">
-              <span class="text-4xl sm:text-5xl p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-3xl shadow-inner text-emerald-300">
+              <span class="text-4xl sm:text-5xl p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-3xl shadow-inner text-emerald-700">
                 💾
               </span>
               <div>
                 <div class="flex items-center gap-2">
-                  <h3 class="text-xl sm:text-2xl font-black tracking-tight text-white">
+                  <h3 class="text-xl sm:text-2xl font-black tracking-tight text-slate-800">
                     Copia de Seguridad del Sistema
                   </h3>
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-emerald-500/30 text-emerald-200 border border-emerald-400/50">
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-emerald-500/30 text-emerald-700 border border-emerald-400/50">
                     Local & Nube
                   </span>
                 </div>
-                <p class="text-xs sm:text-sm text-emerald-100/80 mt-1 max-w-xl leading-relaxed">
+                <p class="text-xs sm:text-sm text-slate-600 mt-1 max-w-xl leading-relaxed">
                   Exporta el 100% de la información del sistema en un archivo de Excel profesional (.xlsx) con hojas independientes para cada módulo, garantizando resguardo seguro en tu equipo.
                 </p>
               </div>
@@ -1677,7 +1667,7 @@ export class ModuloAdmin {
                 <span>📗</span>
                 <span>Descargar Respaldo Excel (.xlsx)</span>
               </button>
-              <button id="btn-descargar-backup-json" class="w-full sm:w-auto px-4 py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl border border-white/20 transition flex items-center justify-center gap-2 text-xs cursor-pointer">
+              <button id="btn-descargar-backup-json" class="w-full sm:w-auto px-4 py-3.5 bg-white/10 hover:bg-white/20 text-slate-800 font-bold rounded-2xl border border-white/20 transition flex items-center justify-center gap-2 text-xs cursor-pointer">
                 <span>📦</span>
                 <span>JSON Crudo</span>
               </button>
@@ -1688,7 +1678,7 @@ export class ModuloAdmin {
         <!-- RESUMEN DE REGISTROS A RESPALDAR -->
         <div class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
           <div class="flex items-center justify-between">
-            <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
+            <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
               <span>📊</span> Registros Reales en Base de Datos
             </h4>
             <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
@@ -1734,10 +1724,10 @@ export class ModuloAdmin {
 
         <!-- ESTRUCTURA DEL ARCHIVO EXCEL DE RESPALDO -->
         <div class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-          <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
+          <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
             <span>📑</span> Contenido del Archivo de Respaldo (.xlsx)
           </h4>
-          <p class="text-xs text-slate-500">
+          <p class="text-xs text-slate-600">
             El archivo exportado contiene 11 hojas de cálculo separadas e independientes, con encabezados técnicos y listos para abrir en Microsoft Excel, Google Sheets o LibreOffice:
           </p>
 
@@ -1745,78 +1735,78 @@ export class ModuloAdmin {
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">1</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🏢 Empresas</strong>
-                <span class="text-slate-500 text-[11px]">Razón social, NIT, país, moneda, plan de vigencia y fechas.</span>
+                <strong class="text-slate-800 block font-bold">🏢 Empresas</strong>
+                <span class="text-slate-600 text-[11px]">Razón social, NIT, país, moneda, plan de vigencia y fechas.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">2</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🏡 Fincas</strong>
-                <span class="text-slate-500 text-[11px]">Código predial, nombre, hectáreas, precios base de carne y leche.</span>
+                <strong class="text-slate-800 block font-bold">🏡 Fincas</strong>
+                <span class="text-slate-600 text-[11px]">Código predial, nombre, hectáreas, precios base de carne y leche.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">3</span>
               <div>
-                <strong class="text-slate-900 block font-bold">👥 Usuarios</strong>
-                <span class="text-slate-500 text-[11px]">Cuentas de acceso, rol corporativo y fincas autorizadas.</span>
+                <strong class="text-slate-800 block font-bold">👥 Usuarios</strong>
+                <span class="text-slate-600 text-[11px]">Cuentas de acceso, rol corporativo y fincas autorizadas.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">4</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🐄 Animales</strong>
-                <span class="text-slate-500 text-[11px]">Inventario completo: chapeta, nombre, raza, sexo, CC, peso actual.</span>
+                <strong class="text-slate-800 block font-bold">🐄 Animales</strong>
+                <span class="text-slate-600 text-[11px]">Inventario completo: chapeta, nombre, raza, sexo, CC, peso actual.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">5</span>
               <div>
-                <strong class="text-slate-900 block font-bold">⚖️ Pesajes</strong>
-                <span class="text-slate-500 text-[11px]">Histórico cronológico, peso, ganancia diaria (GDP), talla (cm) y CC.</span>
+                <strong class="text-slate-800 block font-bold">⚖️ Pesajes</strong>
+                <span class="text-slate-600 text-[11px]">Histórico cronológico, peso, ganancia diaria (GDP), talla (cm) y CC.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">6</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🧬 Servicios</strong>
-                <span class="text-slate-500 text-[11px]">Inseminación artificial, toro, pajilla, fecha de servicio y diagnóstico.</span>
+                <strong class="text-slate-800 block font-bold">🧬 Servicios</strong>
+                <span class="text-slate-600 text-[11px]">Inseminación artificial, toro, pajilla, fecha de servicio y diagnóstico.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">7</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🥗 Nutrición</strong>
-                <span class="text-slate-500 text-[11px]">Planes nutricionales, etapa fisiológica, raciones y requerimientos.</span>
+                <strong class="text-slate-800 block font-bold">🥗 Nutrición</strong>
+                <span class="text-slate-600 text-[11px]">Planes nutricionales, etapa fisiológica, raciones y requerimientos.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">8</span>
               <div>
-                <strong class="text-slate-900 block font-bold">💰 Costos Fijos</strong>
-                <span class="text-slate-500 text-[11px]">Mano de obra, praderas, suplementación y sanidad por predio.</span>
+                <strong class="text-slate-800 block font-bold">💰 Costos Fijos</strong>
+                <span class="text-slate-600 text-[11px]">Mano de obra, praderas, suplementación y sanidad por predio.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">9</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🏗️ Inversiones</strong>
-                <span class="text-slate-500 text-[11px]">Inversiones en infraestructura, maquinaria, genética y praderas.</span>
+                <strong class="text-slate-800 block font-bold">🏗️ Inversiones</strong>
+                <span class="text-slate-600 text-[11px]">Inversiones en infraestructura, maquinaria, genética y praderas.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">10</span>
               <div>
-                <strong class="text-slate-900 block font-bold">🚚 Traslados</strong>
-                <span class="text-slate-500 text-[11px]">Registro de movimientos de ganado entre fincas y potreros.</span>
+                <strong class="text-slate-800 block font-bold">🚚 Traslados</strong>
+                <span class="text-slate-600 text-[11px]">Registro de movimientos de ganado entre fincas y potreros.</span>
               </div>
             </div>
             <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-start gap-2.5">
               <span class="text-emerald-700 font-black text-base">11</span>
               <div>
-                <strong class="text-slate-900 block font-bold">📋 Operaciones</strong>
-                <span class="text-slate-500 text-[11px]">Bitácora y trazabilidad de eventos diarios registrados en campo.</span>
+                <strong class="text-slate-800 block font-bold">📋 Operaciones</strong>
+                <span class="text-slate-600 text-[11px]">Bitácora y trazabilidad de eventos diarios registrados en campo.</span>
               </div>
             </div>
           </div>
@@ -1857,10 +1847,10 @@ export class ModuloAdmin {
 
           <!-- BORRADO 1: VACIAR HATO DE UNA FINCA A CERO -->
           <div class="p-4 bg-white rounded-2xl border border-rose-200 space-y-3">
-            <div class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+            <div class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <span>🏡</span> 1. Borrar Base de Datos de una Finca (Reiniciar Hato a 0)
             </div>
-            <p class="text-xs text-slate-500">
+            <p class="text-xs text-slate-600">
               Elimina todos los animales, pesajes y partos de la finca elegida, conservando el predio y sus costos fijos.
             </p>
             <div class="flex flex-col sm:flex-row gap-2">
@@ -1876,10 +1866,10 @@ export class ModuloAdmin {
           <!-- BORRADO 2: BORRAR EMPRESA COMPLETA (SOLO SUPERADMIN) -->
           ${esSuperAdmin ? `
             <div class="p-4 bg-white rounded-2xl border border-rose-200 space-y-3">
-              <div class="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <div class="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <span>🏢</span> 2. Borrar Base de Datos de una Empresa Completa
               </div>
-              <p class="text-xs text-slate-500">
+              <p class="text-xs text-slate-600">
                 Elimina todos los animales, predios y registros de la empresa seleccionada.
               </p>
               <div class="flex flex-col sm:flex-row gap-2">
@@ -1906,11 +1896,11 @@ export class ModuloAdmin {
             </div>
 
             <!-- BORRADO 4: REINICIO TOTAL A CERO (DEJAR SISTEMA EN BLANCO) -->
-            <div class="p-4 bg-red-950 text-white rounded-2xl border-2 border-red-500 space-y-3">
-              <div class="font-black text-red-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+            <div class="p-4 bg-red-950 text-slate-800 rounded-2xl border-2 border-red-500 space-y-3">
+              <div class="font-black text-red-700 text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <span>🧹</span> 4. Dejar Sistema en Blanco (0 Datos - Listo para Datos Reales)
               </div>
-              <p class="text-xs text-red-200 leading-relaxed">
+              <p class="text-xs text-red-700 leading-relaxed">
                 Elimina permanentemente todas las empresas de prueba, fincas, animales, pesajes y registros. Conserva únicamente tu cuenta de Super Admin (anuardavid) para que registres tu información ganadera real desde cero.
               </p>
               <button type="button" id="btn-resetear-sistema-total" class="w-full py-2.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition cursor-pointer border border-red-400">
@@ -1934,15 +1924,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-gradient-to-r from-emerald-950 to-slate-900 text-white p-5 flex justify-between items-center">
+          <div class="bg-gradient-to-r from-emerald-950 to-slate-900 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-emerald-900/50 rounded-xl border border-emerald-600">🏡</span>
               <div>
                 <h3 class="text-base font-black">Registrar Nuevo Predio / Finca</h3>
-                <p class="text-xs text-emerald-200">Asignado a: <strong>${emp ? emp.nombre : 'Empresa Ganadera'}</strong></p>
+                <p class="text-xs text-emerald-700">Asignado a: <strong>${emp ? emp.nombre : 'Empresa Ganadera'}</strong></p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-crear-finca" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-crear-finca" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-crear-finca" class="p-5 space-y-3.5 text-xs">
@@ -2016,15 +2006,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-gradient-to-r from-purple-950 to-slate-900 text-white p-5 flex justify-between items-center">
+          <div class="bg-gradient-to-r from-purple-950 to-slate-900 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">🏗️</span>
               <div>
                 <h3 class="text-base font-black">Nueva Inversión Amortizable</h3>
-                <p class="text-xs text-purple-200">Predio: <strong>${f ? f.nombre : 'Finca Seleccionada'}</strong></p>
+                <p class="text-xs text-purple-700">Predio: <strong>${f ? f.nombre : 'Finca Seleccionada'}</strong></p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-crear-inv" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-crear-inv" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-crear-inversion" class="p-5 space-y-3.5 text-xs">
@@ -2065,15 +2055,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">🏢</span>
               <div>
                 <h3 class="text-base font-black">Crear Nueva Empresa Ganadera</h3>
-                <p class="text-xs text-slate-400">Nuevo tenant aislado para la gestión de predios y ganado.</p>
+                <p class="text-xs text-slate-600">Nuevo tenant aislado para la gestión de predios y ganado.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-crear-emp" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-crear-emp" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-crear-empresa" class="p-5 space-y-3.5 text-xs">
@@ -2166,15 +2156,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">✏️</span>
               <div>
                 <h3 class="text-base font-black">Editar Empresa: ${emp.nombre}</h3>
-                <p class="text-xs text-slate-400">Actualiza la información institucional del tenant.</p>
+                <p class="text-xs text-slate-600">Actualiza la información institucional del tenant.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-editar-emp" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-editar-emp" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-editar-empresa" class="p-5 space-y-3.5 text-xs">
@@ -2230,18 +2220,18 @@ export class ModuloAdmin {
                   <input type="checkbox" id="edit-emp-indefinido" ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? 'checked' : ''} class="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500 cursor-pointer">
                   <span class="font-black text-xs text-purple-900">♾️ Habilitar por tiempo indefinido (Permanente)</span>
                 </label>
-                <p class="text-[10px] text-slate-500 mt-0.5 ml-6">
+                <p class="text-[10px] text-slate-600 mt-0.5 ml-6">
                   Si activas esta casilla, la empresa tendrá acceso permanente sin fecha límite de expiración.
                 </p>
               </div>
 
               <!-- Contenedor Fecha de Vencimiento -->
-              <div id="contenedor-fecha-vencimiento" class="space-y-1.5 ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? 'opacity-50 pointer-events-none' : ''}">
+              <div id="contenedor-fecha-vencimiento" class="space-y-1.5 ${emp.tiempoIndefinido || emp.fechaVencimiento === 'indefinido' ? ' pointer-events-none' : ''}">
                 <label class="block text-[11px] font-bold text-slate-700">Fecha de Vencimiento de Licencia:</label>
                 <input type="date" id="edit-emp-vencimiento" value="${emp.fechaVencimiento && emp.fechaVencimiento !== 'indefinido' ? emp.fechaVencimiento : ''}" class="w-full px-3 py-2 font-mono font-bold rounded-xl border border-purple-300 bg-white outline-none cursor-pointer">
                 
                 <div class="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span class="text-[10px] font-bold text-slate-500">Modificar fecha rápido:</span>
+                  <span class="text-[10px] font-bold text-slate-600">Modificar fecha rápido:</span>
                   <button type="button" class="btn-quick-add-venc px-2 py-0.5 rounded bg-purple-200 hover:bg-purple-300 active:scale-95 text-purple-950 text-[10px] font-bold cursor-pointer" data-meses="1">+1 Mes</button>
                   <button type="button" class="btn-quick-add-venc px-2 py-0.5 rounded bg-purple-200 hover:bg-purple-300 active:scale-95 text-purple-950 text-[10px] font-bold cursor-pointer" data-meses="3">+3 Meses</button>
                   <button type="button" class="btn-quick-add-venc px-2 py-0.5 rounded bg-purple-200 hover:bg-purple-300 active:scale-95 text-purple-950 text-[10px] font-bold cursor-pointer" data-meses="6">+6 Meses</button>
@@ -2284,7 +2274,7 @@ export class ModuloAdmin {
   renderListaChecksFincas(fincas = [], empresaId, modo = 'crear', fincasAsignadas = 'todas') {
     const fincasDeEmp = (fincas || []).filter((f) => f.empresaId === empresaId);
     if (fincasDeEmp.length === 0) {
-      return '<div class="col-span-full text-slate-500 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">No hay fincas registradas en esta empresa aún.</div>';
+      return '<div class="col-span-full text-slate-600 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">No hay fincas registradas en esta empresa aún.</div>';
     }
 
     const esTodas = !fincasAsignadas || fincasAsignadas === 'todas' || (Array.isArray(fincasAsignadas) && fincasAsignadas.includes('todas'));
@@ -2303,7 +2293,7 @@ export class ModuloAdmin {
           >
           <div class="truncate">
             <span class="text-xs font-bold text-slate-800 block truncate" title="${f.nombre}">${f.nombre}</span>
-            <span class="text-[10px] text-slate-400 font-mono">${f.codigo || f.id}</span>
+            <span class="text-[10px] text-slate-600 font-mono">${f.codigo || f.id}</span>
           </div>
         </label>
       `;
@@ -2318,15 +2308,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">👤</span>
               <div>
                 <h3 class="text-base font-black">Crear Nuevo Usuario</h3>
-                <p class="text-xs text-slate-400">Asigna credenciales, rol y delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Asigna credenciales, rol y delimita fincas autorizadas.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-crear-usr" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-crear-usr" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-crear-usuario" class="p-5 space-y-3.5 text-xs max-h-[85vh] overflow-y-auto">
@@ -2339,7 +2329,7 @@ export class ModuloAdmin {
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Usuario / Login *:</label>
                 <div class="relative">
-                  <span class="absolute left-3 top-2 text-slate-400 font-mono font-bold">@</span>
+                  <span class="absolute left-3 top-2 text-slate-600 font-mono font-bold">@</span>
                   <input type="text" id="usr-login" required placeholder="Ej. crivera" autocomplete="off" class="w-full pl-8 pr-3 py-2 font-mono font-bold rounded-xl border border-slate-300 outline-none focus:border-purple-600 transition">
                 </div>
                 <p id="usr-login-feedback" class="text-[11px] font-bold mt-1 hidden"></p>
@@ -2433,15 +2423,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">✏️</span>
               <div>
                 <h3 class="text-base font-black">Editar Perfil: @${u.usuario}</h3>
-                <p class="text-xs text-slate-400">Actualiza rol asignado, estado o delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Actualiza rol asignado, estado o delimita fincas autorizadas.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-edit" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-edit" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-editar-usuario" class="p-5 space-y-3.5 text-xs max-h-[85vh] overflow-y-auto">
@@ -2532,15 +2522,15 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full overflow-hidden my-auto flex flex-col">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-amber-900/50 rounded-xl border border-amber-600">🔑</span>
               <div>
                 <h3 class="text-base font-black">Asignar Contraseña</h3>
-                <p class="text-xs text-slate-400">Usuario @${u.usuario}</p>
+                <p class="text-xs text-slate-600">Usuario @${u.usuario}</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-pass" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-pass" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <form id="form-cambiar-password" class="p-5 space-y-4 text-xs">
@@ -2554,7 +2544,7 @@ export class ModuloAdmin {
               <input type="text" id="nueva-password" required placeholder="Escribe o genera la clave..." class="w-full px-3 py-2 font-mono font-bold rounded-xl border border-slate-300 outline-none focus:border-amber-600">
             </div>
 
-            <p class="text-[11px] text-slate-500 leading-relaxed">
+            <p class="text-[11px] text-slate-600 leading-relaxed">
               El usuario @${u.usuario} podrá acceder inmediatamente con esta nueva contraseña.
             </p>
 
@@ -2576,22 +2566,22 @@ export class ModuloAdmin {
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden my-auto flex flex-col max-h-[90vh]">
-          <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-2.5">
               <span class="text-2xl p-2 bg-emerald-900/50 rounded-xl border border-emerald-600">⚡</span>
               <div>
                 <h3 class="text-base font-black">Script SQL Oficial para Supabase</h3>
-                <p class="text-xs text-slate-400">Ejecútalo en el SQL Editor de Supabase para inicializar las tablas.</p>
+                <p class="text-xs text-slate-600">Ejecútalo en el SQL Editor de Supabase para inicializar las tablas.</p>
               </div>
             </div>
-            <button id="btn-cerrar-sql-modal" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white cursor-pointer">✕</button>
+            <button id="btn-cerrar-sql-modal" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
           </div>
 
           <div class="p-5 overflow-y-auto space-y-3 flex-1">
             <p class="text-xs text-slate-600">
               Copia este script completo y pégalo en el SQL Editor de tu proyecto de Supabase:
             </p>
-            <textarea id="textarea-sql-supabase" readonly class="w-full h-80 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-xl border border-slate-700 outline-none select-all leading-relaxed">${this.obtenerScriptSqlSupabase()}</textarea>
+            <textarea id="textarea-sql-supabase" readonly class="w-full h-80 p-3 bg-slate-900 text-emerald-700 font-mono text-[11px] rounded-xl border border-slate-700 outline-none select-all leading-relaxed">${this.obtenerScriptSqlSupabase()}</textarea>
           </div>
 
           <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
@@ -2738,7 +2728,7 @@ END $$;
 
   getBadgeRolHtml(rol) {
     const clases = {
-      superadmin: 'bg-purple-900 text-purple-100 border border-purple-700',
+      superadmin: 'bg-purple-900 text-purple-700 border border-purple-700',
       administrador: 'bg-blue-100 text-blue-800 border border-blue-200',
       encargado: 'bg-amber-100 text-amber-800 border border-amber-300',
       consultor: 'bg-slate-100 text-slate-700 border border-slate-300',
@@ -3019,10 +3009,10 @@ END $$;
       if (checkIndefEdit && contFecha) {
         checkIndefEdit.addEventListener('change', (e) => {
           if (e.target.checked) {
-            contFecha.classList.add('opacity-50', 'pointer-events-none');
+            contFecha.classList.add('', 'pointer-events-none');
             if (lblVenc) lblVenc.textContent = '♾️ TIEMPO INDEFINIDO';
           } else {
-            contFecha.classList.remove('opacity-50', 'pointer-events-none');
+            contFecha.classList.remove('', 'pointer-events-none');
             if (inputVenc) {
               if (!inputVenc.value) {
                 const d = new Date();
@@ -3066,7 +3056,7 @@ END $$;
             if (lblVenc) lblVenc.textContent = `Vence: ${formatearFecha(nuevaFecha)}`;
             if (checkIndefEdit) {
               checkIndefEdit.checked = false;
-              if (contFecha) contFecha.classList.remove('opacity-50', 'pointer-events-none');
+              if (contFecha) contFecha.classList.remove('', 'pointer-events-none');
             }
           }
         });
@@ -4448,14 +4438,14 @@ END $$;
     return `
       <div class="space-y-6">
         <!-- CABECERA EXPLICATIVA -->
-        <div class="bg-gradient-to-r from-emerald-950 via-green-900 to-slate-900 text-white p-5 rounded-2xl border border-emerald-700 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="bovi-module-header p-5 rounded-2xl border border-emerald-700 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div class="space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-2xl">💬</span>
               <h4 class="text-base sm:text-lg font-black">Integración Bidireccional con WhatsApp Cloud API (Meta)</h4>
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">Graph API v17.0</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-700 border border-emerald-400/40">Graph API v17.0</span>
             </div>
-            <p class="text-xs text-emerald-100/90 max-w-2xl">
+            <p class="text-xs text-slate-600 max-w-2xl">
               Aquí puedes ingresar tus tokens de Meta, configurar la lista blanca (Whitelist) de teléfonos autorizados y probar los comandos <strong>INFO &lt;ID&gt;</strong> y <strong>PESO &lt;ID&gt; &lt;KG&gt;</strong> directamente con los animales de tu finca activa (<strong>${fincaActiva ? fincaActiva.nombre : 'Todas'}</strong>).
             </p>
           </div>
@@ -4470,7 +4460,7 @@ END $$;
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- COLUMNA 1: FORMULARIO PARA INGRESAR TOKENS, URL WEBHOOK Y WHITELIST -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-            <h5 class="text-sm font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2.5">
+            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2.5">
               <span>🔑</span> 1. Ingresar Credenciales de Meta & Números Autorizados (Whitelist)
             </h5>
 
@@ -4485,7 +4475,7 @@ END $$;
                   📋 Copiar URL
                 </button>
               </div>
-              <span class="text-[10px] text-slate-500 block">Soporta verificación <strong>GET</strong> (<code>hub.mode</code>, <code>hub.verify_token</code>, <code>hub.challenge</code>) y recepción de mensajes <strong>POST</strong>.</span>
+              <span class="text-[10px] text-slate-600 block">Soporta verificación <strong>GET</strong> (<code>hub.mode</code>, <code>hub.verify_token</code>, <code>hub.challenge</code>) y recepción de mensajes <strong>POST</strong>.</span>
             </div>
 
             <form id="form-whatsapp-cloud-config" class="space-y-3.5">
@@ -4515,7 +4505,7 @@ END $$;
                   ✅ Números de Teléfono Autorizados - Whitelist (Separados por coma):
                 </label>
                 <textarea id="wa-authorized-numbers" rows="2" placeholder="Ej. 573001234567, 573109876543" class="w-full px-3 py-2 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">${cfg.authorizedNumbers}</textarea>
-                <span class="text-[10px] text-slate-500 block mt-0.5">
+                <span class="text-[10px] text-slate-600 block mt-0.5">
                   Si un número NO está en esta lista, el webhook retorna <strong>Status 200</strong> sin ejecutar nada en la base de datos.
                 </span>
               </div>
@@ -4529,7 +4519,7 @@ END $$;
           <!-- COLUMNA 2: SIMULADOR INTERACTIVO EN VIVO (COMANDOS INFO Y PESO) -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 flex flex-col justify-between">
             <div class="space-y-4">
-              <h5 class="text-sm font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2.5">
+              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2.5">
                 <span>🤖</span> 2. Probar Comandos "INFO" y "PESO" en Tiempo Real
               </h5>
 
@@ -4539,7 +4529,7 @@ END $$;
 
               <!-- BOTONES RÁPIDOS DE PRUEBA -->
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-[11px] font-bold text-slate-500">Clic para rellenar ejemplo:</span>
+                <span class="text-[11px] font-bold text-slate-600">Clic para rellenar ejemplo:</span>
                 <button type="button" data-cmd="INFO ${primerTagEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
                   INFO ${primerTagEjemplo}
                 </button>
@@ -4567,18 +4557,18 @@ END $$;
               </form>
 
               <!-- CONSOLA DE RESPUESTAS DEL BOT -->
-              <div class="bg-slate-900 text-slate-100 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-60 overflow-y-auto font-mono text-xs">
+              <div class="bg-slate-900 text-slate-600 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-60 overflow-y-auto font-mono text-xs">
                 ${this.whatsappHistorialSimulador.length > 0 ? this.whatsappHistorialSimulador.map((item) => `
                   <div class="p-2.5 rounded-lg ${item.autorizado ? 'bg-slate-800 border border-emerald-500/40' : 'bg-rose-950/60 border border-rose-500/40'} space-y-1">
-                    <div class="flex justify-between text-[10px] text-slate-400">
+                    <div class="flex justify-between text-[10px] text-slate-600">
                       <span>📱 De: +${item.remitente}</span>
                       <span>🕒 ${item.hora}</span>
                     </div>
-                    <div class="text-emerald-300 font-bold">➔ Recibido: "${item.entrante}"</div>
-                    <div class="text-white whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
+                    <div class="text-emerald-700 font-bold">➔ Recibido: "${item.entrante}"</div>
+                    <div class="text-slate-800 whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
                   </div>
                 `).join('') : `
-                  <div class="text-slate-400 text-center py-4">
+                  <div class="text-slate-600 text-center py-4">
                     Escribe <strong>INFO ${primerTagEjemplo}</strong> o <strong>PESO ${primerTagEjemplo} 350</strong> arriba y presiona <strong>▶️ Enviar</strong> para ver la respuesta del bot en vivo.
                   </div>
                 `}
@@ -4602,7 +4592,7 @@ END $$;
                 <button type="button" id="btn-wa-enviar-plantilla" class="px-3 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition shadow">
                   👋 1° Abrir Ventana (Plantilla hello_world)
                 </button>
-                <button type="submit" class="px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-lg cursor-pointer transition shadow">
+                <button type="submit" class="px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-800 font-black text-xs rounded-lg cursor-pointer transition shadow">
                   🚀 2° Enviar Texto Libre a WhatsApp
                 </button>
               </div>

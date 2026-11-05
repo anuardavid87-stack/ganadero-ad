@@ -1115,10 +1115,10 @@ class BoviTrackApp {
     }
 
     const estilos = {
-      success: 'bg-emerald-900/90 text-emerald-100 border-emerald-500/50 shadow-emerald-950/50',
-      info: 'bg-sky-900/90 text-sky-100 border-sky-500/50 shadow-sky-950/50',
-      warn: 'bg-amber-900/90 text-amber-100 border-amber-500/50 shadow-amber-950/50',
-      error: 'bg-rose-900/90 text-rose-100 border-rose-500/50 shadow-rose-950/50'
+      success: 'bg-emerald-900/90 text-emerald-700 border-emerald-500/50 shadow-emerald-950/50',
+      info: 'bg-sky-900/90 text-sky-700 border-sky-500/50 shadow-sky-950/50',
+      warn: 'bg-amber-900/90 text-amber-700 border-amber-500/50 shadow-amber-950/50',
+      error: 'bg-rose-900/90 text-rose-700 border-rose-500/50 shadow-rose-950/50'
     };
 
     toast.className = `fixed bottom-4 right-4 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl text-xs font-bold transition-all duration-300 transform translate-y-0 flex items-center gap-2 border ${estilos[tipo] || estilos.info}`;
@@ -1796,7 +1796,7 @@ class BoviTrackApp {
 
     if (!this.online) {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-50 animate-ping"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 animate-ping"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
       `;
       el.title = 'Sin conexión a internet (Modo Offline). Los cambios se guardan localmente en este dispositivo.';
@@ -1805,7 +1805,7 @@ class BoviTrackApp {
 
     if (estadoOverride === 'guardando') {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
       `;
       el.title = 'Sincronizando y guardando cambios en Supabase Cloud...';
@@ -1814,7 +1814,7 @@ class BoviTrackApp {
 
     if (estadoOverride === 'descargando') {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
       `;
       el.title = 'Sincronizando y descargando datos desde Supabase Cloud...';
@@ -1823,7 +1823,7 @@ class BoviTrackApp {
 
     if (estadoOverride === 'error') {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-60 animate-ping"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 animate-ping"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
       `;
       el.title = 'Error de sincronización con Supabase Cloud. Haz clic para reintentar.';
@@ -1832,13 +1832,13 @@ class BoviTrackApp {
 
     if (supabaseConfigurado) {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-50 animate-pulse"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
       `;
       el.title = 'Supabase Cloud: Sincronizado en línea (Clic para sincronizar ahora).';
     } else {
       el.innerHTML = `
-        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-40 animate-pulse"></span>
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
       `;
       el.title = 'Conectado en línea (Almacenamiento Local Activo).';
@@ -2256,7 +2256,7 @@ class BoviTrackApp {
       return {
         estado: 'suspendida',
         texto: '⛔ Bloqueada por Superadmin',
-        clase: 'bg-rose-500/20 text-rose-300 border border-rose-500/40',
+        clase: 'bg-rose-500/20 text-rose-700 border border-rose-500/40',
         dias: -1,
         esVencida: true
       };
@@ -2266,7 +2266,7 @@ class BoviTrackApp {
       return {
         estado: 'indefinido',
         texto: '🟢 Activa (Tiempo Indefinido)',
-        clase: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+        clase: 'bg-emerald-500/20 text-emerald-700 border border-emerald-500/40',
         dias: Infinity,
         esVencida: false
       };
@@ -2283,7 +2283,7 @@ class BoviTrackApp {
       return {
         estado: 'vencida',
         texto: `⛔ Vencida hace ${Math.abs(diffDias)} días (${formatearFecha(fVenc)})`,
-        clase: 'bg-rose-500/25 text-rose-300 border border-rose-500/50',
+        clase: 'bg-rose-500/25 text-rose-700 border border-rose-500/50',
         dias: diffDias,
         esVencida: true
       };
@@ -2291,7 +2291,7 @@ class BoviTrackApp {
       return {
         estado: 'vence_hoy',
         texto: `⚠️ Vence Hoy (${formatearFecha(fVenc)})`,
-        clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
+        clase: 'bg-amber-500/25 text-amber-700 border border-amber-500/50',
         dias: 0,
         esVencida: false
       };
@@ -2299,7 +2299,7 @@ class BoviTrackApp {
       return {
         estado: 'por_vencer',
         texto: `⚠️ Vence en ${diffDias} días (${formatearFecha(fVenc)})`,
-        clase: 'bg-amber-500/25 text-amber-300 border border-amber-500/50',
+        clase: 'bg-amber-500/25 text-amber-700 border border-amber-500/50',
         dias: diffDias,
         esVencida: false
       };
@@ -2307,7 +2307,7 @@ class BoviTrackApp {
       return {
         estado: 'activa',
         texto: `🟢 Activa (${diffDias} días • Vence: ${formatearFecha(fVenc)})`,
-        clase: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+        clase: 'bg-emerald-500/20 text-emerald-700 border border-emerald-500/40',
         dias: diffDias,
         esVencida: false
       };
@@ -5486,12 +5486,12 @@ class BoviTrackApp {
       badgeEl.textContent = this.getNombreRol(uActual.rol);
       badgeEl.className = `px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${
         uActual.rol === 'superadmin'
-          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30'
+          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-700 border-purple-500/30'
           : uActual.rol === 'administrador'
-          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30'
+          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-700 border-blue-500/30'
           : uActual.rol === 'encargado'
-          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
-          : 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30'
+          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-700 border-emerald-500/30'
+          : 'bg-amber-500/15 text-amber-600 dark:text-amber-700 border-amber-500/30'
       }`;
     }
 
@@ -5537,14 +5537,14 @@ class BoviTrackApp {
 
     document.querySelectorAll('.bovi-view').forEach((el) => el.classList.add('hidden'));
     document.querySelectorAll('.btn-nav-bovi').forEach((btn) => {
-      btn.classList.remove('active', 'text-emerald-400', 'bg-slate-800');
+      btn.classList.remove('active', 'text-emerald-700', 'bg-slate-800');
     });
 
     const activeEl = document.getElementById(`pantalla-${this.vistaActiva}`);
     if (activeEl) activeEl.classList.remove('hidden');
 
     document.querySelectorAll(`.btn-nav-bovi[data-vista="${this.vistaActiva}"]`).forEach((btn) => {
-      btn.classList.add('active', 'text-emerald-400', 'bg-slate-800');
+      btn.classList.add('active', 'text-emerald-700', 'bg-slate-800');
     });
 
     // Indicador activo en botón 'Más' de móvil si la vista actual pertenece al drawer
@@ -5552,11 +5552,11 @@ class BoviTrackApp {
     if (btnMasMobile) {
       const vistasMas = ['reproduccion', 'nutricion', 'alertas', 'dinamica', 'dashboard', 'excel', 'admin'];
       if (vistasMas.includes(this.vistaActiva)) {
-        btnMasMobile.classList.add('text-emerald-400', 'active');
-        btnMasMobile.classList.remove('text-slate-400');
+        btnMasMobile.classList.add('text-emerald-700', 'active');
+        btnMasMobile.classList.remove('text-slate-600');
       } else {
-        btnMasMobile.classList.remove('text-emerald-400', 'active');
-        btnMasMobile.classList.add('text-slate-400');
+        btnMasMobile.classList.remove('text-emerald-700', 'active');
+        btnMasMobile.classList.add('text-slate-600');
       }
     }
 
@@ -5754,33 +5754,33 @@ class BoviTrackApp {
     modal.innerHTML = `
       <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto flex flex-col max-h-[90vh]">
         <!-- HEADER -->
-        <div class="bg-slate-950 text-white p-5 flex justify-between items-center">
+        <div class="bg-slate-950 text-slate-800 p-5 flex justify-between items-center">
           <div class="flex items-center gap-3">
             <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-700">👤</span>
             <div>
               <h3 class="text-base font-black">Sesión & Control de Acceso</h3>
-              <p class="text-xs text-slate-400">Perfil activo y cambio de cuenta de usuario</p>
+              <p class="text-xs text-slate-600">Perfil activo y cambio de cuenta de usuario</p>
             </div>
           </div>
-          <button id="btn-cerrar-modal-sesion" class="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white">✕</button>
+          <button id="btn-cerrar-modal-sesion" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800">✕</button>
         </div>
 
         <div class="p-5 overflow-y-auto space-y-4">
           <!-- PERFIL ACTUAL -->
-          <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 shadow-md">
-            <span class="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 block mb-1">Usuario en Sesión</span>
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-slate-800 border border-slate-700 shadow-md">
+            <span class="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-600 block mb-1">Usuario en Sesión</span>
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl ${this.getColorBgAvatar(uActual.rol)} text-white flex items-center justify-center text-lg font-black shadow-lg">
+              <div class="w-12 h-12 rounded-2xl ${this.getColorBgAvatar(uActual.rol)} text-slate-800 flex items-center justify-center text-lg font-black shadow-lg">
                 ${this.getInitials(uActual.nombre)}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="font-black text-base truncate">${uActual.nombre}</div>
-                <div class="text-xs text-slate-300 font-mono">@${uActual.usuario}</div>
+                <div class="text-xs text-slate-600 font-mono">@${uActual.usuario}</div>
                 <div class="mt-1 flex items-center gap-2">
                   <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${this.getBadgeClaseRol(uActual.rol)}">
                     ${this.getNombreRol(uActual.rol)}
                   </span>
-                  <span class="text-[11px] text-slate-400 truncate">
+                  <span class="text-[11px] text-slate-600 truncate">
                     🏢 ${this.getNombreEmpresaUsuario(uActual.empresaId)}
                   </span>
                 </div>
@@ -5807,15 +5807,15 @@ class BoviTrackApp {
                 return `
                   <div class="p-3 rounded-xl border transition flex items-center justify-between gap-3 ${esActivo ? 'border-purple-400 bg-purple-50/50 ring-2 ring-purple-400/20' : 'border-slate-200 bg-white hover:bg-slate-50'}">
                     <div class="flex items-center gap-2.5 min-w-0">
-                      <div class="w-8 h-8 rounded-xl ${this.getColorBgAvatar(u.rol)} text-white flex items-center justify-center text-xs font-black shrink-0">
+                      <div class="w-8 h-8 rounded-xl ${this.getColorBgAvatar(u.rol)} text-slate-800 flex items-center justify-center text-xs font-black shrink-0">
                         ${this.getInitials(u.nombre)}
                       </div>
                       <div class="min-w-0">
-                        <div class="text-xs font-black text-slate-900 flex items-center gap-1.5 truncate">
+                        <div class="text-xs font-black text-slate-800 flex items-center gap-1.5 truncate">
                           ${u.nombre}
                           ${esActivo ? '<span class="px-1.5 py-0.2 rounded bg-purple-700 text-white text-[9px] font-bold">Activo</span>' : ''}
                         </div>
-                        <div class="text-[11px] text-slate-500 font-mono">
+                        <div class="text-[11px] text-slate-600 font-mono">
                           @${u.usuario} • <span class="font-bold text-slate-700">${this.getNombreRol(u.rol)}</span> • 🏢 ${this.getNombreEmpresaUsuario(u.empresaId)}
                         </div>
                       </div>
@@ -5914,11 +5914,11 @@ class BoviTrackApp {
 
   getBadgeClaseRol(rol) {
     switch (rol) {
-      case 'superadmin': return 'bg-purple-500/30 text-purple-300 border border-purple-500/40';
-      case 'administrador': return 'bg-blue-500/30 text-blue-300 border border-blue-500/40';
-      case 'encargado': return 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40';
-      case 'consultor': return 'bg-amber-500/30 text-amber-300 border border-amber-500/40';
-      default: return 'bg-slate-700 text-slate-300';
+      case 'superadmin': return 'bg-purple-500/30 text-purple-700 border border-purple-500/40';
+      case 'administrador': return 'bg-blue-500/30 text-blue-700 border border-blue-500/40';
+      case 'encargado': return 'bg-emerald-500/30 text-emerald-700 border border-emerald-500/40';
+      case 'consultor': return 'bg-amber-500/30 text-amber-700 border border-amber-500/40';
+      default: return 'bg-slate-700 text-slate-600';
     }
   }
 

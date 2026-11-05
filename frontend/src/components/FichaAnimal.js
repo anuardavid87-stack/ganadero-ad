@@ -146,32 +146,32 @@ export class FichaAnimal {
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-none sm:rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full h-full sm:h-auto sm:max-h-[92vh] flex flex-col modal-fullscreen-mobile">
           <!-- CABECERA DE LA FICHA -->
-          <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+          <div class="bovi-module-header p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
             <div class="flex items-center gap-3 sm:gap-4">
-              <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl sm:text-3xl font-black shadow-inner shrink-0">
+              <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-emerald-600/20 text-emerald-700 border border-emerald-500/30 flex items-center justify-center text-2xl sm:text-3xl font-black shadow-inner shrink-0">
                 ${especie === 'bufalino' ? '🦬' : '🐂'}
               </div>
               <div>
                 <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+                  <span class="text-xl sm:text-2xl font-black font-mono tracking-tight text-slate-800">
                     Arete: ${tag}
                   </span>
-                  <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${especie === 'bufalino' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'}">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${especie === 'bufalino' ? 'bg-amber-500/20 text-amber-700 border border-amber-500/40' : 'bg-blue-500/20 text-blue-700 border border-blue-500/40'}">
                     ${especie === 'bufalino' ? 'Bufalino' : 'Vacuno'}
                   </span>
                   ${a._estaEnOtraFinca ? `
-                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-amber-500/30 text-amber-700 border border-amber-500/50">
                       🏡 En otra finca: ${a._fincaNombre || a.fincaNombre || 'Otra Finca'}
                     </span>
                   ` : ''}
                   ${(a.estadoVida === 'inactivo' || a.estado === 'inactivo' || a.motivoBaja) ? `
-                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-rose-500/30 text-rose-300 border border-rose-500/50">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-rose-500/30 text-rose-700 border border-rose-500/50">
                       🚪 Extraído (${a.motivoBaja || 'Baja'})
                     </span>
                   ` : ''}
                 </div>
-                <h3 class="text-sm sm:text-base font-bold text-slate-200 mt-0.5">${a.nombreAlias || a.nombre || 'Sin Alias Asignado'}</h3>
-                <p class="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}${a._fincaNombre || a.fincaNombre ? ` • 🏡 Finca: ${a._fincaNombre || a.fincaNombre}` : ''}</p>
+                <h3 class="text-sm sm:text-base font-bold text-slate-600 mt-0.5">${a.nombreAlias || a.nombre || 'Sin Alias Asignado'}</h3>
+                <p class="text-[11px] sm:text-xs text-slate-600 font-mono mt-0.5">${a.raza} • ${a.categoria} • Lote: ${a.lote}${a._fincaNombre || a.fincaNombre ? ` • 🏡 Finca: ${a._fincaNombre || a.fincaNombre}` : ''}</p>
               </div>
             </div>
 
@@ -192,11 +192,11 @@ export class FichaAnimal {
                 <button id="btn-ficha-editar-animal" class="flex-1 sm:flex-none px-3.5 py-2.5 sm:py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer" title="Modificar datos de este ejemplar">
                   <span>✏️</span> Editar
                 </button>
-                <button id="btn-ficha-eliminar-animal" class="p-2.5 sm:px-3.5 sm:py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-white border border-rose-500/40 font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer" title="Eliminar este animal del inventario">
+                <button id="btn-ficha-eliminar-animal" class="p-2.5 sm:px-3.5 sm:py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 hover:text-white border border-rose-500/40 font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer" title="Eliminar este animal del inventario">
                   <span>🗑️</span>
                 </button>
               ` : ''}
-              <button id="btn-cerrar-modal-ficha" class="p-2.5 sm:p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition cursor-pointer" title="Cerrar Ficha">
+              <button id="btn-cerrar-modal-ficha" class="p-2.5 sm:p-2 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 hover:bg-slate-700 transition cursor-pointer" title="Cerrar Ficha">
                 ✕
               </button>
             </div>
@@ -226,28 +226,28 @@ export class FichaAnimal {
             ` : ''}
             <!-- SECCIÓN 1: DATOS BÁSICOS & GENEALOGÍA -->
             <div>
-              <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span>🧬</span> Identidad y Genealogía (Pedigree)
               </h4>
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
-                  <span class="block text-slate-400 text-[10px] uppercase font-bold">Fecha Nacimiento</span>
+                  <span class="block text-slate-600 text-[10px] uppercase font-bold">Fecha Nacimiento</span>
                   <span class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento, 'No registrada')}</span>
-                  <span class="text-[10px] text-slate-500 block">Edad: ${edadMeses} meses (${edadAnios} años)</span>
+                  <span class="text-[10px] text-slate-600 block">Edad: ${edadMeses} meses (${edadAnios} años)</span>
                 </div>
                 <div>
-                  <span class="block text-slate-400 text-[10px] uppercase font-bold">Sexo</span>
+                  <span class="block text-slate-600 text-[10px] uppercase font-bold">Sexo</span>
                   <span class="font-bold text-slate-800">${a.sexo === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</span>
                 </div>
                 <div>
-                  <span class="block text-slate-400 text-[10px] uppercase font-bold">Padre (Toro)</span>
-                  <span class="font-bold font-mono text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                  <span class="block text-slate-600 text-[10px] uppercase font-bold">Padre (Toro)</span>
+                  <span class="font-bold font-mono text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
                     ${a.padreTag || a.padre || 'Desconocido'}
                   </span>
                 </div>
                 <div>
-                  <span class="block text-slate-400 text-[10px] uppercase font-bold">Madre (Vaca)</span>
-                  <span class="font-bold font-mono text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                  <span class="block text-slate-600 text-[10px] uppercase font-bold">Madre (Vaca)</span>
+                  <span class="font-bold font-mono text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
                     ${a.madreTag || a.madre || 'Desconocida'}
                   </span>
                 </div>
@@ -256,13 +256,13 @@ export class FichaAnimal {
 
             <!-- SECCIÓN 2: ESTADO REPRODUCTIVO Y DÍAS DE PREÑEZ -->
             <div>
-              <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span>⚡</span> Estado Reproductivo & Indicadores Zootécnicos
               </h4>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <!-- Tarjeta Preñez -->
                 <div class="p-4 rounded-2xl border ${estaPrenada ? 'border-emerald-300 bg-emerald-50/60' : 'border-slate-200 bg-slate-50'}">
-                  <span class="text-[10px] font-bold uppercase text-slate-500 block">Diagnóstico Actual</span>
+                  <span class="text-[10px] font-bold uppercase text-slate-600 block">Diagnóstico Actual</span>
                   <div class="text-base font-black ${estaPrenada ? 'text-emerald-800' : 'text-slate-800'} mt-0.5">
                     ${estaPrenada ? '🟢 Preñada (Gestante)' : (a.estadoReproductivo || 'Vacía')}
                   </div>
@@ -276,34 +276,34 @@ export class FichaAnimal {
                       <span class="text-[10px] text-emerald-700 block mt-1">${(diasG / 30.4).toFixed(1)} meses de gestación (~${283 - diasG} días al parto)</span>
                     </div>
                   ` : `
-                    <span class="text-[10px] text-slate-400 block mt-1">Días Abiertos: ${diasAbiertos} días</span>
+                    <span class="text-[10px] text-slate-600 block mt-1">Días Abiertos: ${diasAbiertos} días</span>
                   `}
                 </div>
 
                 <!-- Tarjeta Intervalo Entre Partos -->
                 <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50">
-                  <span class="text-[10px] font-bold uppercase text-slate-500 block">Intervalo Entre Partos (IEP)</span>
-                  <div class="text-base font-black text-slate-900 mt-0.5">
+                  <span class="text-[10px] font-bold uppercase text-slate-600 block">Intervalo Entre Partos (IEP)</span>
+                  <div class="text-base font-black text-slate-800 mt-0.5">
                     ${fParto ? `${iep.dias} Días` : 'Primerizo / Sin registro'}
                   </div>
-                  <span class="text-[10px] text-slate-500 block mt-1">
+                  <span class="text-[10px] text-slate-600 block mt-1">
                     ${fParto ? `Proyección: ${iep.meses} Meses entre partos` : 'Sin partos previos'}
                   </span>
-                  <div class="mt-2 text-[10px] text-slate-400">
+                  <div class="mt-2 text-[10px] text-slate-600">
                     Último Parto: <strong>${formatearFecha(fParto, 'No registra')}</strong>
                   </div>
                 </div>
 
                 <!-- Tarjeta Productiva (Peso & Leche) -->
                 <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50">
-                  <span class="text-[10px] font-bold uppercase text-slate-500 block">Producción Actual</span>
-                  <div class="text-base font-black text-slate-900 mt-0.5">
+                  <span class="text-[10px] font-bold uppercase text-slate-600 block">Producción Actual</span>
+                  <div class="text-base font-black text-slate-800 mt-0.5">
                     ${a.ultimoPesoKg || a.pesoActual ? `${a.ultimoPesoKg || a.pesoActual} kg` : '-'}
                   </div>
                   <span class="text-[10px] text-emerald-700 font-bold block mt-1">
                     GDP: ${a.gdpPromedioGDia !== undefined ? `${a.gdpPromedioGDia} g/d` : (a.gdpActual ? `${a.gdpActual} g/d` : 'No calculada')}
                   </span>
-                  <div class="mt-2 text-[10px] text-slate-500">
+                  <div class="mt-2 text-[10px] text-slate-600">
                     Leche: <strong>${a.promedioLecheDiariaL || a.produccionLecheDiaria || 0} L/día</strong> ${del > 0 ? `(${del} DEL)` : ''}
                   </div>
                 </div>
@@ -313,7 +313,7 @@ export class FichaAnimal {
             <!-- SECCIÓN 3: HISTORIAL DE PARTOS Y CRÍAS -->
             <div>
               <div class="flex justify-between items-center mb-3">
-                <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
                   <span>🍼</span> Historial de Partos y Crías (${partosRegistrados.length})
                 </h4>
               </div>
@@ -339,14 +339,14 @@ export class FichaAnimal {
                           <td class="p-2.5">${(p.sexoCria || '').toLowerCase().includes('hembra') ? '♀️ Hembra' : '♂️ Macho'}</td>
                           <td class="p-2.5 text-right font-mono font-bold">${p.pesoAlNacerKg || p.pesoCria || p.pesoNacimientoKg || 32} kg</td>
                           <td class="p-2.5">${p.tipoParto || 'Normal (Eutócico)'}</td>
-                          <td class="p-2.5 text-slate-500">${p.observaciones || 'Sin novedad'}</td>
+                          <td class="p-2.5 text-slate-600">${p.observaciones || 'Sin novedad'}</td>
                         </tr>
                       `).join('')}
                     </tbody>
                   </table>
                 </div>
               ` : `
-                <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
+                <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-600 text-xs">
                   Este ejemplar no tiene partos o crías registradas en su historial.
                 </div>
               `}
@@ -356,7 +356,7 @@ export class FichaAnimal {
             ${(a.sexo || '').toLowerCase() === 'hembra' ? `
               <div>
                 <div class="flex justify-between items-center mb-3">
-                  <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                  <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
                     <span>🧬</span> Historial de Inseminaciones, Embriones y Montas (${this.historialServicios.length})
                   </h4>
                 </div>
@@ -404,7 +404,7 @@ export class FichaAnimal {
                                 ${s.donadora ? `<span class="block text-[10px] text-purple-700 font-normal">Donadora: ${s.donadora}</span>` : ''}
                               </td>
                               <td class="p-2.5 text-slate-600">${s.tecnico || '-'}</td>
-                              <td class="p-2.5 text-slate-500">${s.protocolo || s.observaciones || '-'}</td>
+                              <td class="p-2.5 text-slate-600">${s.protocolo || s.observaciones || '-'}</td>
                               <td class="p-2.5">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeSt}">
                                   ${st}
@@ -417,7 +417,7 @@ export class FichaAnimal {
                     </table>
                   </div>
                 ` : `
-                  <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
+                  <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-600 text-xs">
                     No se registran servicios reproductivos (IA, TE o Monta) para esta hembra.
                   </div>
                 `}
@@ -427,7 +427,7 @@ export class FichaAnimal {
             <!-- SECCIÓN 5: HISTORIAL DE PESAJES -->
             <div>
               <div class="flex justify-between items-center mb-3">
-                <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
                   <span>⚖️</span> Trazabilidad de Pesajes y Ganancia Ponderal (${this.historialPesajes.length})
                 </h4>
               </div>
@@ -437,7 +437,7 @@ export class FichaAnimal {
                   <span>Último Pesaje Registrado: <strong>${formatearFecha(a.fechaUltimoPesaje || a.ultimoPesajeFecha, 'Reciente')}</strong></span>
                   <span class="font-mono font-black text-base text-emerald-800">${a.ultimoPesoKg || a.pesoActual || 0} kg</span>
                 </div>
-                <div class="mt-2 text-[11px] text-slate-500">
+                <div class="mt-2 text-[11px] text-slate-600">
                   Condición corporal actual evaluada: <strong>${a.condicionCorporal || '3.5 (Óptima)'}</strong>
                 </div>
               </div>
@@ -462,12 +462,12 @@ export class FichaAnimal {
                           <tr class="hover:bg-slate-50">
                             <td class="p-2.5 font-bold font-mono text-slate-800">${formatearFecha(ps.fecha)}</td>
                             <td class="p-2.5 text-right font-mono font-black text-emerald-800">${pNum} kg</td>
-                            <td class="p-2.5 text-right font-mono font-bold ${ps.gdp ? (Number(ps.gdp) >= 0 ? 'text-emerald-700' : 'text-rose-700') : 'text-slate-400'}">
+                            <td class="p-2.5 text-right font-mono font-bold ${ps.gdp ? (Number(ps.gdp) >= 0 ? 'text-emerald-700' : 'text-rose-700') : 'text-slate-600'}">
                               ${ps.gdp ? `${ps.gdp > 0 ? '+' : ''}${ps.gdp} g/d` : '-'}
                             </td>
                             <td class="p-2.5 font-mono text-slate-600">${ps.lote || a.lote || 'General'}</td>
                             <td class="p-2.5 text-slate-600">${ps.responsable || 'Báscula'}</td>
-                            <td class="p-2.5 text-slate-500">${ps.observaciones || '-'}</td>
+                            <td class="p-2.5 text-slate-600">${ps.observaciones || '-'}</td>
                           </tr>
                         `;
                       }).join('')}
@@ -480,7 +480,7 @@ export class FichaAnimal {
             <!-- SECCIÓN 6: HISTORIAL DE PALPACIONES, CONTROLES DE LECHE Y LABORES DE CAMPO -->
             <div>
               <div class="flex justify-between items-center mb-3">
-                <h4 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                <h4 class="font-black text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
                   <span>🩺</span> Palpaciones, Controles de Leche, Destetes y Bitácora (${(a.historialEventos || []).length})
                 </h4>
               </div>
@@ -534,7 +534,7 @@ export class FichaAnimal {
                               </span>
                             </td>
                             <td class="p-2.5 text-slate-700">${detalleEv}</td>
-                            <td class="p-2.5 text-slate-500 whitespace-nowrap">${ev.responsable || ev.veterinario || 'Veterinario / Operario'}</td>
+                            <td class="p-2.5 text-slate-600 whitespace-nowrap">${ev.responsable || ev.veterinario || 'Veterinario / Operario'}</td>
                           </tr>
                         `;
                       }).join('')}
@@ -542,7 +542,7 @@ export class FichaAnimal {
                   </table>
                 </div>
               ` : `
-                <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
+                <div class="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-600 text-xs">
                   No se registran eventos adicionales de campo (palpaciones, leche o destetes) para este ejemplar.
                 </div>
               `}
@@ -556,9 +556,9 @@ export class FichaAnimal {
                 <button id="btn-ficha-editar-animal-footer" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer">
                   <span>✏️</span> Modificar Datos de este Animal
                 </button>
-              ` : '<span class="text-xs text-slate-400 italic">Modo sólo lectura (Consultor)</span>'}
+              ` : '<span class="text-xs text-slate-600 italic">Modo sólo lectura (Consultor)</span>'}
             </div>
-            <button id="btn-cerrar-ficha-footer" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer">
+            <button id="btn-cerrar-ficha-footer" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold text-xs rounded-xl shadow transition cursor-pointer">
               Cerrar Ficha
             </button>
           </div>
@@ -580,15 +580,15 @@ export class FichaAnimal {
     return `
       <div id="modal-extraer-animal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-5">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden animate-fadeIn">
-          <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-amber-900 text-white p-5 flex justify-between items-center">
+          <div class="bg-gradient-to-r from-amber-900 via-amber-800 to-amber-900 text-slate-800 p-5 flex justify-between items-center">
             <div class="flex items-center gap-3">
               <span class="text-2xl">🚪</span>
               <div>
                 <h3 class="font-black text-base">Extraer Animal: ${tag}</h3>
-                <p class="text-xs text-amber-200 mt-0.5">Registre la salida del ejemplar por venta o muerte.</p>
+                <p class="text-xs text-amber-700 mt-0.5">Registre la salida del ejemplar por venta o muerte.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-extraer" class="text-amber-200 hover:text-white text-lg font-bold cursor-pointer">✕</button>
+            <button id="btn-cerrar-modal-extraer" class="text-amber-700 hover:text-slate-800 text-lg font-bold cursor-pointer">✕</button>
           </div>
 
           <div class="p-5 sm:p-6 space-y-4 text-xs">

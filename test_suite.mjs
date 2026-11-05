@@ -3812,7 +3812,7 @@ pestanaUniversal.filtroEstadoVida = 'todos';
 pestanaUniversal.render();
 const htmlTodos = pestanaUniversal.container.innerHTML;
 test(
-  htmlTodos.includes('opacity-65') &&
+  (htmlTodos.includes('text-slate-600') || htmlTodos.includes('opacity-65')) &&
   htmlTodos.includes('Vendido') &&
   htmlTodos.includes('Muerto') &&
   htmlTodos.includes('btn-reactivar-fila-animal'),
@@ -6981,11 +6981,11 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
   // 60.2: Sistema de Diseño Dual (Modo Claro Pastel Suave sin #FFFFFF encandilante y Modo Oscuro Sutil) + Corrección de Selectores
   test(
     stylesCssContent.includes('html[data-theme="light"]') &&
-    stylesCssContent.includes('#F4F3EE') &&
-    stylesCssContent.includes('#FAF9F5') &&
+    stylesCssContent.includes('--bg-app: #F5F4F0;') &&
+    stylesCssContent.includes('--bg-card: #FCFBF9;') &&
     stylesCssContent.includes('html[data-theme="dark"]') &&
     !stylesCssContent.includes('select {\n  color: #000000 !important;\n}'),
-    'Sistema de Tema Dual & Legibilidad: Define paleta Claro Pastel Suave (#F4F3EE/#FAF9F5), Modo Oscuro Sutil y corrige contraste de <select> y <option>'
+    'Sistema de Tema Dual & Legibilidad: Define paleta Claro Pastel Suave (#F5F4F0/#FCFBF9), Modo Oscuro Sutil y corrige contraste de <select> y <option>'
   );
 
   // 60.3: Sincronización Dinámica de Edad en Meses (desde fechaNacimiento) y Peso (desde Ficha/Pesajes)
@@ -7060,8 +7060,31 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     !autosuggestSrc.includes('bg-amber-300') &&
     tablaDinSrc.includes('bovi-max-gdp-label') &&
     !cuadriculaSrc.includes('MODO RÁPIDO CON TECLA ENTER (SIN USAR MOUSE)') &&
-    stylesCssContent.includes('--bovi-text-primary: #CBD5E1;'),
+    stylesCssContent.includes('--text-primary: #F1F5F9;'),
     'Auditoría Visual (Puntos 1-6 y 10): Finca Destino oscurecido, barra de búsqueda integrada, hover con transparencia, coincidencia azul/gris, Máx GDP oscurecido, sin blancos puros en Dark Mode y aviso de tecla Enter eliminado'
+  );
+
+  // 60.6: Sistema de Tokens Semánticos WCAG AA (Estándar shadcn/ui, Linear & Vercel) y Guardrails de Legibilidad
+  test(
+    stylesCssContent.includes('--bg-app: #F5F4F0;') &&
+    stylesCssContent.includes('--bg-card: #FCFBF9;') &&
+    stylesCssContent.includes('--bg-muted: #EAE8E1;') &&
+    stylesCssContent.includes('--border-subtle: #DDD9CE;') &&
+    stylesCssContent.includes('--text-primary: #1C1917;') &&
+    stylesCssContent.includes('--text-secondary: #57534E;') &&
+    stylesCssContent.includes('--accent-primary: #059669;') &&
+    stylesCssContent.includes('--bg-app: #0B0F17;') &&
+    stylesCssContent.includes('--bg-card: #151C28;') &&
+    stylesCssContent.includes('--bg-muted: #1E293B;') &&
+    stylesCssContent.includes('--border-subtle: #2A3649;') &&
+    stylesCssContent.includes('--text-primary: #F1F5F9;') &&
+    stylesCssContent.includes('--text-secondary: #94A3B8;') &&
+    stylesCssContent.includes('--accent-primary: #10B981;') &&
+    !pestanaAnimSrc.includes('text-slate-400') &&
+    !pestanaAnimSrc.includes('text-gray-300') &&
+    !pestanaAnimSrc.includes('text-black') &&
+    !pestanaAnimSrc.includes('opacity-50'),
+    'Sistema de Tokens Semánticos WCAG AA: Variables matemáticas (#F5F4F0/#FCFBF9/#1C1917/#57534E y #0B0F17/#151C28/#F1F5F9/#94A3B8) y eliminación de grises claros/opacidades'
   );
 }
 

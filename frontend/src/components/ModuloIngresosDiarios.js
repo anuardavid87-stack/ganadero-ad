@@ -106,19 +106,19 @@ export class ModuloIngresosDiarios {
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden space-y-4 pb-6">
         <!-- CABECERA PRINCIPAL SUPERIOR -->
-        <div class="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="bovi-module-header p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-2xl bg-blue-600/20 text-blue-300 border border-blue-500/30 flex items-center justify-center text-2xl shadow-inner">
+            <div class="w-11 h-11 rounded-2xl bg-blue-600/20 text-blue-700 border border-blue-500/30 flex items-center justify-center text-2xl shadow-inner">
               📅
             </div>
             <div>
               <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
                 <span>Registro General de Actividades & Auditoría de Datos</span>
-                <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-700 border border-blue-400/30">
                   Bitácora de Campo
                 </span>
               </h2>
-              <p class="text-xs text-slate-300 mt-0.5">Historial unificado de todos los datos ingresados: pesajes, destetes, partos, traslados y servicios.</p>
+              <p class="text-xs text-slate-600 mt-0.5">Historial unificado de todos los datos ingresados: pesajes, destetes, partos, traslados y servicios.</p>
             </div>
           </div>
 
@@ -126,14 +126,14 @@ export class ModuloIngresosDiarios {
           <div class="flex items-center gap-2 w-full md:w-auto flex-wrap justify-end">
             <button 
               id="btn-exportar-actual-excel" 
-              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled: disabled:cursor-not-allowed"
               ${totalRegistros === 0 ? 'disabled' : ''}
               title="Descargar los registros visibles actualmente en formato Excel CSV"
             >
               <span>📥</span> Exportar a Excel (.CSV)
             </button>
             <div class="relative inline-block text-left">
-              <select id="sel-exportar-grupo-rapido" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-blue-300 font-bold text-xs rounded-xl border border-slate-700 outline-none cursor-pointer">
+              <select id="sel-exportar-grupo-rapido" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-blue-700 font-bold text-xs rounded-xl border border-slate-700 outline-none cursor-pointer">
                 <option value="" selected disabled>📥 Exportar Grupo...</option>
                 <option value="pesajes">⚖️ Exportar Pesajes</option>
                 <option value="partos">🍼 Exportar Partos y Destetes</option>
@@ -149,13 +149,13 @@ export class ModuloIngresosDiarios {
         <div class="px-4 sm:px-6 space-y-3">
           <!-- BUSCADOR UNIVERSAL EN VIVO -->
           <div class="relative">
-            <span class="absolute left-3.5 top-3 text-slate-400 text-sm">🔍</span>
+            <span class="absolute left-3.5 top-3 text-slate-600 text-sm">🔍</span>
             <input 
               type="text" 
               id="input-busqueda-actividades" 
               placeholder="Buscar por arete, nombre, finca (ej. Vesubio), técnico, lote, diagnóstico o nota..." 
               value="${this.filtroTexto}" 
-              class="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-white text-slate-900 font-bold text-xs rounded-xl border-2 border-slate-300 focus:border-blue-500 focus:bg-white outline-none transition shadow-sm"
+              class="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-white text-slate-800 font-bold text-xs rounded-xl border-2 border-slate-300 focus:border-blue-500 focus:bg-white outline-none transition shadow-sm"
             >
           </div>
 
@@ -219,9 +219,9 @@ export class ModuloIngresosDiarios {
           <!-- TARJETAS DE RESUMEN KPI DE LA CONSULTA -->
           <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div class="bg-slate-50 border border-slate-200 p-3 rounded-2xl">
-              <span class="text-[10px] font-bold uppercase text-slate-500 block">Total Actividades</span>
-              <div class="text-xl font-black font-mono text-slate-900 mt-0.5">${totalRegistros}</div>
-              <span class="text-[10px] text-slate-400">Registros en consulta</span>
+              <span class="text-[10px] font-bold uppercase text-slate-600 block">Total Actividades</span>
+              <div class="text-xl font-black font-mono text-slate-800 mt-0.5">${totalRegistros}</div>
+              <span class="text-[10px] text-slate-600">Registros en consulta</span>
             </div>
 
             <div class="bg-blue-50/60 border border-blue-200 p-3 rounded-2xl">
@@ -314,7 +314,7 @@ export class ModuloIngresosDiarios {
                       <tr class="hover:bg-slate-50 transition">
                         <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
                           ${formatearFecha(op.fecha)}
-                          <span class="block text-[10px] text-slate-400">${op.hora || ''}</span>
+                          <span class="block text-[10px] text-slate-600">${op.hora || ''}</span>
                         </td>
                         <td class="p-3 whitespace-nowrap">
                           <span class="px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 border ${badgeClass}">
@@ -324,30 +324,30 @@ export class ModuloIngresosDiarios {
                         <td class="p-3">
                           <div class="flex items-center gap-1.5">
                             <span>${esBufalo ? '🦬' : '🐂'}</span>
-                            <span class="font-black font-mono text-slate-900 text-sm">${op.tag || '-'}</span>
+                            <span class="font-black font-mono text-slate-800 text-sm">${op.tag || '-'}</span>
                           </div>
                         </td>
                         <td class="p-3">
                           <div class="font-bold text-slate-800">${op.nombreAlias || 'Sin Alias'}</div>
-                          <div class="text-[10px] text-slate-500">${op.raza || 'Común'} ${op.categoria ? `• ${op.categoria}` : ''}</div>
+                          <div class="text-[10px] text-slate-600">${op.raza || 'Común'} ${op.categoria ? `• ${op.categoria}` : ''}</div>
                         </td>
                         <td class="p-3 font-semibold text-slate-700 whitespace-nowrap">
                           🏡 ${op.fincaNombre || op.fincaId || '-'}
                         </td>
                         <td class="p-3">
                           <div class="font-bold text-slate-800">${op.detalle || '-'}</div>
-                          ${op.subDetalle ? `<div class="text-[10px] text-slate-500 font-mono">${op.subDetalle}</div>` : ''}
+                          ${op.subDetalle ? `<div class="text-[10px] text-slate-600 font-mono">${op.subDetalle}</div>` : ''}
                         </td>
                         <td class="p-3 text-slate-600 font-mono text-[11px]">
                           ${op.lote || op.loteUbicacion || '-'}
                         </td>
-                        <td class="p-3 text-slate-500 text-[11px]">
+                        <td class="p-3 text-slate-600 text-[11px]">
                           ${op.responsable || '-'}
-                          ${op.observaciones ? `<div class="text-[10px] text-slate-400 italic mt-0.5">${op.observaciones}</div>` : ''}
+                          ${op.observaciones ? `<div class="text-[10px] text-slate-600 italic mt-0.5">${op.observaciones}</div>` : ''}
                         </td>
                         <td class="p-3 text-center">
                           ${op.animalId ? `
-                            <button class="btn-ver-ficha-actividad px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-[10px] transition cursor-pointer" data-id="${op.animalId}">
+                            <button class="btn-ver-ficha-actividad px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-800 rounded-lg font-bold text-[10px] transition cursor-pointer" data-id="${op.animalId}">
                               🔍 Ficha
                             </button>
                           ` : '-'}
@@ -356,7 +356,7 @@ export class ModuloIngresosDiarios {
                     `;
                   }).join('') : `
                     <tr>
-                      <td colspan="9" class="p-12 text-center text-slate-400">
+                      <td colspan="9" class="p-12 text-center text-slate-600">
                         <span class="text-3xl block mb-2">📋</span>
                         <div class="font-bold text-slate-600 text-sm">No se encontraron actividades registradas con los filtros seleccionados.</div>
                         <p class="text-xs mt-1">Prueba seleccionando "Todo el Historial" o limpiando el texto de búsqueda.</p>
@@ -416,7 +416,7 @@ export class ModuloIngresosDiarios {
                       <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 border ${badgeClass}">
                         <span>${icono}</span> ${nombreAccion}
                       </span>
-                      <span class="font-mono text-[10px] text-slate-500 font-bold">
+                      <span class="font-mono text-[10px] text-slate-600 font-bold">
                         ${formatearFecha(op.fecha, '')} ${op.hora || ''}
                       </span>
                     </div>
@@ -425,12 +425,12 @@ export class ModuloIngresosDiarios {
                       <div class="flex items-center gap-2">
                         <span class="text-xl shrink-0">${esBufalo ? '🦬' : '🐂'}</span>
                         <div>
-                          <div class="font-black font-mono text-slate-900 text-sm">${op.tag || 'Sin Arete'}</div>
-                          <div class="text-[10px] text-slate-500">${op.nombreAlias || 'Sin Alias'} ${op.raza ? `• ${op.raza}` : ''}</div>
+                          <div class="font-black font-mono text-slate-800 text-sm">${op.tag || 'Sin Arete'}</div>
+                          <div class="text-[10px] text-slate-600">${op.nombreAlias || 'Sin Alias'} ${op.raza ? `• ${op.raza}` : ''}</div>
                         </div>
                       </div>
                       ${op.animalId ? `
-                        <button class="btn-ver-ficha-actividad px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl font-bold text-xs transition cursor-pointer" data-id="${op.animalId}">
+                        <button class="btn-ver-ficha-actividad px-3 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-800 rounded-xl font-bold text-xs transition cursor-pointer" data-id="${op.animalId}">
                           🔍 Ficha
                         </button>
                       ` : ''}
@@ -438,17 +438,17 @@ export class ModuloIngresosDiarios {
 
                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
                       <div class="font-bold text-slate-800">${op.detalle || '-'}</div>
-                      ${op.subDetalle ? `<div class="text-[10px] text-slate-500 font-mono mt-0.5">${op.subDetalle}</div>` : ''}
+                      ${op.subDetalle ? `<div class="text-[10px] text-slate-600 font-mono mt-0.5">${op.subDetalle}</div>` : ''}
                     </div>
 
-                    <div class="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                    <div class="flex items-center justify-between text-[10px] text-slate-600 pt-0.5">
                       <span>🏡 ${op.fincaNombre || op.fincaId || '-'} • 📍 ${op.lote || op.loteUbicacion || 'General'}</span>
                       <span>${op.responsable || ''}</span>
                     </div>
                   </div>
                 `;
               }).join('') : `
-                <div class="p-8 text-center text-slate-400 bg-white rounded-2xl">
+                <div class="p-8 text-center text-slate-600 bg-white rounded-2xl">
                   <span class="text-3xl block mb-2">📋</span>
                   No se encontraron actividades registradas con los filtros seleccionados.
                 </div>

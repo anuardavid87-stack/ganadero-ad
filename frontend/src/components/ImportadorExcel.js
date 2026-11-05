@@ -1032,15 +1032,15 @@ export class ImportadorExcel {
       <div id="modal-informe-cargue" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[70] flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
         <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
           <!-- CABECERA -->
-          <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bovi-module-header p-5 flex justify-between items-center">
             <div class="flex items-center gap-3">
               <span class="text-2xl">${tieneFaltantes ? '⚠️' : '✅'}</span>
               <div>
                 <h3 class="font-black text-base">Informe de Carga Masiva: ${tipoCargue.toUpperCase()}</h3>
-                <p class="text-xs text-slate-400 mt-0.5">Predio / Finca: <strong>${nombreFinca || 'Predio Activo'}</strong></p>
+                <p class="text-xs text-slate-600 mt-0.5">Predio / Finca: <strong>${nombreFinca || 'Predio Activo'}</strong></p>
               </div>
             </div>
-            <button id="btn-cerrar-informe-excel" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+            <button id="btn-cerrar-informe-excel" class="text-slate-600 hover:text-slate-800 text-lg font-bold p-1 cursor-pointer">✕</button>
           </div>
 
           <!-- CONTENIDO -->
@@ -1053,14 +1053,14 @@ export class ImportadorExcel {
                 <span class="text-[10px] text-emerald-600 block mt-0.5">Actualizados / Nuevos</span>
               </div>
               <div class="${tieneFaltantes ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'} border p-3.5 rounded-2xl">
-                <span class="block text-[10px] font-bold uppercase ${tieneFaltantes ? 'text-rose-800' : 'text-slate-500'}">No Encontrados</span>
-                <span class="text-2xl font-black font-mono ${tieneFaltantes ? 'text-rose-700' : 'text-slate-400'}">${noEncontrados.length}</span>
-                <span class="text-[10px] ${tieneFaltantes ? 'text-rose-600 font-bold' : 'text-slate-400'} block mt-0.5">Omitidos</span>
+                <span class="block text-[10px] font-bold uppercase ${tieneFaltantes ? 'text-rose-800' : 'text-slate-600'}">No Encontrados</span>
+                <span class="text-2xl font-black font-mono ${tieneFaltantes ? 'text-rose-700' : 'text-slate-600'}">${noEncontrados.length}</span>
+                <span class="text-[10px] ${tieneFaltantes ? 'text-rose-600 font-bold' : 'text-slate-600'} block mt-0.5">Omitidos</span>
               </div>
               <div class="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
-                <span class="block text-[10px] font-bold uppercase text-slate-500">Total Filas</span>
+                <span class="block text-[10px] font-bold uppercase text-slate-600">Total Filas</span>
                 <span class="text-2xl font-black font-mono text-slate-700">${totalFilas}</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Leídas de archivo</span>
+                <span class="text-[10px] text-slate-600 block mt-0.5">Leídas de archivo</span>
               </div>
             </div>
 
@@ -1080,7 +1080,7 @@ export class ImportadorExcel {
                   <button id="btn-copiar-aretes-no-encontrados" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition cursor-pointer">
                     <span>📋</span> Copiar Aretes Faltantes
                   </button>
-                  <button id="btn-descargar-no-encontrados-csv" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition cursor-pointer">
+                  <button id="btn-descargar-no-encontrados-csv" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-800 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition cursor-pointer">
                     <span>📥</span> Descargar Reporte CSV
                   </button>
                 </div>
@@ -1099,7 +1099,7 @@ export class ImportadorExcel {
                     <tbody class="divide-y divide-amber-100">
                       ${noEncontrados.map((item) => `
                         <tr class="hover:bg-amber-50/50">
-                          <td class="p-2 text-center font-mono text-slate-400">${item.fila || '-'}</td>
+                          <td class="p-2 text-center font-mono text-slate-600">${item.fila || '-'}</td>
                           <td class="p-2 font-black font-mono text-rose-700">${item.tag}</td>
                           <td class="p-2 font-bold text-slate-700">${item.evento}</td>
                           <td class="p-2 font-mono text-slate-600 text-[11px]">${item.detalle || '-'}</td>
@@ -1119,7 +1119,7 @@ export class ImportadorExcel {
 
           <!-- FOOTER -->
           <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-            <button id="btn-cerrar-informe-excel-pie" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow transition cursor-pointer">
+            <button id="btn-cerrar-informe-excel-pie" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-800 font-black text-xs rounded-xl shadow transition cursor-pointer">
               Entendido / Cerrar
             </button>
           </div>
@@ -1161,15 +1161,15 @@ export class ImportadorExcel {
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
         <!-- HEADER IMPORTADOR -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div class="bovi-module-header p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div>
             <h3 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
               <span>📤</span> Carga Masiva con Excel / CSV
-              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 font-bold">
                 ${this.tipoCargue.toUpperCase()}
               </span>
             </h3>
-            <p class="text-xs text-slate-400 mt-0.5">${subtitulos[this.tipoCargue] || 'Importación de datos zootécnicos.'}</p>
+            <p class="text-xs text-slate-600 mt-0.5">${subtitulos[this.tipoCargue] || 'Importación de datos zootécnicos.'}</p>
           </div>
 
           <button id="btn-descargar-plantilla" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-2 cursor-pointer active:scale-95">
@@ -1212,9 +1212,9 @@ export class ImportadorExcel {
                 📅
               </div>
               <div>
-                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label tracking-wider block">Fecha de la Jornada / Evento:</span>
+                <span class="text-xs font-black uppercase text-slate-800 bovi-finca-destino-label tracking-wider block">Fecha de la Jornada / Evento:</span>
                 <div class="flex items-center gap-2 mt-1">
-                  <input type="date" id="input-fecha-global-excel" value="${this.fechaGlobal}" class="px-3 py-1.5 text-xs font-black font-mono rounded-xl border-2 border-emerald-500 bg-white text-slate-900 shadow-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-400">
+                  <input type="date" id="input-fecha-global-excel" value="${this.fechaGlobal}" class="px-3 py-1.5 text-xs font-black font-mono rounded-xl border-2 border-emerald-500 bg-white text-slate-800 shadow-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-400">
                   <label class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 cursor-pointer">
                     <input type="checkbox" id="check-aplicar-fecha-global" ${this.aplicarFechaGlobal ? 'checked' : ''} class="rounded text-emerald-600">
                     <span>Aplicar si la fila no trae fecha</span>
@@ -1226,8 +1226,8 @@ export class ImportadorExcel {
             <!-- SELECTOR DE PREDIO DESTINO -->
             <div class="flex items-center gap-3 w-full md:w-auto justify-end">
               <div class="text-right hidden sm:block">
-                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label block">Finca de Destino:</span>
-                <span class="text-[11px] font-black text-emerald-700 dark:text-emerald-400">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
+                <span class="text-xs font-black uppercase text-slate-800 bovi-finca-destino-label block">Finca de Destino:</span>
+                <span class="text-[11px] font-black text-emerald-700 dark:text-emerald-700">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
               </div>
               <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-800 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}
@@ -1243,14 +1243,14 @@ export class ImportadorExcel {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-black uppercase text-slate-800 tracking-wider">Especie del Hato:</span>
               <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-                <button type="button" id="btn-toggle-esp-bufalino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bufalino' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                <button type="button" id="btn-toggle-esp-bufalino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bufalino' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}">
                   🦬 Bufalino
                 </button>
-                <button type="button" id="btn-toggle-esp-bovino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bovino' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}">
+                <button type="button" id="btn-toggle-esp-bovino" class="px-3.5 py-1 text-xs font-black rounded-lg transition cursor-pointer ${this.resolverEspeciePredeterminada() === 'bovino' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}">
                   🐂 Vacuno / Bovino
                 </button>
               </div>
-              <span class="text-[11px] text-slate-500 font-semibold">(Se aplica si las filas del Excel no traen columna "especie")</span>
+              <span class="text-[11px] text-slate-600 font-semibold">(Se aplica si las filas del Excel no traen columna "especie")</span>
             </div>
 
             <!-- MODO DE CARGUE (SOLO PARA INVENTARIO) -->
@@ -1273,7 +1273,7 @@ export class ImportadorExcel {
             <input type="file" id="input-archivo-excel" accept=".csv, .txt, .xlsx, .xls" class="hidden">
             <span class="text-4xl block mb-2">📊</span>
             <h4 class="font-black text-slate-800 text-sm">Haga clic o arrastre el archivo Excel (.xlsx, .xls) o CSV aquí</h4>
-            <p class="text-xs text-slate-500 mt-1">
+            <p class="text-xs text-slate-600 mt-1">
               ${tipoTitulos[this.tipoCargue]} • Destino: <strong class="text-emerald-900">${nombreEmpresaActiva ? `${nombreEmpresaActiva} → ` : ''}${nombreFincaDestino}</strong> • Fecha: <strong class="font-mono text-emerald-800">${formatearFecha(this.fechaGlobal)}</strong>
             </p>
           </div>
@@ -1283,7 +1283,7 @@ export class ImportadorExcel {
             <div class="mt-6 space-y-3">
               <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-emerald-50/80 border border-emerald-300 p-3.5 rounded-2xl">
                 <div>
-                  <h4 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                  <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
                     <span>📋</span> Previsualización (${this.registros.length} filas analizadas)
                   </h4>
                   <p class="text-[11px] text-emerald-900 font-bold mt-0.5">
@@ -1422,20 +1422,20 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900 font-mono">${r.tag}</td>
+          <td class="p-2.5 font-black text-slate-800 font-mono">${r.tag}</td>
           <td class="p-2.5 whitespace-nowrap font-mono text-slate-600">${formatearFecha(r.fecha)}</td>
           <td class="p-2.5">
             <div class="flex flex-wrap gap-1">
               ${(r.laboresDetectadas || []).map((l) => `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">${l}</span>`).join('')}
             </div>
           </td>
-          <td class="p-2.5 font-bold ${r.tienePesaje ? 'text-emerald-800 font-mono' : 'text-slate-300'}">${r.pesoActual ? `${r.pesoActual} kg` : '-'}</td>
-          <td class="p-2.5 font-bold ${r.tienePalpacion ? 'text-purple-800' : 'text-slate-300'}">
+          <td class="p-2.5 font-bold ${r.tienePesaje ? 'text-emerald-800 font-mono' : 'text-slate-600'}">${r.pesoActual ? `${r.pesoActual} kg` : '-'}</td>
+          <td class="p-2.5 font-bold ${r.tienePalpacion ? 'text-purple-800' : 'text-slate-600'}">
             ${r.resultadoPalpacion ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.resultadoPalpacion === 'Preñada' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">${r.resultadoPalpacion} ${r.diasGestacion ? `(${r.diasGestacion}d)` : ''}</span>` : '-'}
           </td>
-          <td class="p-2.5 font-bold ${r.tieneLeche ? 'text-blue-800 font-mono' : 'text-slate-300'}">${r.totalLitros ? `${r.totalLitros} L` : '-'}</td>
-          <td class="p-2.5 font-bold ${r.tieneDestete ? 'text-amber-800' : 'text-slate-300'}">${r.tieneDestete ? `${r.pesoDestete ? r.pesoDestete + ' kg' : ''} (${r.loteDestino})` : '-'}</td>
-          <td class="p-2.5 font-bold ${r.tieneParto ? 'text-pink-800' : 'text-slate-300'}">${r.tieneParto ? `${r.tagCria} (${r.sexoCria === 'hembra' ? '♀️' : '♂️'})` : '-'}</td>
+          <td class="p-2.5 font-bold ${r.tieneLeche ? 'text-blue-800 font-mono' : 'text-slate-600'}">${r.totalLitros ? `${r.totalLitros} L` : '-'}</td>
+          <td class="p-2.5 font-bold ${r.tieneDestete ? 'text-amber-800' : 'text-slate-600'}">${r.tieneDestete ? `${r.pesoDestete ? r.pesoDestete + ' kg' : ''} (${r.loteDestino})` : '-'}</td>
+          <td class="p-2.5 font-bold ${r.tieneParto ? 'text-pink-800' : 'text-slate-600'}">${r.tieneParto ? `${r.tagCria} (${r.sexoCria === 'hembra' ? '♀️' : '♂️'})` : '-'}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
           </td>
@@ -1445,11 +1445,11 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
+          <td class="p-2.5 font-black text-slate-800">${r.tag}</td>
           <td class="p-2.5">${formatearFecha(r.fechaPesaje)}</td>
           <td class="p-2.5 font-bold text-emerald-800">${r.pesoActual} kg</td>
           <td class="p-2.5 font-sans">${r.condicionCorporal}</td>
-          <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
+          <td class="p-2.5 font-sans text-slate-600">${r.observaciones || '-'}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
           </td>
@@ -1459,7 +1459,7 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
+          <td class="p-2.5 font-black text-slate-800">${r.tag}</td>
           <td class="p-2.5">${formatearFecha(r.fechaPalpacion)}</td>
           <td class="p-2.5">
             <span class="px-2 py-0.5 rounded font-sans text-[10px] font-bold ${r.resultadoPalpacion === 'Preñada' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">
@@ -1467,7 +1467,7 @@ export class ImportadorExcel {
             </span>
           </td>
           <td class="p-2.5 font-bold">${r.diasGestacion || 0} d</td>
-          <td class="p-2.5 font-sans text-slate-500">${r.estructuraOvario || '-'}</td>
+          <td class="p-2.5 font-sans text-slate-600">${r.estructuraOvario || '-'}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
           </td>
@@ -1477,12 +1477,12 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
+          <td class="p-2.5 font-black text-slate-800">${r.tag}</td>
           <td class="p-2.5">${formatearFecha(r.fechaLeche)}</td>
           <td class="p-2.5">${r.litrosManana} L</td>
           <td class="p-2.5">${r.litrosTarde} L</td>
           <td class="p-2.5 font-black text-emerald-800">${r.totalLitros} L</td>
-          <td class="p-2.5 font-sans text-slate-500">${r.notasUbre || '-'}</td>
+          <td class="p-2.5 font-sans text-slate-600">${r.notasUbre || '-'}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
           </td>
@@ -1492,11 +1492,11 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900">${r.madreTag}</td>
+          <td class="p-2.5 font-black text-slate-800">${r.madreTag}</td>
           <td class="p-2.5">${formatearFecha(r.fechaParto)}</td>
           <td class="p-2.5 font-sans font-bold ${r.sexoCria === 'hembra' ? 'text-pink-700' : 'text-blue-700'}">${r.sexoCria === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</td>
           <td class="p-2.5 font-bold">${r.pesoCria} kg</td>
-          <td class="p-2.5 font-bold text-slate-900">${r.tagCria}</td>
+          <td class="p-2.5 font-bold text-slate-800">${r.tagCria}</td>
           <td class="p-2.5 font-sans text-slate-600">${r.padre}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
@@ -1507,11 +1507,11 @@ export class ImportadorExcel {
       return `
         <tr class="${bgRow}">
           <td class="p-2.5 font-bold">${r.idx}</td>
-          <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
+          <td class="p-2.5 font-black text-slate-800">${r.tag}</td>
           <td class="p-2.5">${formatearFecha(r.fechaDestete)}</td>
           <td class="p-2.5 font-black text-emerald-800">${r.pesoDestete} kg</td>
           <td class="p-2.5 font-sans">${r.loteDestino}</td>
-          <td class="p-2.5 font-sans text-slate-500">${r.observaciones || '-'}</td>
+          <td class="p-2.5 font-sans text-slate-600">${r.observaciones || '-'}</td>
           <td class="p-2.5 font-sans">
             ${r.errores && r.errores.length > 0 ? `<span class="text-rose-600 font-bold text-[10px]">🚫 ${r.errores[0].mensaje}</span>` : '<span class="text-emerald-600 font-bold text-[10px]">✓ Válido</span>'}
           </td>
@@ -1523,7 +1523,7 @@ export class ImportadorExcel {
     return `
       <tr class="${bgRow}">
         <td class="p-2.5 font-bold">${r.idx}</td>
-        <td class="p-2.5 font-black text-slate-900">${r.tag}</td>
+        <td class="p-2.5 font-black text-slate-800">${r.tag}</td>
         <td class="p-2.5 uppercase font-bold text-[10px] ${r.especie === 'bufalino' ? 'text-amber-700' : 'text-blue-700'}">
           ${r.especie === 'bufalino' ? '🦬 Bufalino' : '🐂 Vacuno'}
         </td>

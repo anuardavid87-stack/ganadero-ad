@@ -143,7 +143,7 @@ export class PestanaAnimales {
               <div>
                 <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2 text-slate-700 bovi-module-title">
                   <span>Inventario General de Animales</span>
-                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold">
+                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-700 border border-emerald-500/30 font-bold">
                     ${lista.length} de ${todosAnimales.length} Ejemplares
                   </span>
                 </h2>
@@ -162,7 +162,7 @@ export class PestanaAnimales {
                 </button>
               </div>
             ` : `
-              <div class="text-[11px] font-bold text-amber-300 bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-500/40 flex items-center gap-1.5">
+              <div class="text-[11px] font-bold text-amber-700 bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-500/40 flex items-center gap-1.5">
                 <span>👁️</span> Modo Consulta: Modificaciones Deshabilitadas
               </div>
             `}
@@ -175,13 +175,13 @@ export class PestanaAnimales {
             <!-- BUSCADOR RÁPIDO DE ARETE CON BOTÓN BUSCAR QUE ABRE FICHA -->
             <form id="form-buscar-animal-directo" class="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-3">
               <div class="relative w-full">
-                <span class="absolute left-3.5 top-3.5 text-slate-400 text-sm">🔍</span>
+                <span class="absolute left-3.5 top-3.5 text-slate-600 text-sm">🔍</span>
                 <input 
                   type="text" 
                   id="input-tag-animal-directo" 
                   placeholder="Digite o escanee No. de animal (Ej. BV-401, 102)..." 
                   value="${this.filtroBusqueda || ''}"
-                  class="w-full pl-10 pr-4 py-3 bg-white text-slate-900 font-mono font-black text-base rounded-xl border-2 border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none uppercase shadow-sm"
+                  class="w-full pl-10 pr-4 py-3 bg-white text-slate-800 font-mono font-black text-base rounded-xl border-2 border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none uppercase shadow-sm"
                   autocomplete="off"
                 >
               </div>
@@ -230,7 +230,7 @@ export class PestanaAnimales {
                     ✕ Limpiar ("${this.filtroBusqueda}")
                   </button>
                 ` : `
-                  <span id="subtexto-contador-pestana" class="text-[11px] text-slate-500 font-medium">Mostrando ${lista.length} ejemplares</span>
+                  <span id="subtexto-contador-pestana" class="text-[11px] text-slate-600 font-medium">Mostrando ${lista.length} ejemplares</span>
                 `}
               </div>
             </div>
@@ -292,7 +292,7 @@ export class PestanaAnimales {
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <tr class="bovi-table-row-hover ${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : '')} transition items-center">
+      <tr class="bovi-table-row-hover ${esInactivo ? ' bg-slate-50/80 text-slate-600' : (esOtraFinca ? 'bg-amber-50/40' : '')} transition items-center">
         <!-- Arete & Especie -->
         <td class="p-3">
           <div class="flex items-center gap-2">
@@ -335,10 +335,10 @@ export class PestanaAnimales {
         <!-- Genealogía: Padre & Madre -->
         <td class="p-3">
           <div class="text-[11px] font-mono">
-            <span class="text-slate-500 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
+            <span class="text-slate-600 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
           </div>
           <div class="text-[11px] font-mono mt-0.5">
-            <span class="text-slate-500 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
+            <span class="text-slate-600 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
           </div>
         </td>
 
@@ -393,7 +393,7 @@ export class PestanaAnimales {
         <!-- Acciones -->
         <td class="p-3 text-center">
           <div class="flex items-center justify-center gap-1.5">
-            <button class="btn-ver-ficha-animal px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] shadow transition flex items-center gap-1 cursor-pointer" data-id="${a.id}" title="Ver Ficha Zootécnica">
+            <button class="btn-ver-ficha-animal px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold text-[11px] shadow transition flex items-center gap-1 cursor-pointer" data-id="${a.id}" title="Ver Ficha Zootécnica">
               <span>🔍</span> Ficha
             </button>
             ${esInactivo ? `
@@ -423,7 +423,7 @@ export class PestanaAnimales {
   renderFilaVacia() {
     return `
       <tr>
-        <td colspan="9" class="p-8 text-center text-slate-400">
+        <td colspan="9" class="p-8 text-center text-slate-600">
           <span class="text-3xl block mb-2">🐄</span>
           No se encontraron animales registrados con los filtros aplicados.
         </td>
@@ -448,14 +448,14 @@ export class PestanaAnimales {
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <div class="card-animal-mobile p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-2.5 ${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : ''}">
+      <div class="card-animal-mobile p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-2.5 ${esInactivo ? ' bg-slate-50/80 text-slate-600' : ''}">
         <!-- CABECERA DE LA TARJETA: Tag, Nombre, Sexo, Especie, Peso -->
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-center gap-2">
             <span class="text-2xl shrink-0">${esBufalo ? '🦬' : '🐂'}</span>
             <div>
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="font-black font-mono text-slate-950 text-base tracking-tight">${tag}</span>
+                <span class="font-black font-mono text-slate-800 text-base tracking-tight">${tag}</span>
                 <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${esBufalo ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                   ${esBufalo ? 'Bufalino' : 'Vacuno'}
                 </span>
@@ -472,7 +472,7 @@ export class PestanaAnimales {
             </div>
           </div>
           <div class="text-right shrink-0">
-            <span class="inline-block px-2.5 py-1 rounded-xl text-xs font-mono font-black bg-slate-900 text-white shadow-sm">
+            <span class="inline-block px-2.5 py-1 rounded-xl text-xs font-mono font-black bg-slate-900 text-slate-800 shadow-sm">
               ${a.ultimoPesoKg || a.pesoActual ? `${a.ultimoPesoKg || a.pesoActual} kg` : '-'}
             </span>
             ${a.gdpPromedioGDia !== undefined ? `
@@ -486,13 +486,13 @@ export class PestanaAnimales {
         <!-- DETALLES ZOOTÉCNICOS EN GRID DE 2 COLUMNAS -->
         <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
           <div>
-            <span class="text-[9px] uppercase font-bold text-slate-400 block">Raza & Lote</span>
+            <span class="text-[9px] uppercase font-bold text-slate-600 block">Raza & Lote</span>
             <span class="font-bold text-slate-800 truncate block">${a.raza || 'Común'}</span>
-            <span class="text-[10px] text-slate-500 block truncate">${a.categoria || 'General'} • 📍 ${a.lote || 'General'}</span>
+            <span class="text-[10px] text-slate-600 block truncate">${a.categoria || 'General'} • 📍 ${a.lote || 'General'}</span>
           </div>
 
           <div>
-            <span class="text-[9px] uppercase font-bold text-slate-400 block">Reproductivo</span>
+            <span class="text-[9px] uppercase font-bold text-slate-600 block">Reproductivo</span>
             ${estaPrenada ? `
               <span class="inline-flex items-center gap-1 font-black text-emerald-700">
                 <span>🟢</span> Preñada (${diasG}d)
@@ -502,7 +502,7 @@ export class PestanaAnimales {
                 ${a.estadoReproductivo || 'Vacía'}
               </span>
             `}
-            <span class="text-[10px] text-slate-500 block">
+            <span class="text-[10px] text-slate-600 block">
               ${fParto ? `Parto: ${formatearFecha(fParto)}` : `${edadMeses} m`}
             </span>
           </div>
@@ -510,13 +510,13 @@ export class PestanaAnimales {
 
         <!-- PEDIGREE COMPACTO -->
         <div class="flex items-center justify-between text-[11px] font-mono text-slate-600 px-1">
-          <div><span class="text-slate-400">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong></div>
-          <div><span class="text-slate-400">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong></div>
+          <div><span class="text-slate-600">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong></div>
+          <div><span class="text-slate-600">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong></div>
         </div>
 
         <!-- BOTONES DE ACCIÓN ERGONÓMICOS (TOUCH FRIENDLY) -->
         <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
-          <button class="btn-ver-ficha-animal flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer" data-id="${a.id}">
+          <button class="btn-ver-ficha-animal flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-800 font-bold text-xs shadow transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer" data-id="${a.id}">
             <span>🔍</span> Ficha
           </button>
           ${esInactivo ? `
@@ -544,7 +544,7 @@ export class PestanaAnimales {
 
   renderTarjetaVaciaMobile() {
     return `
-      <div class="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+      <div class="p-8 text-center text-slate-600 bg-white rounded-2xl border border-slate-200">
         <span class="text-3xl block mb-2">🐄</span>
         No se encontraron animales registrados con los filtros aplicados.
       </div>
@@ -556,15 +556,15 @@ export class PestanaAnimales {
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-none sm:rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full h-full sm:h-auto sm:max-h-[95vh] flex flex-col modal-fullscreen-mobile">
           <!-- CABECERA MODAL -->
-          <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bovi-module-header p-5 flex justify-between items-center">
             <div class="flex items-center gap-3">
               <span class="text-2xl p-2 bg-emerald-600/30 rounded-xl border border-emerald-500/40">➕</span>
               <div>
                 <h3 class="text-base font-black tracking-tight">Registrar Nuevo Ejemplar</h3>
-                <p class="text-xs text-slate-400">Ingreso individual al inventario con datos genealógicos y reproductivos.</p>
+                <p class="text-xs text-slate-600">Ingreso individual al inventario con datos genealógicos y reproductivos.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-nuevo" class="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition">
+            <button id="btn-cerrar-modal-nuevo" class="p-2 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 transition">
               ✕
             </button>
           </div>
@@ -719,15 +719,15 @@ export class PestanaAnimales {
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-5 overflow-y-auto">
         <div class="bg-white rounded-none sm:rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full h-full sm:h-auto sm:max-h-[95vh] flex flex-col modal-fullscreen-mobile">
           <!-- CABECERA MODAL -->
-          <div class="bg-gradient-to-r from-slate-950 via-blue-950 to-slate-950 text-white p-5 flex justify-between items-center">
+          <div class="bovi-module-header p-5 flex justify-between items-center">
             <div class="flex items-center gap-3">
               <span class="text-2xl p-2 bg-blue-600/30 rounded-xl border border-blue-500/40">✏️</span>
               <div>
                 <h3 class="text-base font-black tracking-tight">Modificar Datos del Ejemplar: ${tag}</h3>
-                <p class="text-xs text-slate-400">Edita cualquier dato genealógico, zootécnico, de peso o reproductivo.</p>
+                <p class="text-xs text-slate-600">Edita cualquier dato genealógico, zootécnico, de peso o reproductivo.</p>
               </div>
             </div>
-            <button id="btn-cerrar-modal-editar-animal" class="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer">
+            <button id="btn-cerrar-modal-editar-animal" class="p-2 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 transition cursor-pointer">
               ✕
             </button>
           </div>

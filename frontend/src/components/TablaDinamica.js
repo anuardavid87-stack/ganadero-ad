@@ -1059,7 +1059,7 @@ export class TablaDinamica {
         <!-- 1. CABECERA PRINCIPAL Y CATÁLOGO DE 12 INFORMES GANADEROS          -->
         <!-- ================================================================== -->
         <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-          <div class="bg-gradient-to-r from-slate-950 via-emerald-950 to-slate-950 text-white p-5 space-y-4">
+          <div class="bovi-module-header p-5 space-y-4">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
@@ -1067,23 +1067,23 @@ export class TablaDinamica {
                   <h2 class="text-base sm:text-xl font-black tracking-tight">
                     Centro de Informes & Inteligencia Ganadera
                   </h2>
-                  <span class="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                  <span class="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 border border-emerald-400/30 font-bold">
                     Rankings • Razas • Cruces Zootécnicos
                   </span>
                 </div>
-                <p class="text-xs text-slate-300 mt-1">
+                <p class="text-xs text-slate-600 mt-1">
                   Estándares técnicos <strong>FEDEGÁN • AGROSAVIA • EMBRAPA • ICAR</strong> — Analiza rankings de leche, ganancia de peso, IEP, comportamiento por raza (ej. Simmental, Brahman, Girolando) y cruces personalizados en <strong>${nombreFinca}</strong>.
                 </p>
               </div>
 
               <div class="flex flex-wrap items-center gap-2 shrink-0">
-                <div id="contador-ejemplares-dinamica" class="text-xs font-mono font-black bg-slate-900/90 px-3.5 py-2 rounded-xl border border-emerald-500/40 text-emerald-300 shadow">
+                <div id="contador-ejemplares-dinamica" class="text-xs font-mono font-black bg-slate-900/90 px-3.5 py-2 rounded-xl border border-emerald-500/40 text-emerald-700 shadow">
                   ${animales.length} Ejemplares Analizados
                 </div>
                 <button type="button" id="btn-exportar-informe-excel" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer">
                   <span>📥</span> Exportar Informe a Excel
                 </button>
-                <button type="button" id="btn-limpiar-filtros-informes" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition cursor-pointer" title="Restablecer todos los filtros">
+                <button type="button" id="btn-limpiar-filtros-informes" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-600 font-bold text-xs border border-slate-700 transition cursor-pointer" title="Restablecer todos los filtros">
                   🔄 Limpiar Filtros
                 </button>
               </div>
@@ -1092,28 +1092,24 @@ export class TablaDinamica {
             <!-- CATÁLOGO VISUAL DE LOS 12 INFORMES ESPECIALIZADOS -->
             <div>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <span class="text-[10px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
                   <span>📚</span> Selecciona un Informe Ganadero Especializado o usa el Explorador Libre:
                 </span>
-                <span class="text-[10px] text-slate-400 hidden sm:inline">Clic en cualquier tarjeta para cargar el informe</span>
+                <span class="text-[10px] text-slate-600 hidden sm:inline">Clic en cualquier tarjeta para cargar el informe</span>
               </div>
               <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 ${CATALOGO_INFORMES_GANADEROS.map((inf) => {
                   const activo = inf.id === this.informeActivoId;
                   return `
-                    <button type="button" data-informe-id="${inf.id}" class="btn-seleccionar-informe text-left p-2.5 rounded-2xl border transition cursor-pointer flex flex-col justify-between ${
-                      activo
-                        ? 'bg-emerald-600/30 border-emerald-400 text-white shadow-lg ring-2 ring-emerald-400/30'
-                        : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300'
-                    }">
+                    <button type="button" data-informe-id="${inf.id}" class="btn-seleccionar-informe text-left p-2.5 rounded-2xl border transition cursor-pointer flex flex-col justify-between ${ activo ? 'bg-emerald-600/30 border-emerald-400 text-white shadow-lg ring-2 ring-emerald-400/30' : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-600' }">
                       <div>
                         <div class="flex items-center justify-between gap-1 mb-1">
                           <span class="text-lg">${inf.icono}</span>
-                          ${activo ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-400 text-slate-950 font-black uppercase">Activo</span>' : ''}
+                          ${activo ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-400 text-slate-800 font-black uppercase">Activo</span>' : ''}
                         </div>
-                        <div class="font-black text-[11px] leading-tight text-white">${inf.nombre}</div>
+                        <div class="font-black text-[11px] leading-tight text-slate-800">${inf.nombre}</div>
                       </div>
-                      <div class="text-[9px] text-slate-400 mt-1 line-clamp-2 leading-snug">${inf.subtitulo}</div>
+                      <div class="text-[9px] text-slate-600 mt-1 line-clamp-2 leading-snug">${inf.subtitulo}</div>
                     </button>
                   `;
                 }).join('')}
@@ -1125,11 +1121,11 @@ export class TablaDinamica {
               <div class="flex items-start sm:items-center gap-2.5">
                 <span class="text-2xl p-1.5 rounded-xl bg-emerald-950 border border-emerald-700/60">${informeActual.icono}</span>
                 <div>
-                  <div class="font-black text-emerald-300 flex items-center gap-2 flex-wrap">
+                  <div class="font-black text-emerald-700 flex items-center gap-2 flex-wrap">
                     <span>${informeActual.nombre}</span>
-                    <span class="text-[10px] font-mono px-2 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">Ref: ${informeActual.fuente}</span>
+                    <span class="text-[10px] font-mono px-2 py-0.2 rounded bg-slate-800 text-slate-600 border border-slate-700">Ref: ${informeActual.fuente}</span>
                   </div>
-                  <p class="text-[11px] text-slate-300 mt-0.5">${informeActual.descripcion}</p>
+                  <p class="text-[11px] text-slate-600 mt-0.5">${informeActual.descripcion}</p>
                 </div>
               </div>
             </div>
@@ -1142,10 +1138,10 @@ export class TablaDinamica {
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <!-- SELECTOR DE RAZA (EJ. SIMMENTAL, BRAHMAN, GIROLANDO, ETC.) -->
                 <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-emerald-500/40">
-                  <label for="select-filtro-raza" class="block font-black text-emerald-300 uppercase text-[10px] mb-1 flex items-center gap-1">
+                  <label for="select-filtro-raza" class="block font-black text-emerald-700 uppercase text-[10px] mb-1 flex items-center gap-1">
                     <span>🧬</span> 1. Filtrar por Raza (Ej. Simmental):
                   </label>
-                  <select id="select-filtro-raza" class="w-full px-3 py-2 bg-slate-950 border border-emerald-500/60 rounded-xl text-white font-black outline-none cursor-pointer focus:border-emerald-400">
+                  <select id="select-filtro-raza" class="w-full px-3 py-2 bg-slate-950 border border-emerald-500/60 rounded-xl text-slate-800 font-black outline-none cursor-pointer focus:border-emerald-400">
                     <option value="todas" ${this.filtroRaza === 'todas' ? 'selected' : ''}>Todas las Razas (${animalesBase.length} animales)</option>
                     ${opciones.razasEnHato.length > 0 ? `
                       <optgroup label="Razas Presentes en la Finca">
@@ -1168,10 +1164,10 @@ export class TablaDinamica {
 
                 <!-- SELECTOR DEL DATO / MÉTRICA PRINCIPAL A ANALIZAR Y ORDENAR -->
                 <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-emerald-500/40">
-                  <label for="select-filtro-orden" class="block font-black text-emerald-300 uppercase text-[10px] mb-1 flex items-center gap-1">
+                  <label for="select-filtro-orden" class="block font-black text-emerald-700 uppercase text-[10px] mb-1 flex items-center gap-1">
                     <span>🎯</span> 2. Dato Principal a Evaluar / Ranking:
                   </label>
-                  <select id="select-filtro-orden" class="w-full px-3 py-2 bg-emerald-950 border-2 border-emerald-500 rounded-xl text-emerald-100 font-black outline-none cursor-pointer">
+                  <select id="select-filtro-orden" class="w-full px-3 py-2 bg-emerald-950 border-2 border-emerald-500 rounded-xl text-emerald-700 font-black outline-none cursor-pointer">
                     <option value="gdp_desc" ${this.filtroOrden === 'gdp_desc' ? 'selected' : ''}>⚖️ Ganancia Diaria de Peso - GDP (Mayor a Menor)</option>
                     <option value="gdp_asc" ${this.filtroOrden === 'gdp_asc' ? 'selected' : ''}>⚖️ Ganancia Diaria de Peso - GDP (Menor a Mayor / Rezago)</option>
                     <option value="leche_desc" ${this.filtroOrden === 'leche_desc' ? 'selected' : ''}>🥛 Producción de Leche L/día (Mayor a Menor)</option>
@@ -1192,10 +1188,10 @@ export class TablaDinamica {
 
                 <!-- SELECTOR DE QUÉ DATOS / COLUMNAS MOSTRAR EN PANTALLA -->
                 <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-emerald-500/40">
-                  <label for="select-modo-columnas" class="block font-black text-emerald-300 uppercase text-[10px] mb-1 flex items-center gap-1">
+                  <label for="select-modo-columnas" class="block font-black text-emerald-700 uppercase text-[10px] mb-1 flex items-center gap-1">
                     <span>👁️</span> 3. ¿Qué Datos Quieres Ver?:
                   </label>
-                  <select id="select-modo-columnas" class="w-full px-3 py-2 bg-slate-950 border border-emerald-500/60 rounded-xl text-white font-black outline-none cursor-pointer">
+                  <select id="select-modo-columnas" class="w-full px-3 py-2 bg-slate-950 border border-emerald-500/60 rounded-xl text-slate-800 font-black outline-none cursor-pointer">
                     <option value="todas" ${this.modoColumnas === 'todas' ? 'selected' : ''}>📋 Ver Todos los Datos (Vista Completa)</option>
                     <option value="solo_dato" ${this.modoColumnas === 'solo_dato' ? 'selected' : ''}>🎯 Ver SOLO el Dato Seleccionado (${infoCriterio.tituloColumna})</option>
                     <option value="carne_peso" ${this.modoColumnas === 'carne_peso' ? 'selected' : ''}>⚖️ Datos de Peso, Ganancia (GDP) & Ceba</option>
@@ -1208,10 +1204,10 @@ export class TablaDinamica {
 
                 <!-- SELECTOR DE CRUCE / AGRUPACIÓN ESTADÍSTICA -->
                 <div class="bg-slate-900/90 p-2.5 rounded-2xl border border-slate-700">
-                  <label for="select-agrupar-por" class="block font-bold text-slate-300 uppercase text-[10px] mb-1 flex items-center gap-1">
+                  <label for="select-agrupar-por" class="block font-bold text-slate-600 uppercase text-[10px] mb-1 flex items-center gap-1">
                     <span>📊</span> 4. Cruzar y Comparar Resumen Por:
                   </label>
-                  <select id="select-agrupar-por" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <select id="select-agrupar-por" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="raza" ${this.agruparPor === 'raza' ? 'selected' : ''}>🧬 Agrupar y Comparar por RAZA</option>
                     <option value="lote" ${this.agruparPor === 'lote' ? 'selected' : ''}>📍 Agrupar y Comparar por LOTE / POTRERO</option>
                     <option value="categoria" ${this.agruparPor === 'categoria' ? 'selected' : ''}>🏷️ Agrupar y Comparar por CATEGORÍA</option>
@@ -1226,13 +1222,13 @@ export class TablaDinamica {
               <!-- FILA 2: FILTROS SECUNDARIOS DE CRUCE (BUSCADOR, ESPECIE, CATEGORÍA, LOTE, SEXO, REPRO, PADRE) -->
               <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
                 <div class="col-span-2 sm:col-span-1">
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Buscar Tag / Nombre / Raza:</label>
-                  <input type="text" id="input-filtro-tag" value="${this.busqueda}" placeholder="Ej. BV-401, Simmental..." class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono font-bold outline-none focus:border-emerald-500" autocomplete="off">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Buscar Tag / Nombre / Raza:</label>
+                  <input type="text" id="input-filtro-tag" value="${this.busqueda}" placeholder="Ej. BV-401, Simmental..." class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-mono font-bold outline-none focus:border-emerald-500" autocomplete="off">
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Especie:</label>
-                  <select id="select-filtro-especie" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Especie:</label>
+                  <select id="select-filtro-especie" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todas" ${this.filtroEspecie === 'todas' ? 'selected' : ''}>Todas las Especies</option>
                     <option value="bovino" ${this.filtroEspecie === 'bovino' ? 'selected' : ''}>🐂 Vacuno (Bovino)</option>
                     <option value="bufalino" ${this.filtroEspecie === 'bufalino' ? 'selected' : ''}>🦬 Bufalino (Búfalos)</option>
@@ -1240,8 +1236,8 @@ export class TablaDinamica {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Categoría:</label>
-                  <select id="select-filtro-categoria" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Categoría:</label>
+                  <select id="select-filtro-categoria" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todas" ${this.filtroCategoria === 'todas' ? 'selected' : ''}>Todas las Categorías</option>
                     ${opciones.categorias.map((cat) => `
                       <option value="${cat}" ${this.filtroCategoria === cat ? 'selected' : ''}>${cat}</option>
@@ -1250,8 +1246,8 @@ export class TablaDinamica {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Lote / Potrero:</label>
-                  <select id="select-filtro-lote" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Lote / Potrero:</label>
+                  <select id="select-filtro-lote" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todos" ${this.filtroLote === 'todos' ? 'selected' : ''}>Todos los Lotes</option>
                     ${opciones.lotes.map((l) => `
                       <option value="${l}" ${this.filtroLote === l ? 'selected' : ''}>📍 ${l}</option>
@@ -1260,8 +1256,8 @@ export class TablaDinamica {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Sexo:</label>
-                  <select id="select-filtro-sexo" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Sexo:</label>
+                  <select id="select-filtro-sexo" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todos" ${this.filtroSexo === 'todos' ? 'selected' : ''}>♀️♂️ Ambos Sexos</option>
                     <option value="hembra" ${this.filtroSexo === 'hembra' ? 'selected' : ''}>♀️ Solo Hembras</option>
                     <option value="macho" ${this.filtroSexo === 'macho' ? 'selected' : ''}>♂️ Solo Machos</option>
@@ -1269,8 +1265,8 @@ export class TablaDinamica {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Estado Reproductivo:</label>
-                  <select id="select-filtro-repro" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Estado Reproductivo:</label>
+                  <select id="select-filtro-repro" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todos" ${this.filtroRepro === 'todos' ? 'selected' : ''}>Todos los Estados</option>
                     <option value="preñad" ${this.filtroRepro === 'preñad' ? 'selected' : ''}>🟢 Preñadas (Gestantes)</option>
                     <option value="vacia" ${this.filtroRepro === 'vacia' ? 'selected' : ''}>🔴 Vacías (Abiertas)</option>
@@ -1279,8 +1275,8 @@ export class TablaDinamica {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-400 uppercase text-[10px] mb-1">Padre / Toro:</label>
-                  <select id="select-filtro-padre" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold outline-none cursor-pointer">
+                  <label class="block font-bold text-slate-600 uppercase text-[10px] mb-1">Padre / Toro:</label>
+                  <select id="select-filtro-padre" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-800 font-bold outline-none cursor-pointer">
                     <option value="todos" ${this.filtroPadre === 'todos' ? 'selected' : ''}>Todos los Padres</option>
                     ${opciones.padres.map((p) => `
                       <option value="${p}" ${this.filtroPadre === p ? 'selected' : ''}>🐂 ${p}</option>
@@ -1292,36 +1288,32 @@ export class TablaDinamica {
               <!-- FILA 3: UMBRALES RÁPIDOS Y SELECTOR PERSONALIZADO DE COLUMNAS -->
               <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
                 <div class="flex flex-wrap items-center gap-2 text-[11px]">
-                  <span class="text-slate-400 font-bold">Umbrales mínimos:</span>
+                  <span class="text-slate-600 font-bold">Umbrales mínimos:</span>
                   <label class="inline-flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800">
-                    <span class="text-slate-400">Peso ≥</span>
-                    <input type="number" id="input-peso-minimo" value="${this.pesoMinimo}" placeholder="kg" class="w-14 bg-transparent text-white font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
+                    <span class="text-slate-600">Peso ≥</span>
+                    <input type="number" id="input-peso-minimo" value="${this.pesoMinimo}" placeholder="kg" class="w-14 bg-transparent text-slate-800 font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
                   </label>
                   <label class="inline-flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800">
-                    <span class="text-slate-400">GDP ≥</span>
-                    <input type="number" id="input-gdp-minima" value="${this.gdpMinima}" placeholder="g/d" class="w-16 bg-transparent text-white font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
+                    <span class="text-slate-600">GDP ≥</span>
+                    <input type="number" id="input-gdp-minima" value="${this.gdpMinima}" placeholder="g/d" class="w-16 bg-transparent text-slate-800 font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
                   </label>
                   <label class="inline-flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800">
-                    <span class="text-slate-400">Leche ≥</span>
-                    <input type="number" step="0.5" id="input-leche-minima" value="${this.lecheMinima}" placeholder="L/d" class="w-14 bg-transparent text-white font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
+                    <span class="text-slate-600">Leche ≥</span>
+                    <input type="number" step="0.5" id="input-leche-minima" value="${this.lecheMinima}" placeholder="L/d" class="w-14 bg-transparent text-slate-800 font-mono font-bold outline-none border-b border-slate-600 focus:border-emerald-400 text-center">
                   </label>
                   <label class="inline-flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 cursor-pointer">
                     <input type="checkbox" id="check-solo-descarte" ${this.soloCandidatosDescarte ? 'checked' : ''} class="accent-rose-500">
-                    <span class="text-rose-300 font-bold">🚨 Solo Candidatos a Descarte</span>
+                    <span class="text-rose-700 font-bold">🚨 Solo Candidatos a Descarte</span>
                   </label>
                 </div>
 
                 <!-- PÍLDORAS DE SELECCIÓN MANUAL DE COLUMNAS -->
                 <div class="flex flex-wrap items-center gap-1.5">
-                  <span class="text-[10px] font-bold text-slate-400 uppercase mr-1">Datos visibles:</span>
+                  <span class="text-[10px] font-bold text-slate-600 uppercase mr-1">Datos visibles:</span>
                   ${DEFINICION_COLUMNAS_INFORME.map((col) => {
                     const activa = columnasActivas.has(col.id);
                     return `
-                      <button type="button" data-col-toggle="${col.id}" class="btn-toggle-columna px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
-                        activa
-                          ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200'
-                          : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
-                      }" title="Mostrar u ocultar columna ${col.label}">
+                      <button type="button" data-col-toggle="${col.id}" class="btn-toggle-columna px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${ activa ? 'bg-emerald-600/30 border-emerald-400 text-emerald-700' : 'bg-slate-900 border-slate-800 text-slate-600 hover:text-slate-600' }" title="Mostrar u ocultar columna ${col.label}">
                         ${activa ? '✓' : '+'} ${col.icono} ${col.label}
                       </button>
                     `;
@@ -1334,19 +1326,19 @@ export class TablaDinamica {
           <!-- ================================================================ -->
           <!-- 3. BANNER DE ESTADÍSTICAS DEL CRUCE Y DATO ACTIVO                -->
           <!-- ================================================================ -->
-          <div class="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white px-5 py-3.5 border-b border-emerald-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="bovi-module-header px-5 py-3.5 border-b border-emerald-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div class="flex items-center gap-3">
               <span class="text-2xl">${infoCriterio.icono}</span>
               <div>
-                <div class="text-[10px] uppercase font-bold text-emerald-300 tracking-wider flex items-center gap-2 flex-wrap">
+                <div class="text-[10px] uppercase font-bold text-emerald-700 tracking-wider flex items-center gap-2 flex-wrap">
                   <span>Métrica Principal Seleccionada:</span>
-                  ${this.filtroRaza !== 'todas' ? `<span class="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black">🧬 Raza: ${this.filtroRaza}</span>` : ''}
-                  ${this.filtroCategoria !== 'todas' ? `<span class="px-2 py-0.5 rounded-full bg-blue-400 text-slate-950 font-black">🏷️ ${this.filtroCategoria}</span>` : ''}
-                  ${this.filtroLote !== 'todos' ? `<span class="px-2 py-0.5 rounded-full bg-purple-400 text-slate-950 font-black">📍 Lote: ${this.filtroLote}</span>` : ''}
+                  ${this.filtroRaza !== 'todas' ? `<span class="px-2 py-0.5 rounded-full bg-amber-400 text-slate-800 font-black">🧬 Raza: ${this.filtroRaza}</span>` : ''}
+                  ${this.filtroCategoria !== 'todas' ? `<span class="px-2 py-0.5 rounded-full bg-blue-400 text-slate-800 font-black">🏷️ ${this.filtroCategoria}</span>` : ''}
+                  ${this.filtroLote !== 'todos' ? `<span class="px-2 py-0.5 rounded-full bg-purple-400 text-slate-800 font-black">📍 Lote: ${this.filtroLote}</span>` : ''}
                 </div>
-                <div class="font-black text-white text-sm flex items-center gap-2 flex-wrap mt-0.5">
+                <div class="font-black text-slate-800 text-sm flex items-center gap-2 flex-wrap mt-0.5">
                   <span>${infoCriterio.tituloColumna}</span>
-                  <span class="px-2 py-0.2 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-mono">
+                  <span class="px-2 py-0.2 rounded bg-emerald-500/30 text-emerald-700 border border-emerald-400/40 text-[10px] font-mono">
                     ${infoCriterio.esAscendente ? 'Orden Ascendente (Mejor Menor Valor) ⬆️' : 'Orden Descendente (Mayor a Menor) ⬇️'}
                   </span>
                 </div>
@@ -1355,24 +1347,24 @@ export class TablaDinamica {
 
             <div class="flex flex-wrap items-center gap-2.5 text-xs font-mono">
               <div class="bg-black/35 px-3 py-1.5 rounded-xl border border-white/10">
-                <span class="text-[9px] uppercase text-emerald-300 block">Máximo (${infoCriterio.unidad})</span>
-                <strong class="text-emerald-400 text-sm">${maxVal > 0 ? `${maxVal.toLocaleString('es-CO')}` : '-'}</strong>
+                <span class="text-[9px] uppercase text-emerald-700 block">Máximo (${infoCriterio.unidad})</span>
+                <strong class="text-emerald-700 text-sm">${maxVal > 0 ? `${maxVal.toLocaleString('es-CO')}` : '-'}</strong>
               </div>
               <div class="bg-black/35 px-3 py-1.5 rounded-xl border border-white/10">
-                <span class="text-[9px] uppercase text-emerald-300 block">Promedio del Grupo</span>
-                <strong class="text-white text-sm">${avgVal > 0 ? `${avgVal.toLocaleString('es-CO')}` : '-'}</strong>
+                <span class="text-[9px] uppercase text-emerald-700 block">Promedio del Grupo</span>
+                <strong class="text-slate-800 text-sm">${avgVal > 0 ? `${avgVal.toLocaleString('es-CO')}` : '-'}</strong>
               </div>
               <div class="bg-black/35 px-3 py-1.5 rounded-xl border border-white/10">
-                <span class="text-[9px] uppercase text-emerald-300 block">Mínimo (${infoCriterio.unidad})</span>
-                <strong class="text-amber-300 text-sm">${minVal > 0 ? `${minVal.toLocaleString('es-CO')}` : '-'}</strong>
+                <span class="text-[9px] uppercase text-emerald-700 block">Mínimo (${infoCriterio.unidad})</span>
+                <strong class="text-amber-700 text-sm">${minVal > 0 ? `${minVal.toLocaleString('es-CO')}` : '-'}</strong>
               </div>
               <div class="bg-black/35 px-3 py-1.5 rounded-xl border border-white/10 hidden md:block">
-                <span class="text-[9px] uppercase text-slate-300 block">Peso Prom. / GDP Prom.</span>
-                <strong class="text-slate-100 text-sm">${promPesoFiltro > 0 ? `${promPesoFiltro} kg` : '-'} / ${promGdpFiltro > 0 ? `+${promGdpFiltro} g/d` : '-'}</strong>
+                <span class="text-[9px] uppercase text-slate-600 block">Peso Prom. / GDP Prom.</span>
+                <strong class="text-slate-600 text-sm">${promPesoFiltro > 0 ? `${promPesoFiltro} kg` : '-'} / ${promGdpFiltro > 0 ? `+${promGdpFiltro} g/d` : '-'}</strong>
               </div>
               <div class="bg-black/35 px-3 py-1.5 rounded-xl border border-white/10 hidden md:block">
-                <span class="text-[9px] uppercase text-slate-300 block">Leche Total Grupo</span>
-                <strong class="text-sky-300 text-sm">${totalLecheFiltro > 0 ? `${totalLecheFiltro} L/día` : '0 L/día'}</strong>
+                <span class="text-[9px] uppercase text-slate-600 block">Leche Total Grupo</span>
+                <strong class="text-sky-700 text-sm">${totalLecheFiltro > 0 ? `${totalLecheFiltro} L/día` : '0 L/día'}</strong>
               </div>
             </div>
           </div>
@@ -1387,14 +1379,14 @@ export class TablaDinamica {
                   <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                     <span>📊</span> Matriz Comparativa Agrupada por ${this.obtenerEtiquetaDimension(this.agruparPor)} (${resumenGrupos.length} grupos)
                   </h4>
-                  <p class="text-[11px] text-slate-500">
+                  <p class="text-[11px] text-slate-600">
                     Haz clic en <strong>"Filtrar Grupo"</strong> en cualquier fila (ej. una raza específica) para aislar únicamente esos animales en la tabla inferior.
                   </p>
                 </div>
               </div>
               <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <table class="w-full text-left text-xs border-collapse">
-                  <thead class="bg-slate-900 text-white uppercase text-[10px] font-black tracking-wider">
+                  <thead class="bg-slate-900 text-slate-800 uppercase text-[10px] font-black tracking-wider">
                     <tr>
                       <th class="p-2.5">${this.obtenerEtiquetaDimension(this.agruparPor)}</th>
                       <th class="p-2.5 text-center">Cabezas (% Hato)</th>
@@ -1452,8 +1444,8 @@ export class TablaDinamica {
                         </td>
                         <td class="p-2.5 text-[11px]">
                           ${g.mejorEjemplar ? `
-                            <span class="font-mono font-black text-slate-900">${g.mejorEjemplar.tag}</span>
-                            <span class="text-slate-500">${g.mejorEjemplar.nombre ? `(${g.mejorEjemplar.nombre})` : ''}</span>
+                            <span class="font-mono font-black text-slate-800">${g.mejorEjemplar.tag}</span>
+                            <span class="text-slate-600">${g.mejorEjemplar.nombre ? `(${g.mejorEjemplar.nombre})` : ''}</span>
                             <span class="block text-[10px] font-bold text-emerald-700">${g.mejorEjemplar.valorTexto}</span>
                           ` : '-'}
                         </td>
@@ -1538,7 +1530,7 @@ export class TablaDinamica {
               <tbody id="tbody-tabla-dinamica" class="divide-y divide-slate-200 font-medium">
                 ${animales.length > 0 ? animales.map((a, idx) => this.renderFilaAnimal(a, idx, columnasActivas, avgVal)).join('') : `
                   <tr>
-                    <td colspan="16" class="p-10 text-center text-slate-400">
+                    <td colspan="16" class="p-10 text-center text-slate-600">
                       No se encontraron ejemplares con los criterios seleccionados${this.filtroRaza !== 'todas' ? ` para la raza "${this.filtroRaza}"` : ''}.
                     </td>
                   </tr>
@@ -1597,9 +1589,9 @@ export class TablaDinamica {
     }
 
     // Medallas para los primeros lugares
-    let medalla = `<span class="text-slate-400 font-mono text-xs">#${idx + 1}</span>`;
+    let medalla = `<span class="text-slate-600 font-mono text-xs">#${idx + 1}</span>`;
     if (idx === 0) medalla = `<span class="px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-xs shadow-sm">🥇 #1</span>`;
-    else if (idx === 1) medalla = `<span class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-900 font-black text-xs shadow-sm">🥈 #2</span>`;
+    else if (idx === 1) medalla = `<span class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 font-black text-xs shadow-sm">🥈 #2</span>`;
     else if (idx === 2) medalla = `<span class="px-1.5 py-0.5 rounded-full bg-amber-600/30 text-amber-900 font-black text-xs shadow-sm">🥉 #3</span>`;
 
     // Clasificación de rendimiento zootécnico individual
@@ -1621,7 +1613,7 @@ export class TablaDinamica {
         <td class="p-2.5 text-center bg-slate-50/80">${medalla}</td>
 
         <!-- ARETE -->
-        <td class="p-2.5 font-black font-mono text-slate-900 text-sm">${tag}</td>
+        <td class="p-2.5 font-black font-mono text-slate-800 text-sm">${tag}</td>
 
         <!-- ESPECIE -->
         ${columnasActivas.has('especie') ? `
@@ -1647,7 +1639,7 @@ export class TablaDinamica {
               ${metaOrden.valorTexto}
             </span>
             ${metaOrden.subtexto ? `
-              <span class="text-[9px] font-bold text-slate-500 mt-0.5">${metaOrden.subtexto}</span>
+              <span class="text-[9px] font-bold text-slate-600 mt-0.5">${metaOrden.subtexto}</span>
             ` : ''}
             ${diffTexto ? `
               <span class="text-[9px] font-mono font-bold text-emerald-800">${diffTexto}</span>
@@ -1659,7 +1651,7 @@ export class TablaDinamica {
         ${columnasActivas.has('categoria_lote') ? `
           <td class="p-2.5">
             <div class="font-bold text-slate-700 text-[11px]">${a.categoria || 'General'}</div>
-            <span class="text-[10px] text-slate-400 block">📍 ${a.lote || 'General'}</span>
+            <span class="text-[10px] text-slate-600 block">📍 ${a.lote || 'General'}</span>
           </td>
         ` : ''}
 
@@ -1675,7 +1667,7 @@ export class TablaDinamica {
           <td class="p-2.5 text-right font-mono font-bold text-slate-800 ${this.filtroOrden.startsWith('peso') ? 'bg-emerald-50' : ''}">
             ${peso > 0 ? `
               <div>${peso} kg</div>
-              <div class="text-[9px] text-slate-400 font-normal">${ugg} UGG</div>
+              <div class="text-[9px] text-slate-600 font-normal">${ugg} UGG</div>
             ` : '-'}
           </td>
         ` : ''}
@@ -1687,7 +1679,7 @@ export class TablaDinamica {
               <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold ${gdp < 300 ? 'bg-rose-100 text-rose-800 font-black' : (gdp < 600 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')}">
                 ${gdp > 0 ? '+' : ''}${gdp} g/d
               </span>
-            ` : '<span class="text-slate-300 text-xs">-</span>'}
+            ` : '<span class="text-slate-600 text-xs">-</span>'}
           </td>
         ` : ''}
 
@@ -1696,7 +1688,7 @@ export class TablaDinamica {
           <td class="p-2.5 text-right font-mono font-bold text-emerald-800 ${this.filtroOrden === 'leche_desc' || this.filtroOrden === 'lactancia305_desc' ? 'bg-emerald-50' : ''}">
             ${leche > 0 ? `
               <div>${parseFloat(leche).toFixed(1)} L</div>
-              <div class="text-[9px] text-slate-400 font-normal">${proyeccion305}L/${diasLactanciaBase}d</div>
+              <div class="text-[9px] text-slate-600 font-normal">${proyeccion305}L/${diasLactanciaBase}d</div>
             ` : '-'}
           </td>
         ` : ''}
@@ -1738,14 +1730,14 @@ export class TablaDinamica {
           <td class="p-2.5 text-center">
             <div class="flex flex-col items-center gap-0.5">
               ${badgeRendimiento}
-              <span class="text-[9px] font-mono font-bold text-slate-500">Mérito: ${merito} pts</span>
+              <span class="text-[9px] font-mono font-bold text-slate-600">Mérito: ${merito} pts</span>
             </div>
           </td>
         ` : ''}
 
         <!-- ACCIONES -->
         <td class="p-2.5 text-center">
-          <button data-action="ver-ficha-animal" data-id="${a.id}" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold rounded-lg shadow transition cursor-pointer" title="Ver Ficha Técnica">
+          <button data-action="ver-ficha-animal" data-id="${a.id}" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-800 text-[10px] font-bold rounded-lg shadow transition cursor-pointer" title="Ver Ficha Técnica">
             🔍
           </button>
         </td>
@@ -2007,7 +1999,7 @@ export class TablaDinamica {
       } else {
         tbody.innerHTML = `
           <tr>
-            <td colspan="16" class="p-10 text-center text-slate-400">
+            <td colspan="16" class="p-10 text-center text-slate-600">
               No se encontraron ejemplares con los criterios seleccionados.
             </td>
           </tr>

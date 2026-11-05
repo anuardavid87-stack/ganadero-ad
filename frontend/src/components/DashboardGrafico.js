@@ -34,7 +34,7 @@ export class DashboardGrafico {
             🔒
           </div>
           <div class="space-y-1">
-            <h3 class="text-xl font-black text-slate-900">Dashboard Financiero Restringido</h3>
+            <h3 class="text-xl font-black text-slate-800">Dashboard Financiero Restringido</h3>
             <p class="text-xs font-mono uppercase font-bold text-rose-700">Métricas Confidenciales</p>
           </div>
           <p class="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
@@ -112,10 +112,10 @@ export class DashboardGrafico {
             </div>
             <div>
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-black text-slate-900 text-base sm:text-lg tracking-tight">${finca?.nombre || 'Predio Ganadero'}</h3>
+                <h3 class="font-black text-slate-800 text-base sm:text-lg tracking-tight">${finca?.nombre || 'Predio Ganadero'}</h3>
                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-black uppercase">Finca Activa</span>
               </div>
-              <div class="text-xs text-slate-500 font-mono mt-0.5">
+              <div class="text-xs text-slate-600 font-mono mt-0.5">
                 Código: <strong>${finca?.codigo || finca?.id || 'S/C'}</strong> • Área: <strong>${finca?.areaHa || 0} Ha</strong> • 📍 ${finca?.ubicacion || 'Colombia'}
               </div>
             </div>
@@ -134,7 +134,7 @@ export class DashboardGrafico {
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <span class="text-[11px] font-bold text-slate-500 uppercase">Tasa de Preñez</span>
+              <span class="text-[11px] font-bold text-slate-600 uppercase">Tasa de Preñez</span>
               <div class="text-2xl font-black text-emerald-800 mt-1">${tasaPrenez}%</div>
               <span class="text-[10px] text-emerald-600 font-bold">${prenadas} de ${vientres.length} vientres</span>
             </div>
@@ -145,9 +145,9 @@ export class DashboardGrafico {
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <span class="text-[11px] font-bold text-slate-500 uppercase">Total Hato Activo</span>
-              <div class="text-2xl font-black text-slate-900 mt-1">${animales.length}</div>
-              <span class="text-[10px] text-slate-500 font-medium">${finca?.nombre || 'Predio activo'}</span>
+              <span class="text-[11px] font-bold text-slate-600 uppercase">Total Hato Activo</span>
+              <div class="text-2xl font-black text-slate-800 mt-1">${animales.length}</div>
+              <span class="text-[10px] text-slate-600 font-medium">${finca?.nombre || 'Predio activo'}</span>
             </div>
             <div class="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xl">
               🐂
@@ -156,7 +156,7 @@ export class DashboardGrafico {
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <span class="text-[11px] font-bold text-slate-500 uppercase">Margen Neto Mes</span>
+              <span class="text-[11px] font-bold text-slate-600 uppercase">Margen Neto Mes</span>
               <div class="text-2xl font-black ${balance.indicadores.margenNeto >= 0 ? 'text-emerald-700' : 'text-rose-700'} mt-1">
                 $${(balance.indicadores.margenNeto / 1000000).toFixed(2)}M
               </div>
@@ -169,7 +169,7 @@ export class DashboardGrafico {
 
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <span class="text-[11px] font-bold text-slate-500 uppercase">Amortización Diferida</span>
+              <span class="text-[11px] font-bold text-slate-600 uppercase">Amortización Diferida</span>
               <div class="text-2xl font-black text-purple-700 mt-1">
                 $${(balance.costos.cuotaInversionesDiferidas / 1000).toFixed(0)}k
               </div>
@@ -187,10 +187,10 @@ export class DashboardGrafico {
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
             <div class="flex justify-between items-center mb-4">
               <div>
-                <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                <h3 class="font-black text-slate-800 text-sm flex items-center gap-2">
                   <span>🧬</span> Dinámica Reproductiva y Fertilidad
                 </h3>
-                <p class="text-xs text-slate-500">Distribución de vientres gestantes, vacíos y servidos.</p>
+                <p class="text-xs text-slate-600">Distribución de vientres gestantes, vacíos y servidos.</p>
               </div>
               <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
                 ${tasaPrenez}% Preñez
@@ -201,8 +201,8 @@ export class DashboardGrafico {
               <div class="relative w-44 h-44">
                 ${this.renderDonut(prenadas, vacias, servidas)}
                 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span class="text-2xl font-black text-slate-900">${tasaPrenez}%</span>
-                  <span class="text-[10px] uppercase font-bold text-slate-400">Preñadas</span>
+                  <span class="text-2xl font-black text-slate-800">${tasaPrenez}%</span>
+                  <span class="text-[10px] uppercase font-bold text-slate-600">Preñadas</span>
                 </div>
               </div>
 
@@ -233,10 +233,10 @@ export class DashboardGrafico {
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
             <div class="flex justify-between items-center mb-4">
               <div>
-                <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                <h3 class="font-black text-slate-800 text-sm flex items-center gap-2">
                   <span>📈</span> Rendimiento Financiero (Costos vs Ingresos)
                 </h3>
-                <p class="text-xs text-slate-500">Cruce de costos fijos, cuotas amortizables e ingresos de leche y carne.</p>
+                <p class="text-xs text-slate-600">Cruce de costos fijos, cuotas amortizables e ingresos de leche y carne.</p>
               </div>
               <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
                 Margen: ${balance.indicadores.margenPct}%
@@ -252,12 +252,12 @@ export class DashboardGrafico {
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <div class="flex justify-between items-center mb-4">
               <div>
-                <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                <h3 class="font-black text-slate-800 text-sm flex items-center gap-2">
                   <span>🥛</span> Curva de Lactancia Promedio (Litros vs DEL)
                 </h3>
-                <p class="text-xs text-slate-500">Comportamiento de producción según días en lactancia.</p>
+                <p class="text-xs text-slate-600">Comportamiento de producción según días en lactancia.</p>
               </div>
-              <span class="text-xs font-bold text-slate-500">Pico: Día 60</span>
+              <span class="text-xs font-bold text-slate-600">Pico: Día 60</span>
             </div>
             ${this.renderCurvaLactancia()}
           </div>
@@ -265,10 +265,10 @@ export class DashboardGrafico {
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <div class="flex justify-between items-center mb-4">
               <div>
-                <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
+                <h3 class="font-black text-slate-800 text-sm flex items-center gap-2">
                   <span>🏷️</span> Estructura Demográfica del Hato
                 </h3>
-                <p class="text-xs text-slate-500">Distribución por categorías zootécnicas.</p>
+                <p class="text-xs text-slate-600">Distribución por categorías zootécnicas.</p>
               </div>
               <span class="text-xs font-bold text-emerald-800 font-mono">${animales.length} Cabezas</span>
             </div>
@@ -283,7 +283,7 @@ export class DashboardGrafico {
 
   renderDonut(p, v, s) {
     const total = p + v + s;
-    if (total === 0) return '<div class="text-xs text-slate-400">Sin datos</div>';
+    if (total === 0) return '<div class="text-xs text-slate-600">Sin datos</div>';
 
     const r = 58;
     const c = 2 * Math.PI * r;
@@ -314,7 +314,7 @@ export class DashboardGrafico {
         <div class="flex flex-col items-center gap-1 flex-1">
           <span class="text-[10px] font-bold text-slate-700 font-mono">$${(b.costos.fijos / 1000000).toFixed(1)}M</span>
           <div class="w-full max-w-[42px] bg-slate-700 rounded-t-lg transition-all" style="height: ${Math.max(6, hFijos)}px"></div>
-          <span class="text-[9px] font-bold text-slate-500 uppercase">Costos Fijos</span>
+          <span class="text-[9px] font-bold text-slate-600 uppercase">Costos Fijos</span>
         </div>
         <div class="flex flex-col items-center gap-1 flex-1">
           <span class="text-[10px] font-bold text-purple-700 font-mono">$${(b.costos.cuotaInversionesDiferidas / 1000).toFixed(0)}k</span>
@@ -374,7 +374,7 @@ export class DashboardGrafico {
             <div>
               <div class="flex justify-between text-xs font-bold text-slate-700 mb-0.5">
                 <span>${c}</span>
-                <span class="font-mono text-slate-500">${n} (${pct}%)</span>
+                <span class="font-mono text-slate-600">${n} (${pct}%)</span>
               </div>
               <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div class="h-full bg-emerald-600 rounded-full" style="width: ${pct}%"></div>

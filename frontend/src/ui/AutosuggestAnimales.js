@@ -244,14 +244,14 @@ export function conectarAutosuggestAnimales({
         dropMenu.classList.add('hidden');
         return;
       }
-      dropMenu.innerHTML = '<div class="p-3.5 text-center text-xs text-slate-500 font-semibold flex items-center justify-center gap-2"><span>🔍</span> ' + textoVacio + '</div>';
+      dropMenu.innerHTML = '<div class="p-3.5 text-center text-xs text-slate-600 font-semibold flex items-center justify-center gap-2"><span>🔍</span> ' + textoVacio + '</div>';
       dropMenu.classList.remove('hidden');
       return;
     }
 
     let html = '<div class="px-3.5 py-1.5 ' + tColors.headerBg + ' border-b text-[11px] font-black flex items-center justify-between">' +
       '<span class="flex items-center gap-1.5"><span>✨</span> Coincidencias encontradas: ' + coincidencias.length + '</span>' +
-      '<span class="text-[10px] font-normal text-slate-400">Clic o Enter para seleccionar</span>' +
+      '<span class="text-[10px] font-normal text-slate-600">Clic o Enter para seleccionar</span>' +
       '</div><div class="divide-y divide-slate-100">';
 
     coincidencias.forEach((a, idx) => {
@@ -287,30 +287,30 @@ export function conectarAutosuggestAnimales({
           : `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
-      html += `<div class="item-sugerencia-animal bovi-autosuggest-item p-2.5 sm:px-3.5 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
+      html += `<div class="item-sugerencia-animal bovi-autosuggest-item p-2.5 sm:px-3.5 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? ' text-slate-600 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
         `<div class="flex items-center gap-2.5 min-w-0">` +
-          `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale opacity-70' : ''}">${especie}</span>` +
+          `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale ' : ''}">${especie}</span>` +
           `<div class="min-w-0">` +
             `<div class="flex items-center gap-1.5 flex-wrap">` +
-              `<span class="font-mono font-black px-2 py-0.5 rounded-lg border text-xs ${esAtenuado ? 'bg-slate-100 text-slate-500 border-slate-300' : tColors.badgeBg}">` +
+              `<span class="font-mono font-black px-2 py-0.5 rounded-lg border text-xs ${esAtenuado ? 'bg-slate-100 text-slate-600 border-slate-300' : tColors.badgeBg}">` +
                 resaltarCoincidencia(tag, query) +
               `</span>` +
-              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-500 font-medium' : 'text-slate-800'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
+              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-600 font-medium' : 'text-slate-800'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
               badgeEstadoExtra +
             `</div>` +
-            `<div class="text-[11px] ${esAtenuado ? 'text-slate-500' : 'text-slate-600'} truncate flex items-center gap-1.5 mt-0.5">` +
+            `<div class="text-[11px] ${esAtenuado ? 'text-slate-600' : 'text-slate-600'} truncate flex items-center gap-1.5 mt-0.5">` +
               `<span>${raza}</span>` +
               `<span>•</span>` +
               `<span>${categoria}</span>` +
               `<span>•</span>` +
-              `<span class="text-slate-500 font-mono">Lote: ${lote}</span>` +
+              `<span class="text-slate-600 font-mono">Lote: ${lote}</span>` +
             `</div>` +
           `</div>` +
         `</div>` +
         `<div class="text-right flex-shrink-0 flex flex-col items-end gap-1">` +
           (mensajeAccion ? mensajeAccion : '') +
-          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-500' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
-          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-500' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-600')}">${repro}</span>` : '') +
+          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-600' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
+          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-600' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-600')}">${repro}</span>` : '') +
         `</div>` +
       `</div>`;
     });

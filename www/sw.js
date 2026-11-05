@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.3.1-contraste-global-sin-blancos';
+const CACHE_NAME = 'ganadero-ad-v4.4.0-tokens-semanticos-wcag';
 const CORE_FILES = [
   './',
   './index.html',
