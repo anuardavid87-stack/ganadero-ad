@@ -7043,6 +7043,26 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     htmlNutriSync.includes('bovi-select-raza'),
     'ModuloNutricion (Sincronización con Ficha): Prioriza el último peso (312 kg) y edad dinámica desde fechaNacimiento de la ficha sobre valores antiguos del plan'
   );
+
+  // 60.5: Ajustes finos de contraste (Finca Destino, Barra superior, Selección con transparencia, Coincidencias azul/gris, Máx GDP, Sin aviso Enter)
+  const autosuggestSrc = fs.readFileSync('./frontend/src/ui/AutosuggestAnimales.js', 'utf8');
+  const cuadriculaSrc = fs.readFileSync('./frontend/src/components/CuadriculaMasiva.js', 'utf8');
+  const pestanaAnimSrc = fs.readFileSync('./frontend/src/components/PestanaAnimales.js', 'utf8');
+  const tablaDinSrc = fs.readFileSync('./frontend/src/components/TablaDinamica.js', 'utf8');
+  const importadorSrc = fs.readFileSync('./frontend/src/components/ImportadorExcel.js', 'utf8');
+
+  test(
+    importadorSrc.includes('bovi-finca-destino-label') &&
+    pestanaAnimSrc.includes('bovi-module-title') &&
+    pestanaAnimSrc.includes('bovi-search-toolbar') &&
+    pestanaAnimSrc.includes('bovi-table-row-hover') &&
+    autosuggestSrc.includes('bovi-match-highlight') &&
+    !autosuggestSrc.includes('bg-amber-300') &&
+    tablaDinSrc.includes('bovi-max-gdp-label') &&
+    !cuadriculaSrc.includes('MODO RÁPIDO CON TECLA ENTER (SIN USAR MOUSE)') &&
+    stylesCssContent.includes('--bovi-text-primary: #CBD5E1;'),
+    'Auditoría Visual (Puntos 1-6 y 10): Finca Destino oscurecido, barra de búsqueda integrada, hover con transparencia, coincidencia azul/gris, Máx GDP oscurecido, sin blancos puros en Dark Mode y aviso de tecla Enter eliminado'
+  );
 }
 
 console.log(`\n=====================================================================`);

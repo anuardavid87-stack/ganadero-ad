@@ -141,7 +141,7 @@ function resaltarCoincidencia(texto, query) {
   if (!query) return String(texto);
   const qClean = normalizarTextoBusqueda(query);
   const regex = new RegExp('(' + qClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-  return String(texto).replace(regex, '<span class="bg-amber-300 text-slate-900 px-0.5 rounded font-black">$1</span>');
+  return String(texto).replace(regex, '<span class="bovi-match-highlight px-1 py-0.2 rounded font-black">$1</span>');
 }
 
 /**
@@ -287,7 +287,7 @@ export function conectarAutosuggestAnimales({
           : `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
-      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
+      html += `<div class="item-sugerencia-animal bovi-autosuggest-item p-2.5 sm:px-3.5 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
         `<div class="flex items-center gap-2.5 min-w-0">` +
           `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale opacity-70' : ''}">${especie}</span>` +
           `<div class="min-w-0">` +
@@ -295,22 +295,22 @@ export function conectarAutosuggestAnimales({
               `<span class="font-mono font-black px-2 py-0.5 rounded-lg border text-xs ${esAtenuado ? 'bg-slate-100 text-slate-500 border-slate-300' : tColors.badgeBg}">` +
                 resaltarCoincidencia(tag, query) +
               `</span>` +
-              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-500 font-medium' : 'text-slate-900'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
+              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-500 font-medium' : 'text-slate-800'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
               badgeEstadoExtra +
             `</div>` +
-            `<div class="text-[11px] ${esAtenuado ? 'text-slate-400' : 'text-slate-500'} truncate flex items-center gap-1.5 mt-0.5">` +
+            `<div class="text-[11px] ${esAtenuado ? 'text-slate-500' : 'text-slate-600'} truncate flex items-center gap-1.5 mt-0.5">` +
               `<span>${raza}</span>` +
               `<span>•</span>` +
               `<span>${categoria}</span>` +
               `<span>•</span>` +
-              `<span class="text-slate-400 font-mono">Lote: ${lote}</span>` +
+              `<span class="text-slate-500 font-mono">Lote: ${lote}</span>` +
             `</div>` +
           `</div>` +
         `</div>` +
         `<div class="text-right flex-shrink-0 flex flex-col items-end gap-1">` +
           (mensajeAccion ? mensajeAccion : '') +
-          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-400' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
-          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-400' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-500')}">${repro}</span>` : '') +
+          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-500' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
+          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-500' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-600')}">${repro}</span>` : '') +
         `</div>` +
       `</div>`;
     });
@@ -358,10 +358,10 @@ export function conectarAutosuggestAnimales({
     const items = dropMenu.querySelectorAll('.item-sugerencia-animal');
     items.forEach((it, idx) => {
       if (idx === indiceActivo) {
-        it.classList.add('bg-slate-100', 'font-black');
+        it.classList.add('bovi-autosuggest-active', 'font-black');
         it.scrollIntoView({ block: 'nearest' });
       } else {
-        it.classList.remove('bg-slate-100', 'font-black');
+        it.classList.remove('bovi-autosuggest-active', 'font-black');
       }
     });
   }

@@ -1411,11 +1411,11 @@ export class TablaDinamica {
                   </thead>
                   <tbody class="divide-y divide-slate-200">
                     ${resumenGrupos.map((g) => `
-                      <tr class="hover:bg-emerald-50/60 transition">
-                        <td class="p-2.5 font-black text-slate-900">${g.grupo}</td>
+                      <tr class="bovi-table-row-hover transition">
+                        <td class="p-2.5 font-black text-slate-800">${g.grupo}</td>
                         <td class="p-2.5 text-center font-mono">
                           <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-black">${g.cantidad}</span>
-                          <span class="text-[10px] text-slate-500 ml-1">(${g.porcentajeHato}%)</span>
+                          <span class="text-[10px] text-slate-600 font-semibold ml-1">(${g.porcentajeHato}%)</span>
                         </td>
                         <td class="p-2.5 text-right font-mono font-bold text-slate-800">
                           ${g.pesoPromedio ? `${g.pesoPromedio} kg` : '-'}
@@ -1423,18 +1423,18 @@ export class TablaDinamica {
                         <td class="p-2.5 text-right font-mono text-slate-700">
                           ${g.uggTotal > 0 ? `${g.uggTotal} UGG` : '-'}
                         </td>
-                        <td class="p-2.5 text-center bg-emerald-50/50 font-mono">
+                        <td class="p-2.5 text-center bovi-gdp-col-cell font-mono">
                           ${g.gdpPromedio !== null ? `
                             <span class="px-2 py-0.5 rounded-full font-black text-[11px] ${g.gdpPromedio >= 600 ? 'bg-emerald-100 text-emerald-900' : (g.gdpPromedio < 300 ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900')}">
                               +${g.gdpPromedio} g/d
                             </span>
-                            <span class="text-[10px] text-slate-500 block">Máx: +${g.gdpMax} g/d</span>
+                            <span class="text-[10px] text-slate-700 font-bold bovi-max-gdp-label block mt-0.5">Máx: +${g.gdpMax} g/d</span>
                           ` : '-'}
                         </td>
                         <td class="p-2.5 text-right font-mono">
                           ${g.lechePromedio !== null ? `
                             <strong class="text-emerald-800">${g.lechePromedio} L/d</strong>
-                            <span class="text-[10px] text-slate-500 block">Total: ${g.lecheTotalDia} L/d</span>
+                            <span class="text-[10px] text-slate-700 font-semibold block">Total: ${g.lecheTotalDia} L/d</span>
                           ` : '-'}
                         </td>
                         <td class="p-2.5 text-center font-mono">

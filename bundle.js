@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-05T04:57:55.279Z
+ * Generado automáticamente: 2026-11-05T16:31:30.061Z
  */
 (function() {
   "use strict";
@@ -6078,7 +6078,7 @@ function resaltarCoincidencia(texto, query) {
   if (!query) return String(texto);
   const qClean = normalizarTextoBusqueda(query);
   const regex = new RegExp('(' + qClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-  return String(texto).replace(regex, '<span class="bg-amber-300 text-slate-900 px-0.5 rounded font-black">$1</span>');
+  return String(texto).replace(regex, '<span class="bovi-match-highlight px-1 py-0.2 rounded font-black">$1</span>');
 }
 
 /**
@@ -6224,7 +6224,7 @@ function conectarAutosuggestAnimales({
           : `<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 flex items-center gap-1">🔄 Clic para reactivar</span>`;
       }
 
-      html += `<div class="item-sugerencia-animal p-2.5 sm:px-3.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 bg-slate-50/70 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
+      html += `<div class="item-sugerencia-animal bovi-autosuggest-item p-2.5 sm:px-3.5 cursor-pointer transition flex items-center justify-between gap-2.5 text-xs ${esAtenuado ? 'opacity-65 text-slate-400 border-l-4 ' + (esEnOtraFinca ? 'border-amber-400' : 'border-rose-400') : ''}" data-index="${idx}">` +
         `<div class="flex items-center gap-2.5 min-w-0">` +
           `<span class="text-base flex-shrink-0 ${esAtenuado ? 'grayscale opacity-70' : ''}">${especie}</span>` +
           `<div class="min-w-0">` +
@@ -6232,22 +6232,22 @@ function conectarAutosuggestAnimales({
               `<span class="font-mono font-black px-2 py-0.5 rounded-lg border text-xs ${esAtenuado ? 'bg-slate-100 text-slate-500 border-slate-300' : tColors.badgeBg}">` +
                 resaltarCoincidencia(tag, query) +
               `</span>` +
-              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-500 font-medium' : 'text-slate-900'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
+              (alias ? `<span class="font-black ${esAtenuado ? 'text-slate-500 font-medium' : 'text-slate-800'} truncate">${resaltarCoincidencia(alias, query)}</span>` : '') +
               badgeEstadoExtra +
             `</div>` +
-            `<div class="text-[11px] ${esAtenuado ? 'text-slate-400' : 'text-slate-500'} truncate flex items-center gap-1.5 mt-0.5">` +
+            `<div class="text-[11px] ${esAtenuado ? 'text-slate-500' : 'text-slate-600'} truncate flex items-center gap-1.5 mt-0.5">` +
               `<span>${raza}</span>` +
               `<span>•</span>` +
               `<span>${categoria}</span>` +
               `<span>•</span>` +
-              `<span class="text-slate-400 font-mono">Lote: ${lote}</span>` +
+              `<span class="text-slate-500 font-mono">Lote: ${lote}</span>` +
             `</div>` +
           `</div>` +
         `</div>` +
         `<div class="text-right flex-shrink-0 flex flex-col items-end gap-1">` +
           (mensajeAccion ? mensajeAccion : '') +
-          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-400' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
-          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-400' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-500')}">${repro}</span>` : '') +
+          (peso ? `<span class="font-black font-mono text-xs px-1.5 py-0.5 rounded ${esAtenuado ? 'bg-slate-100 text-slate-500' : 'text-slate-800 bg-slate-100'}">${peso}</span>` : '') +
+          (repro ? `<span class="text-[10px] font-bold ${esAtenuado ? 'text-slate-500' : (repro === 'Preñada' ? 'text-emerald-600' : 'text-slate-600')}">${repro}</span>` : '') +
         `</div>` +
       `</div>`;
     });
@@ -6295,10 +6295,10 @@ function conectarAutosuggestAnimales({
     const items = dropMenu.querySelectorAll('.item-sugerencia-animal');
     items.forEach((it, idx) => {
       if (idx === indiceActivo) {
-        it.classList.add('bg-slate-100', 'font-black');
+        it.classList.add('bovi-autosuggest-active', 'font-black');
         it.scrollIntoView({ block: 'nearest' });
       } else {
-        it.classList.remove('bg-slate-100', 'font-black');
+        it.classList.remove('bovi-autosuggest-active', 'font-black');
       }
     });
   }
@@ -8829,11 +8829,11 @@ class TablaDinamica {
                   </thead>
                   <tbody class="divide-y divide-slate-200">
                     ${resumenGrupos.map((g) => `
-                      <tr class="hover:bg-emerald-50/60 transition">
-                        <td class="p-2.5 font-black text-slate-900">${g.grupo}</td>
+                      <tr class="bovi-table-row-hover transition">
+                        <td class="p-2.5 font-black text-slate-800">${g.grupo}</td>
                         <td class="p-2.5 text-center font-mono">
                           <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-black">${g.cantidad}</span>
-                          <span class="text-[10px] text-slate-500 ml-1">(${g.porcentajeHato}%)</span>
+                          <span class="text-[10px] text-slate-600 font-semibold ml-1">(${g.porcentajeHato}%)</span>
                         </td>
                         <td class="p-2.5 text-right font-mono font-bold text-slate-800">
                           ${g.pesoPromedio ? `${g.pesoPromedio} kg` : '-'}
@@ -8841,18 +8841,18 @@ class TablaDinamica {
                         <td class="p-2.5 text-right font-mono text-slate-700">
                           ${g.uggTotal > 0 ? `${g.uggTotal} UGG` : '-'}
                         </td>
-                        <td class="p-2.5 text-center bg-emerald-50/50 font-mono">
+                        <td class="p-2.5 text-center bovi-gdp-col-cell font-mono">
                           ${g.gdpPromedio !== null ? `
                             <span class="px-2 py-0.5 rounded-full font-black text-[11px] ${g.gdpPromedio >= 600 ? 'bg-emerald-100 text-emerald-900' : (g.gdpPromedio < 300 ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900')}">
                               +${g.gdpPromedio} g/d
                             </span>
-                            <span class="text-[10px] text-slate-500 block">Máx: +${g.gdpMax} g/d</span>
+                            <span class="text-[10px] text-slate-700 font-bold bovi-max-gdp-label block mt-0.5">Máx: +${g.gdpMax} g/d</span>
                           ` : '-'}
                         </td>
                         <td class="p-2.5 text-right font-mono">
                           ${g.lechePromedio !== null ? `
                             <strong class="text-emerald-800">${g.lechePromedio} L/d</strong>
-                            <span class="text-[10px] text-slate-500 block">Total: ${g.lecheTotalDia} L/d</span>
+                            <span class="text-[10px] text-slate-700 font-semibold block">Total: ${g.lecheTotalDia} L/d</span>
                           ` : '-'}
                         </td>
                         <td class="p-2.5 text-center font-mono">
@@ -11051,7 +11051,7 @@ class ImportadorExcel {
 
         <!-- BARRA DE CONFIGURACIÓN SUPERIOR: FECHA DE JORNADA & PREDIO DESTINO -->
         <div class="p-4 sm:p-6 pb-0">
-          <div class="bg-gradient-to-r from-emerald-50 via-slate-50 to-blue-50 p-4 rounded-2xl border-2 border-emerald-300 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div class="bovi-search-toolbar p-4 rounded-2xl border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             
             <!-- FECHA SUPERIOR DE LA JORNADA / CARGA -->
             <div class="flex items-center gap-3 w-full md:w-auto">
@@ -11059,10 +11059,10 @@ class ImportadorExcel {
                 📅
               </div>
               <div>
-                <span class="text-xs font-black uppercase text-emerald-950 tracking-wider block">Fecha de la Jornada / Evento:</span>
+                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label tracking-wider block">Fecha de la Jornada / Evento:</span>
                 <div class="flex items-center gap-2 mt-1">
                   <input type="date" id="input-fecha-global-excel" value="${this.fechaGlobal}" class="px-3 py-1.5 text-xs font-black font-mono rounded-xl border-2 border-emerald-500 bg-white text-slate-900 shadow-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-400">
-                  <label class="text-[11px] text-slate-600 font-semibold flex items-center gap-1 cursor-pointer">
+                  <label class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 cursor-pointer">
                     <input type="checkbox" id="check-aplicar-fecha-global" ${this.aplicarFechaGlobal ? 'checked' : ''} class="rounded text-emerald-600">
                     <span>Aplicar si la fila no trae fecha</span>
                   </label>
@@ -11073,8 +11073,8 @@ class ImportadorExcel {
             <!-- SELECTOR DE PREDIO DESTINO -->
             <div class="flex items-center gap-3 w-full md:w-auto justify-end">
               <div class="text-right hidden sm:block">
-                <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
-                <span class="text-[10px] font-bold text-emerald-800">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
+                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label block">Finca de Destino:</span>
+                <span class="text-[11px] font-black text-emerald-700 dark:text-emerald-400">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
               </div>
               <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-800 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}
@@ -17345,20 +17345,20 @@ class PestanaAnimales {
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
         <!-- HEADER PESTAÑA -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-4 sm:p-5 space-y-4">
+        <div class="bovi-module-header p-4 sm:p-5 space-y-4 border-b border-slate-200">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shadow-inner">
+              <div class="w-11 h-11 rounded-2xl bg-emerald-600/15 text-emerald-500 border border-emerald-500/30 flex items-center justify-center text-2xl shadow-inner">
                 🏷️
               </div>
               <div>
-                <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2 text-slate-700 bovi-module-title">
                   <span>Inventario General de Animales</span>
-                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold">
                     ${lista.length} de ${todosAnimales.length} Ejemplares
                   </span>
                 </h2>
-                <p class="text-xs text-slate-400 mt-0.5">Listado detallado con genealogía (padre, madre), especie, días de preñez, partos y trazabilidad.</p>
+                <p class="text-xs text-slate-600 bovi-module-subtitle mt-0.5">Listado detallado con genealogía (padre, madre), especie, días de preñez, partos y trazabilidad.</p>
               </div>
             </div>
 
@@ -17381,7 +17381,7 @@ class PestanaAnimales {
         </div>
 
         <!-- SECCIÓN DE BÚSQUEDA RÁPIDA EXACTA A LA CUADRÍCULA MASIVA -->
-        <div class="p-3.5 sm:p-5 bg-emerald-50/50 border-b border-emerald-100">
+        <div class="p-3.5 sm:p-5 bovi-search-toolbar border-b border-slate-200">
           <div class="max-w-3xl mx-auto space-y-3">
             <!-- BUSCADOR RÁPIDO DE ARETE CON BOTÓN BUSCAR QUE ABRE FICHA -->
             <form id="form-buscar-animal-directo" class="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-3">
@@ -17503,13 +17503,13 @@ class PestanaAnimales {
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : 'hover:bg-slate-50')} transition items-center">
+      <tr class="bovi-table-row-hover ${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : '')} transition items-center">
         <!-- Arete & Especie -->
         <td class="p-3">
           <div class="flex items-center gap-2">
             <span class="text-lg">${esBufalo ? '🦬' : '🐂'}</span>
             <div>
-              <span class="font-black font-mono text-slate-900 text-sm block">${tag}</span>
+              <span class="font-black font-mono text-slate-800 text-sm block">${tag}</span>
               <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                 <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${esBufalo ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
                   ${esBufalo ? 'Bufalino' : 'Vacuno'}
@@ -17532,13 +17532,13 @@ class PestanaAnimales {
         <!-- Nombre & Raza -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${a.nombreAlias || a.nombre || 'Sin Alias'}</div>
-          <div class="text-[10px] text-slate-500">${a.raza || 'Común'} • ${a.sexo === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</div>
+          <div class="text-[10px] text-slate-600">${a.raza || 'Común'} • ${a.sexo === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</div>
         </td>
 
         <!-- Categoría & Lote -->
         <td class="p-3">
           <div class="font-bold text-slate-700">${a.categoria || 'Sin Categoría'}</div>
-          <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
+          <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium">
             📍 ${a.lote || 'General'}
           </span>
         </td>
@@ -17546,17 +17546,17 @@ class PestanaAnimales {
         <!-- Genealogía: Padre & Madre -->
         <td class="p-3">
           <div class="text-[11px] font-mono">
-            <span class="text-slate-400 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
+            <span class="text-slate-500 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
           </div>
           <div class="text-[11px] font-mono mt-0.5">
-            <span class="text-slate-400 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
+            <span class="text-slate-500 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
           </div>
         </td>
 
         <!-- Nacimiento & Edad -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento)}</div>
-          <div class="text-[10px] text-slate-500">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
+          <div class="text-[10px] text-slate-600">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
         </td>
 
         <!-- Estado Reproductivo & Días de Preñez -->
@@ -17569,15 +17569,15 @@ class PestanaAnimales {
               <span class="text-xs font-black font-mono text-emerald-700 mt-1">
                 ${diasG} Días de Preñez
               </span>
-              <span class="text-[9px] text-slate-400">~${Math.round(diasG / 30.4)} meses</span>
+              <span class="text-[9px] text-slate-600 font-medium">~${Math.round(diasG / 30.4)} meses</span>
             </div>
           ` : `
             <div class="inline-flex flex-col">
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.estadoReproductivo === 'No Aplica' ? 'bg-slate-100 text-slate-600' : 'bg-rose-100 text-rose-800 border border-rose-200'} w-fit">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.estadoReproductivo === 'No Aplica' ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-800 border border-rose-200'} w-fit">
                 ${a.estadoReproductivo || 'Vacía'}
               </span>
               ${a.sexo === 'hembra' && diasAbiertos > 0 ? `
-                <span class="text-[10px] font-mono text-slate-500 mt-0.5">${diasAbiertos} Días Abiertos</span>
+                <span class="text-[10px] font-mono text-slate-600 mt-0.5">${diasAbiertos} Días Abiertos</span>
               ` : ''}
             </div>
           `}
@@ -17586,14 +17586,14 @@ class PestanaAnimales {
         <!-- Último Parto & IEP -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${formatearFecha(fParto, 'Sin partos')}</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">
-            ${fParto ? `IEP: <strong class="text-slate-700">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
+          <div class="text-[10px] text-slate-600 mt-0.5">
+            ${fParto ? `IEP: <strong class="text-slate-800">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
           </div>
         </td>
 
         <!-- Peso Actual & GDP -->
         <td class="p-3 text-right">
-          <span class="font-black font-mono text-slate-900 text-sm">
+          <span class="font-black font-mono text-slate-800 text-sm">
             ${a.ultimoPesoKg || a.pesoActual ? `${a.ultimoPesoKg || a.pesoActual} kg` : '-'}
           </span>
           <div class="text-[10px] font-bold mt-0.5 ${a.gdpPromedioGDia < 300 ? 'text-rose-600' : 'text-emerald-700'}">
@@ -21927,24 +21927,8 @@ class CuadriculaMasiva {
         </div>
 
         <!-- SECCIÓN DE BÚSQUEDA Y CAPTURA UNO A UNO EN MANGA -->
-        <div class="p-4 sm:p-5 bg-emerald-50/40 border-b border-emerald-100">
+        <div class="p-4 sm:p-5 bovi-search-toolbar border-b border-slate-200">
           <div class="max-w-3xl mx-auto space-y-3">
-            <!-- BANNER EXPLICATIVO DEL FLUJO CON TECLA ENTER SIN MOUSE -->
-            <div class="bg-emerald-950 text-emerald-100 px-3.5 py-2.5 rounded-xl border border-emerald-700 shadow-sm flex flex-wrap items-center justify-between gap-2 text-[11px]">
-              <div class="flex items-center gap-2 font-black text-emerald-300">
-                <span>⌨️</span> MODO RÁPIDO CON TECLA ENTER (SIN USAR MOUSE):
-              </div>
-              <div class="font-mono text-[10px] sm:text-[11px] text-emerald-100 flex flex-wrap items-center gap-1.5">
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">1. Digite N° Animal + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">2. Fecha + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">3. Datos + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">4. Enter final Guarda y vuelve aquí</span>
-              </div>
-            </div>
-
             <!-- BUSCADOR RÁPIDO DE ARETE -->
             <div class="flex flex-col sm:flex-row items-center gap-3">
               <div class="relative w-full">
@@ -22111,12 +22095,9 @@ class CuadriculaMasiva {
       }
 
       return `
-        <div class="bg-white/90 p-4 rounded-xl border border-dashed border-emerald-300 text-center text-xs text-slate-600">
+        <div class="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-600">
           <div class="font-bold text-slate-700">
             Esperando número de animal en la manga para cargar historial de pesajes y palpaciones...
-          </div>
-          <div class="text-[11px] text-emerald-700 font-semibold mt-1">
-            💡 Escribe el número del animal arriba y presiona <strong>ENTER</strong> para desplegar las casillas y navegar sin mouse.
           </div>
           ${vistaPreviaModulo}
         </div>

@@ -325,24 +325,8 @@ export class CuadriculaMasiva {
         </div>
 
         <!-- SECCIÓN DE BÚSQUEDA Y CAPTURA UNO A UNO EN MANGA -->
-        <div class="p-4 sm:p-5 bg-emerald-50/40 border-b border-emerald-100">
+        <div class="p-4 sm:p-5 bovi-search-toolbar border-b border-slate-200">
           <div class="max-w-3xl mx-auto space-y-3">
-            <!-- BANNER EXPLICATIVO DEL FLUJO CON TECLA ENTER SIN MOUSE -->
-            <div class="bg-emerald-950 text-emerald-100 px-3.5 py-2.5 rounded-xl border border-emerald-700 shadow-sm flex flex-wrap items-center justify-between gap-2 text-[11px]">
-              <div class="flex items-center gap-2 font-black text-emerald-300">
-                <span>⌨️</span> MODO RÁPIDO CON TECLA ENTER (SIN USAR MOUSE):
-              </div>
-              <div class="font-mono text-[10px] sm:text-[11px] text-emerald-100 flex flex-wrap items-center gap-1.5">
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">1. Digite N° Animal + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">2. Fecha + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-900/90 border border-emerald-600 font-bold">3. Datos + Enter</span>
-                <span>➔</span>
-                <span class="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">4. Enter final Guarda y vuelve aquí</span>
-              </div>
-            </div>
-
             <!-- BUSCADOR RÁPIDO DE ARETE -->
             <div class="flex flex-col sm:flex-row items-center gap-3">
               <div class="relative w-full">
@@ -509,12 +493,9 @@ export class CuadriculaMasiva {
       }
 
       return `
-        <div class="bg-white/90 p-4 rounded-xl border border-dashed border-emerald-300 text-center text-xs text-slate-600">
+        <div class="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-600">
           <div class="font-bold text-slate-700">
             Esperando número de animal en la manga para cargar historial de pesajes y palpaciones...
-          </div>
-          <div class="text-[11px] text-emerald-700 font-semibold mt-1">
-            💡 Escribe el número del animal arriba y presiona <strong>ENTER</strong> para desplegar las casillas y navegar sin mouse.
           </div>
           ${vistaPreviaModulo}
         </div>

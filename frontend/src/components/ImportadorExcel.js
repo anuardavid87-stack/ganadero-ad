@@ -1204,7 +1204,7 @@ export class ImportadorExcel {
 
         <!-- BARRA DE CONFIGURACIÓN SUPERIOR: FECHA DE JORNADA & PREDIO DESTINO -->
         <div class="p-4 sm:p-6 pb-0">
-          <div class="bg-gradient-to-r from-emerald-50 via-slate-50 to-blue-50 p-4 rounded-2xl border-2 border-emerald-300 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div class="bovi-search-toolbar p-4 rounded-2xl border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             
             <!-- FECHA SUPERIOR DE LA JORNADA / CARGA -->
             <div class="flex items-center gap-3 w-full md:w-auto">
@@ -1212,10 +1212,10 @@ export class ImportadorExcel {
                 📅
               </div>
               <div>
-                <span class="text-xs font-black uppercase text-emerald-950 tracking-wider block">Fecha de la Jornada / Evento:</span>
+                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label tracking-wider block">Fecha de la Jornada / Evento:</span>
                 <div class="flex items-center gap-2 mt-1">
                   <input type="date" id="input-fecha-global-excel" value="${this.fechaGlobal}" class="px-3 py-1.5 text-xs font-black font-mono rounded-xl border-2 border-emerald-500 bg-white text-slate-900 shadow-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-400">
-                  <label class="text-[11px] text-slate-600 font-semibold flex items-center gap-1 cursor-pointer">
+                  <label class="text-[11px] text-slate-700 font-semibold flex items-center gap-1 cursor-pointer">
                     <input type="checkbox" id="check-aplicar-fecha-global" ${this.aplicarFechaGlobal ? 'checked' : ''} class="rounded text-emerald-600">
                     <span>Aplicar si la fila no trae fecha</span>
                   </label>
@@ -1226,8 +1226,8 @@ export class ImportadorExcel {
             <!-- SELECTOR DE PREDIO DESTINO -->
             <div class="flex items-center gap-3 w-full md:w-auto justify-end">
               <div class="text-right hidden sm:block">
-                <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
-                <span class="text-[10px] font-bold text-emerald-800">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
+                <span class="text-xs font-black uppercase text-slate-900 bovi-finca-destino-label block">Finca de Destino:</span>
+                <span class="text-[11px] font-black text-emerald-700 dark:text-emerald-400">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
               </div>
               <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-800 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                 ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}

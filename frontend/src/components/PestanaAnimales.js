@@ -134,20 +134,20 @@ export class PestanaAnimales {
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
         <!-- HEADER PESTAÑA -->
-        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-4 sm:p-5 space-y-4">
+        <div class="bovi-module-header p-4 sm:p-5 space-y-4 border-b border-slate-200">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div class="flex items-center gap-3">
-              <div class="w-11 h-11 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shadow-inner">
+              <div class="w-11 h-11 rounded-2xl bg-emerald-600/15 text-emerald-500 border border-emerald-500/30 flex items-center justify-center text-2xl shadow-inner">
                 🏷️
               </div>
               <div>
-                <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                <h2 class="text-base sm:text-lg font-black tracking-tight flex items-center gap-2 text-slate-700 bovi-module-title">
                   <span>Inventario General de Animales</span>
-                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                  <span id="contador-animales-pestana" class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold">
                     ${lista.length} de ${todosAnimales.length} Ejemplares
                   </span>
                 </h2>
-                <p class="text-xs text-slate-400 mt-0.5">Listado detallado con genealogía (padre, madre), especie, días de preñez, partos y trazabilidad.</p>
+                <p class="text-xs text-slate-600 bovi-module-subtitle mt-0.5">Listado detallado con genealogía (padre, madre), especie, días de preñez, partos y trazabilidad.</p>
               </div>
             </div>
 
@@ -170,7 +170,7 @@ export class PestanaAnimales {
         </div>
 
         <!-- SECCIÓN DE BÚSQUEDA RÁPIDA EXACTA A LA CUADRÍCULA MASIVA -->
-        <div class="p-3.5 sm:p-5 bg-emerald-50/50 border-b border-emerald-100">
+        <div class="p-3.5 sm:p-5 bovi-search-toolbar border-b border-slate-200">
           <div class="max-w-3xl mx-auto space-y-3">
             <!-- BUSCADOR RÁPIDO DE ARETE CON BOTÓN BUSCAR QUE ABRE FICHA -->
             <form id="form-buscar-animal-directo" class="flex flex-col sm:flex-row items-center gap-2.5 sm:gap-3">
@@ -292,13 +292,13 @@ export class PestanaAnimales {
     const motivoBaja = (a.motivoBaja || '').toLowerCase();
 
     return `
-      <tr class="${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : 'hover:bg-slate-50')} transition items-center">
+      <tr class="bovi-table-row-hover ${esInactivo ? 'opacity-65 bg-slate-50/80 text-slate-500' : (esOtraFinca ? 'bg-amber-50/40' : '')} transition items-center">
         <!-- Arete & Especie -->
         <td class="p-3">
           <div class="flex items-center gap-2">
             <span class="text-lg">${esBufalo ? '🦬' : '🐂'}</span>
             <div>
-              <span class="font-black font-mono text-slate-900 text-sm block">${tag}</span>
+              <span class="font-black font-mono text-slate-800 text-sm block">${tag}</span>
               <div class="flex items-center gap-1 mt-0.5 flex-wrap">
                 <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${esBufalo ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
                   ${esBufalo ? 'Bufalino' : 'Vacuno'}
@@ -321,13 +321,13 @@ export class PestanaAnimales {
         <!-- Nombre & Raza -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${a.nombreAlias || a.nombre || 'Sin Alias'}</div>
-          <div class="text-[10px] text-slate-500">${a.raza || 'Común'} • ${a.sexo === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</div>
+          <div class="text-[10px] text-slate-600">${a.raza || 'Común'} • ${a.sexo === 'hembra' ? '♀️ Hembra' : '♂️ Macho'}</div>
         </td>
 
         <!-- Categoría & Lote -->
         <td class="p-3">
           <div class="font-bold text-slate-700">${a.categoria || 'Sin Categoría'}</div>
-          <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
+          <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-medium">
             📍 ${a.lote || 'General'}
           </span>
         </td>
@@ -335,17 +335,17 @@ export class PestanaAnimales {
         <!-- Genealogía: Padre & Madre -->
         <td class="p-3">
           <div class="text-[11px] font-mono">
-            <span class="text-slate-400 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
+            <span class="text-slate-500 font-bold">P:</span> <strong class="text-slate-800">${a.padreTag || a.padre || 'Desc.'}</strong>
           </div>
           <div class="text-[11px] font-mono mt-0.5">
-            <span class="text-slate-400 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
+            <span class="text-slate-500 font-bold">M:</span> <strong class="text-slate-800">${a.madreTag || a.madre || 'Desc.'}</strong>
           </div>
         </td>
 
         <!-- Nacimiento & Edad -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${formatearFecha(a.fechaNacimiento)}</div>
-          <div class="text-[10px] text-slate-500">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
+          <div class="text-[10px] text-slate-600">${edadMeses > 0 ? `${edadMeses} m (${edadAnios} a)` : 'Sin fecha'}</div>
         </td>
 
         <!-- Estado Reproductivo & Días de Preñez -->
@@ -358,15 +358,15 @@ export class PestanaAnimales {
               <span class="text-xs font-black font-mono text-emerald-700 mt-1">
                 ${diasG} Días de Preñez
               </span>
-              <span class="text-[9px] text-slate-400">~${Math.round(diasG / 30.4)} meses</span>
+              <span class="text-[9px] text-slate-600 font-medium">~${Math.round(diasG / 30.4)} meses</span>
             </div>
           ` : `
             <div class="inline-flex flex-col">
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.estadoReproductivo === 'No Aplica' ? 'bg-slate-100 text-slate-600' : 'bg-rose-100 text-rose-800 border border-rose-200'} w-fit">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.estadoReproductivo === 'No Aplica' ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-800 border border-rose-200'} w-fit">
                 ${a.estadoReproductivo || 'Vacía'}
               </span>
               ${a.sexo === 'hembra' && diasAbiertos > 0 ? `
-                <span class="text-[10px] font-mono text-slate-500 mt-0.5">${diasAbiertos} Días Abiertos</span>
+                <span class="text-[10px] font-mono text-slate-600 mt-0.5">${diasAbiertos} Días Abiertos</span>
               ` : ''}
             </div>
           `}
@@ -375,14 +375,14 @@ export class PestanaAnimales {
         <!-- Último Parto & IEP -->
         <td class="p-3">
           <div class="font-bold text-slate-800">${formatearFecha(fParto, 'Sin partos')}</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">
-            ${fParto ? `IEP: <strong class="text-slate-700">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
+          <div class="text-[10px] text-slate-600 mt-0.5">
+            ${fParto ? `IEP: <strong class="text-slate-800">${iep.dias}d</strong> (${iep.meses}m)` : 'Primeriza'}
           </div>
         </td>
 
         <!-- Peso Actual & GDP -->
         <td class="p-3 text-right">
-          <span class="font-black font-mono text-slate-900 text-sm">
+          <span class="font-black font-mono text-slate-800 text-sm">
             ${a.ultimoPesoKg || a.pesoActual ? `${a.ultimoPesoKg || a.pesoActual} kg` : '-'}
           </span>
           <div class="text-[10px] font-bold mt-0.5 ${a.gdpPromedioGDia < 300 ? 'text-rose-600' : 'text-emerald-700'}">

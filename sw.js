@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.3.0-tema-dual-pastel-header-minimal';
+const CACHE_NAME = 'ganadero-ad-v4.3.1-contraste-global-sin-blancos';
 const CORE_FILES = [
   './',
   './index.html',
