@@ -7,7 +7,7 @@
  */
 
 import fs from 'fs';
-import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio, formatearFecha } from './frontend/src/core/zootecnia.js';
+import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio, formatearFecha, obtenerEdadMesesAnimal, obtenerPesoActualAnimal } from './frontend/src/core/zootecnia.js';
 import { auditarPesajeInput, auditarPartoInput, auditarPalpacionInput, auditarServicioInput, detectarAlertasZootecnicas } from './frontend/src/core/auditorIA.js';
 import { consolidarCostosFijos, sumarCuotasInversionesDiferidas, computarRendimientoFinanciero } from './frontend/src/core/finanzas.js';
 import { TablaDinamica } from './frontend/src/components/TablaDinamica.js';
@@ -6957,6 +6957,91 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     htmlSuperAdmin.includes('EXCLUSIVO SUPER ADMINISTRADOR') &&
     htmlSuperAdmin.includes('Para Todas las Fincas y Empresas'),
     'ModuloAdmin (Control de Acceso IA): Oculta la pestaña IA Gemini a administradores/usuarios regulares y permite su gestión global exclusivamente al Super Administrador'
+  );
+
+  // ============================================================================
+  // 60. REDISEÑO MINIMALISTA HEADER, SISTEMA DE TEMA DUAL (CLARO PASTEL / OSCURO SUTIL) Y SINCRONIZACIÓN CON FICHA
+  // ============================================================================
+  console.log('\n--- 60. Rediseño Minimalista Header, Tema Dual y Sincronización con Ficha ---');
+
+  const indexHtmlContent = fs.readFileSync('./frontend/index.html', 'utf8');
+  const stylesCssContent = fs.readFileSync('./frontend/src/styles.css', 'utf8');
+
+  // 60.1: Rediseño Minimalista del Header (Status Dot, Perfil de Iniciales + Dropdown, Selectores Limpios)
+  test(
+    indexHtmlContent.includes('id="status-dot-supabase"') &&
+    !indexHtmlContent.includes('Supabase Cloud (En Línea)') &&
+    indexHtmlContent.includes('id="btn-user-menu-trigger"') &&
+    indexHtmlContent.includes('id="user-profile-dropdown"') &&
+    indexHtmlContent.includes('id="btn-theme-toggle-header"') &&
+    indexHtmlContent.includes('id="btn-theme-toggle-dropdown"'),
+    'Header Minimalista: Incluye punto de estado minimalista para Supabase, avatar compacto de iniciales con menú desplegable y selector rápido de tema'
+  );
+
+  // 60.2: Sistema de Diseño Dual (Modo Claro Pastel Suave sin #FFFFFF encandilante y Modo Oscuro Sutil) + Corrección de Selectores
+  test(
+    stylesCssContent.includes('html[data-theme="light"]') &&
+    stylesCssContent.includes('#F4F3EE') &&
+    stylesCssContent.includes('#FAF9F5') &&
+    stylesCssContent.includes('html[data-theme="dark"]') &&
+    !stylesCssContent.includes('select {\n  color: #000000 !important;\n}'),
+    'Sistema de Tema Dual & Legibilidad: Define paleta Claro Pastel Suave (#F4F3EE/#FAF9F5), Modo Oscuro Sutil y corrige contraste de <select> y <option>'
+  );
+
+  // 60.3: Sincronización Dinámica de Edad en Meses (desde fechaNacimiento) y Peso (desde Ficha/Pesajes)
+  const fechaHace15Meses = new Date();
+  fechaHace15Meses.setMonth(fechaHace15Meses.getMonth() - 15);
+  const isoNac = fechaHace15Meses.toISOString().split('T')[0];
+
+  const animalFichaViva = {
+    id: 'ANM-SYNC-99',
+    identificacionTag: 'SYNC-99',
+    raza: 'Gyr (Lechero)',
+    sexo: 'Hembra',
+    fechaNacimiento: isoNac,
+    ultimoPesoKg: 295,
+    edadMeses: 8
+  };
+  const pesajesRecientes = [
+    { id: 'PES-OLD', animalId: 'ANM-SYNC-99', tag: 'SYNC-99', fecha: '2026-01-10', peso: 210 },
+    { id: 'PES-NEW', animalId: 'ANM-SYNC-99', tag: 'SYNC-99', fecha: '2026-10-25', peso: 312 }
+  ];
+
+  const edadRealCalculada = obtenerEdadMesesAnimal(animalFichaViva);
+  const pesoRealSincronizado = obtenerPesoActualAnimal(animalFichaViva, pesajesRecientes);
+
+  test(
+    edadRealCalculada >= 14 && edadRealCalculada <= 16 &&
+    pesoRealSincronizado === 312,
+    'Single Source of Truth (Zootecnia): obtenerEdadMesesAnimal calcula la edad real desde fechaNacimiento y obtenerPesoActualAnimal toma el último pesaje válido (312 kg)'
+  );
+
+  // 60.4: ModuloNutricion sincroniza automáticamente peso y edad (readonly) con la ficha del animal ignorando cachés viejos
+  const modNutriSync = new ModuloNutricion({
+    containerId: 'test-nutri-sync',
+    getAnimales: () => [animalFichaViva],
+    getPesajes: () => pesajesRecientes,
+    getFincaActiva: () => ({ id: 'FIN-1', nombre: 'Hacienda Central' }),
+    getNutricion: () => [
+      {
+        id: 'NUT-OLD',
+        tag: 'SYNC-99',
+        pesoActualKg: 180,
+        edadMeses: 6,
+        raza: 'Gyr (Lechero)'
+      }
+    ]
+  });
+  modNutriSync.container = new MockDomElement('test-nutri-sync');
+  modNutriSync.abrirEvaluacionParaAnimal(animalFichaViva);
+  const htmlNutriSync = modNutriSync.container.innerHTML;
+
+  test(
+    modNutriSync.planGenerado.pesoActualKg === 312 &&
+    modNutriSync.planGenerado.edadMeses === edadRealCalculada &&
+    htmlNutriSync.includes('id="input-nutri-edad-meses"') &&
+    htmlNutriSync.includes('bovi-select-raza'),
+    'ModuloNutricion (Sincronización con Ficha): Prioriza el último peso (312 kg) y edad dinámica desde fechaNacimiento de la ficha sobre valores antiguos del plan'
   );
 }
 

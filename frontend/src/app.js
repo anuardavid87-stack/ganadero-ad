@@ -35,6 +35,9 @@ class BoviTrackApp {
     this.escapeHTML = escapeHTML;
     this.keyStorage = 'bovitrack_pro_storage_v3';
     this.sessionKey = 'bovitrack_auth_session';
+    this.themeKey = 'bovitrack_theme_mode';
+    this.temaActual = 'light';
+    this.initTheme();
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
     this.online = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -1717,47 +1720,128 @@ class BoviTrackApp {
     });
   }
 
+  initTheme() {
+    let saved = 'light';
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(this.themeKey);
+        if (stored === 'dark' || stored === 'light') {
+          saved = stored;
+        }
+      }
+    } catch (_e) {
+      saved = 'light';
+    }
+    this.aplicarTema(saved, false);
+  }
+
+  aplicarTema(modo = 'light', persistir = true) {
+    const temaNormalizado = modo === 'dark' ? 'dark' : 'light';
+    this.temaActual = temaNormalizado;
+
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      if (root) {
+        root.setAttribute('data-theme', temaNormalizado);
+        if (root.classList) {
+          root.classList.toggle('dark', temaNormalizado === 'dark');
+          root.classList.toggle('theme-light', temaNormalizado === 'light');
+        }
+      }
+      if (document.body && document.body.classList) {
+        document.body.classList.toggle('dark', temaNormalizado === 'dark');
+        document.body.classList.toggle('theme-light', temaNormalizado === 'light');
+      }
+
+      const sunIcon = document.getElementById('icon-theme-sun');
+      const moonIcon = document.getElementById('icon-theme-moon');
+      if (sunIcon && sunIcon.classList) {
+        sunIcon.classList.toggle('hidden', temaNormalizado !== 'dark');
+      }
+      if (moonIcon && moonIcon.classList) {
+        moonIcon.classList.toggle('hidden', temaNormalizado === 'dark');
+      }
+
+      const labelDropdown = document.getElementById('theme-label-dropdown');
+      if (labelDropdown) {
+        labelDropdown.textContent = temaNormalizado === 'dark' ? 'Oscuro Sutil' : 'Claro Pastel';
+      }
+
+      const btnHeader = document.getElementById('btn-theme-toggle-header');
+      if (btnHeader) {
+        btnHeader.title = temaNormalizado === 'dark'
+          ? 'Tema actual: Modo Oscuro Sutil (Clic para cambiar a Modo Claro Pastel)'
+          : 'Tema actual: Modo Claro Pastel (Clic para cambiar a Modo Oscuro Sutil)';
+      }
+    }
+
+    if (persistir && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(this.themeKey, temaNormalizado);
+      } catch (_e) {}
+    }
+  }
+
+  toggleTema() {
+    const siguiente = this.temaActual === 'dark' ? 'light' : 'dark';
+    this.aplicarTema(siguiente, true);
+  }
+
   actualizarBadgeConexion(estadoOverride = null) {
     const el = document.getElementById('status-red-pwa');
     if (!el) return;
     const supabaseConfigurado = this.supabase && this.supabase.estaConfigurado();
 
+    el.className = 'relative flex items-center justify-center w-5 h-5 rounded-full focus:outline-none cursor-pointer group';
+
     if (!this.online) {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse cursor-pointer';
-      el.innerHTML = '<span class="hidden sm:inline">⚡ Modo Campo Offline</span><span class="sm:hidden">⚡ Offline</span>';
-      el.title = 'Sin conexión a internet. Los cambios se guardan localmente en este equipo.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-50 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+      `;
+      el.title = 'Sin conexión a internet (Modo Offline). Los cambios se guardan localmente en este dispositivo.';
       return;
     }
 
     if (estadoOverride === 'guardando') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1 cursor-pointer animate-pulse';
-      el.innerHTML = '<span class="hidden sm:inline">🔄 Guardando en Supabase...</span><span class="sm:hidden">🔄 Guardando...</span>';
-      el.title = 'Sincronizando cambios con Supabase Cloud.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+      `;
+      el.title = 'Sincronizando y guardando cambios en Supabase Cloud...';
       return;
     }
 
     if (estadoOverride === 'descargando') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1 cursor-pointer animate-pulse';
-      el.innerHTML = '<span class="hidden sm:inline">🔄 Conectando con Supabase...</span><span class="sm:hidden">🔄 Conectando...</span>';
-      el.title = 'Descargando datos más recientes desde Supabase Cloud.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+      `;
+      el.title = 'Sincronizando y descargando datos desde Supabase Cloud...';
       return;
     }
 
     if (estadoOverride === 'error') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 cursor-pointer';
-      el.innerHTML = '<span class="hidden sm:inline">⚠️ Supabase (Reintentar)</span><span class="sm:hidden">⚠️ Reintentar</span>';
-      el.title = 'Hubo un error de conexión con Supabase. Haz clic para reintentar la sincronización.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-60 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+      `;
+      el.title = 'Error de sincronización con Supabase Cloud. Haz clic para reintentar.';
       return;
     }
 
     if (supabaseConfigurado) {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/30 transition shadow-sm';
-      el.innerHTML = '<span class="hidden sm:inline">⚡ Supabase Cloud (En Línea)</span><span class="sm:hidden">⚡ En Línea</span>';
-      el.title = 'Base de datos conectada con Supabase. Clic para forzar sincronización ahora.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-50 animate-pulse"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      `;
+      el.title = 'Supabase Cloud: Sincronizado en línea (Clic para sincronizar ahora).';
     } else {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/30 transition';
-      el.innerHTML = '<span class="hidden sm:inline">● Conectado (Local)</span><span class="sm:hidden">● Local</span>';
-      el.title = 'Internet activo. Clic para conectar con Supabase.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-40 animate-pulse"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      `;
+      el.title = 'Conectado en línea (Almacenamiento Local Activo).';
     }
   }
 
@@ -2012,6 +2096,7 @@ class BoviTrackApp {
       getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getFincaActiva: () => this.getFincaActiva(),
       getNutricion: () => this.state.nutricion || [],
+      getPesajes: () => this.state.pesajes || [],
       onGuardarPlan: (registro) => this.guardarPlanNutricion(registro),
       onEliminarRegistro: (tag) => this.eliminarPlanNutricion(tag),
       onVerFicha: (id) => this.abrirFichaAnimal(id),
@@ -5346,14 +5431,14 @@ class BoviTrackApp {
         if (selEmp) {
           const empList = this.state.empresas || [];
           if (empList.length === 0) {
-            selEmp.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Empresas Registradas)</option>';
+            selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
           } else {
             const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
               ? this.state.empresaActivaId
               : empList[0].id;
-            selEmp.innerHTML = `
-              ${empList.map((e) => `<option value="${e.id}" ${e.id === empActiva ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🏢 ${e.nombre}</option>`).join('')}
-            `;
+            selEmp.innerHTML = empList
+              .map((e) => `<option value="${e.id}" ${e.id === empActiva ? 'selected' : ''}>${e.nombre}</option>`)
+              .join('');
           }
         }
       } else {
@@ -5368,25 +5453,28 @@ class BoviTrackApp {
     const selF = document.getElementById('select-finca-nav');
     if (selF) {
       if (fincasPermitidas.length === 0) {
-        selF.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Fincas Registradas)</option>';
+        selF.innerHTML = '<option value="">(Sin Fincas Registradas)</option>';
       } else {
         selF.innerHTML = fincasPermitidas
-          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`)
+          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''}>${f.nombre}</option>`)
           .join('');
       }
     }
 
-    // 3. Identificador de Usuario en Sesión y Botón Salir
+    // 3. Perfil Compacto (Solo Iniciales en Avatar + Datos en Menú Desplegable)
     const uActual = this.state.usuarioActual;
     if (!uActual) return;
     const avatarEl = document.getElementById('user-avatar-nav');
+    const btnTrigger = document.getElementById('btn-user-menu-trigger');
     const nombreEl = document.getElementById('user-nombre-nav');
     const empresaEl = document.getElementById('user-empresa-nav');
     const badgeEl = document.getElementById('user-rol-badge-nav');
 
     if (avatarEl) {
       avatarEl.textContent = this.getInitials(uActual.nombre);
-      avatarEl.className = `w-6 h-6 rounded-full ${this.getColorBgAvatar(uActual.rol)} text-white flex items-center justify-center text-[10px] font-black`;
+    }
+    if (btnTrigger) {
+      btnTrigger.title = `${uActual.nombre || uActual.usuario} (${this.getNombreRol(uActual.rol)})`;
     }
     if (nombreEl) {
       nombreEl.textContent = uActual.nombre || uActual.usuario;
@@ -5396,13 +5484,18 @@ class BoviTrackApp {
     }
     if (badgeEl) {
       badgeEl.textContent = this.getNombreRol(uActual.rol);
-      badgeEl.className = `text-[9px] font-mono font-black uppercase ${
-        uActual.rol === 'superadmin' ? 'text-purple-300' :
-        uActual.rol === 'administrador' ? 'text-blue-300' :
-        uActual.rol === 'encargado' ? 'text-emerald-300' : 'text-amber-300'
+      badgeEl.className = `px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${
+        uActual.rol === 'superadmin'
+          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30'
+          : uActual.rol === 'administrador'
+          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30'
+          : uActual.rol === 'encargado'
+          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+          : 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30'
       }`;
     }
 
+    this.aplicarTema(this.temaActual || 'light', false);
     this.actualizarContadorAlertas();
     this.actualizarBadgeConexion();
   }
@@ -5540,6 +5633,8 @@ class BoviTrackApp {
     if (btnLogout && !btnLogout._listenerAdded) {
       btnLogout._listenerAdded = true;
       btnLogout.addEventListener('click', () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
         this.logout();
       });
     }
@@ -5556,8 +5651,54 @@ class BoviTrackApp {
     if (btnBackupHeader && !btnBackupHeader._listenerAdded) {
       btnBackupHeader._listenerAdded = true;
       btnBackupHeader.addEventListener('click', async () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
         await this.exportarCopiaSeguridadCompleta('xlsx');
       });
+    }
+
+    // Selector de Tema (Header y Dropdown)
+    const btnThemeHeader = document.getElementById('btn-theme-toggle-header');
+    if (btnThemeHeader && !btnThemeHeader._listenerAdded) {
+      btnThemeHeader._listenerAdded = true;
+      btnThemeHeader.addEventListener('click', () => {
+        this.toggleTema();
+      });
+    }
+
+    const btnThemeDropdown = document.getElementById('btn-theme-toggle-dropdown');
+    if (btnThemeDropdown && !btnThemeDropdown._listenerAdded) {
+      btnThemeDropdown._listenerAdded = true;
+      btnThemeDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleTema();
+      });
+    }
+
+    // Menú desplegable de Perfil de Usuario (Solo Iniciales)
+    const btnUserMenuTrigger = document.getElementById('btn-user-menu-trigger');
+    const userProfileDropdown = document.getElementById('user-profile-dropdown');
+    if (btnUserMenuTrigger && userProfileDropdown && !btnUserMenuTrigger._listenerAdded) {
+      btnUserMenuTrigger._listenerAdded = true;
+      btnUserMenuTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = userProfileDropdown.classList.contains('hidden');
+        userProfileDropdown.classList.toggle('hidden', !isHidden);
+        btnUserMenuTrigger.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      });
+
+      if (typeof document !== 'undefined' && !document._boviUserDropdownListener) {
+        document._boviUserDropdownListener = true;
+        document.addEventListener('click', (ev) => {
+          const wrapper = document.getElementById('badge-usuario-activo');
+          const dd = document.getElementById('user-profile-dropdown');
+          const trig = document.getElementById('btn-user-menu-trigger');
+          if (dd && wrapper && !wrapper.contains(ev.target)) {
+            dd.classList.add('hidden');
+            if (trig) trig.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
     }
   }
 

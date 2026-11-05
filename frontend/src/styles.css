@@ -1,6 +1,39 @@
 /* ==========================================================================
-   GANADERO AD PWA - ESTILOS ZOOTÉCNICOS MOBILE FIRST Y RESPONSIVE
+   GANADERO AD PWA - SISTEMA DE DISEÑO DUAL (MODO CLARO PASTEL SUAVE / MODO OSCURO SUTIL)
    ========================================================================== */
+
+:root,
+html[data-theme="light"] {
+  --bovi-bg-main: #F4F3EE;          /* Crema/Piedra pastel súper suave (NO blanco puro) */
+  --bovi-bg-card: #FAF9F5;          /* Marfil cálido suave para tarjetas */
+  --bovi-bg-elevated: #EFECE6;      /* Piedra pastel tenue para contenedores secundarios / inputs */
+  --bovi-bg-hover: #E6E2D8;         /* Hover sutil cálido */
+  --bovi-border: #E2DFD7;           /* Borde piedra delicado */
+  --bovi-border-strong: #D0CBBF;    /* Borde de controles interactivos */
+  --bovi-text-primary: #292524;     /* Gris carbón cálido suave */
+  --bovi-text-secondary: #57534E;   /* Gris piedra medio */
+  --bovi-text-muted: #78716C;       /* Subtítulos y etiquetas */
+  --bovi-header-bg: rgba(250, 249, 245, 0.94);
+  --bovi-select-bg: #F7F5F0;
+  --bovi-select-text: #1E293B;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --bovi-bg-main: #0F141C;          /* Oscuro profundo suave (NO negro puro) */
+  --bovi-bg-card: #161D26;          /* Superficie de tarjeta oscura sutil */
+  --bovi-bg-elevated: #1E2631;      /* Contenedor secundario / input oscuro */
+  --bovi-bg-hover: #26303F;         /* Hover oscuro suave */
+  --bovi-border: #263040;           /* Borde oscuro sutil */
+  --bovi-border-strong: #334155;    /* Borde interactivo oscuro */
+  --bovi-text-primary: #E2E8F0;     /* Gris claro descansado (NO blanco chillón) */
+  --bovi-text-secondary: #94A3B8;   /* Gris medio para subtítulos */
+  --bovi-text-muted: #64748B;       /* Etiquetas secundarias */
+  --bovi-header-bg: rgba(15, 20, 28, 0.94);
+  --bovi-select-bg: #1E2631;
+  --bovi-select-text: #F1F5F9;
+  color-scheme: dark;
+}
 
 * {
   -webkit-tap-highlight-color: transparent;
@@ -8,25 +41,29 @@
   box-sizing: border-box;
 }
 
-body {
+body,
+.bovi-theme-body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f8fafc;
+  background-color: var(--bovi-bg-main) !important;
+  color: var(--bovi-text-primary) !important;
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 @media (min-width: 768px) {
-  body {
+  body,
+  .bovi-theme-body {
     padding-bottom: 1.5rem;
   }
 }
 
-/* Scrollbars limpias */
+/* Scrollbars limpias y adaptadas al tema */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--bovi-border-strong);
   border-radius: 9999px;
 }
 
@@ -38,10 +75,435 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /* ==========================================================================
+   HEADER / NAVBAR MINIMALISTA Y COMPONENTES DE NAVEGACIÓN
+   ========================================================================== */
+.bovi-header {
+  background-color: var(--bovi-header-bg) !important;
+  border-color: var(--bovi-border) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bovi-header-title {
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-header-subtitle {
+  color: var(--bovi-text-secondary) !important;
+}
+
+.bovi-header-nav-border {
+  border-color: var(--bovi-border) !important;
+}
+
+.bovi-context-control {
+  background-color: var(--bovi-bg-elevated) !important;
+  border-color: var(--bovi-border-strong) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-context-control:hover,
+.bovi-context-control:focus-within {
+  border-color: #10b981 !important;
+}
+
+.bovi-context-icon {
+  color: var(--bovi-text-secondary) !important;
+}
+
+.bovi-context-label {
+  color: var(--bovi-text-muted) !important;
+}
+
+.bovi-nav-select {
+  color: var(--bovi-text-primary) !important;
+  background-color: transparent !important;
+}
+
+.bovi-icon-btn {
+  background-color: var(--bovi-bg-elevated) !important;
+  border-color: var(--bovi-border-strong) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-icon-btn:hover {
+  background-color: var(--bovi-bg-hover) !important;
+}
+
+/* Menú desplegable de Perfil de Usuario */
+.bovi-dropdown-menu {
+  background-color: var(--bovi-bg-card) !important;
+  border-color: var(--bovi-border-strong) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-dropdown-divider {
+  border-color: var(--bovi-border) !important;
+}
+
+.bovi-dropdown-title {
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-dropdown-subtitle {
+  color: var(--bovi-text-secondary) !important;
+}
+
+.bovi-dropdown-item {
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-dropdown-item:hover {
+  background-color: var(--bovi-bg-elevated) !important;
+}
+
+/* Botones de navegación en barra superior Desktop */
+html[data-theme="light"] #app-desktop-nav .btn-nav-bovi {
+  color: #475569 !important;
+  background-color: transparent !important;
+}
+
+html[data-theme="light"] #app-desktop-nav .btn-nav-bovi:hover {
+  color: #1E293B !important;
+  background-color: #E8E4DA !important;
+}
+
+html[data-theme="light"] #app-desktop-nav .btn-nav-bovi.active {
+  color: #065F46 !important;
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.32);
+}
+
+html[data-theme="dark"] #app-desktop-nav .btn-nav-bovi {
+  color: #94A3B8 !important;
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] #app-desktop-nav .btn-nav-bovi:hover {
+  color: #E2E8F0 !important;
+  background-color: #1E2631 !important;
+}
+
+html[data-theme="dark"] #app-desktop-nav .btn-nav-bovi.active {
+  color: #34D399 !important;
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.3);
+}
+
+/* ==========================================================================
+   SELECTORES, INPUTS Y OPCIONES (<select>, <option>, <optgroup>) LEGIBLES EN AMBOS TEMAS
+   ========================================================================== */
+select,
+.bovi-select-raza {
+  color: var(--bovi-select-text) !important;
+  background-color: var(--bovi-select-bg) !important;
+  border-color: var(--bovi-border-strong) !important;
+}
+
+select option,
+select optgroup,
+.bovi-select-raza option,
+.bovi-select-raza optgroup {
+  color: var(--bovi-select-text) !important;
+  background-color: var(--bovi-bg-card) !important;
+  font-weight: 600;
+}
+
+#select-finca-nav,
+#select-empresa-nav {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+#select-finca-nav option,
+#select-empresa-nav option {
+  color: var(--bovi-select-text) !important;
+  background-color: var(--bovi-bg-card) !important;
+}
+
+/* ==========================================================================
+   MODO CLARO PASTEL SUAVE (NO BLANCO PURO #FFFFFF) - ARMONIZACIÓN GLOBAL
+   ========================================================================== */
+html[data-theme="light"] .bg-white {
+  background-color: var(--bovi-bg-card) !important;
+}
+
+html[data-theme="light"] .bg-slate-50,
+html[data-theme="light"] .bg-slate-50\/50,
+html[data-theme="light"] .bg-slate-50\/80,
+html[data-theme="light"] .bg-gray-50 {
+  background-color: #F2EFE9 !important;
+}
+
+html[data-theme="light"] .bg-slate-100,
+html[data-theme="light"] .bg-gray-100 {
+  background-color: var(--bovi-bg-elevated) !important;
+}
+
+html[data-theme="light"] .border-slate-100,
+html[data-theme="light"] .border-slate-200,
+html[data-theme="light"] .border-gray-100,
+html[data-theme="light"] .border-gray-200 {
+  border-color: var(--bovi-border) !important;
+}
+
+html[data-theme="light"] .border-slate-300,
+html[data-theme="light"] .border-gray-300 {
+  border-color: var(--bovi-border-strong) !important;
+}
+
+/* Armonización de paneles oscuros (ej. Módulo Nutrición IA, Cabeceras y Tarjetas) en Modo Claro Pastel */
+html[data-theme="light"] #contenedor-app-segura .bg-slate-950,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-950\/90,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-950\/80 {
+  background-color: var(--bovi-bg-card) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .bg-slate-900,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-900\/90,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-900\/80,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-900\/50 {
+  background-color: var(--bovi-bg-elevated) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .bg-slate-800,
+html[data-theme="light"] #contenedor-app-segura .bg-slate-800\/80 {
+  background-color: #E5E0D5 !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .from-slate-950,
+html[data-theme="light"] #contenedor-app-segura .from-slate-900,
+html[data-theme="light"] #contenedor-app-segura .from-indigo-950 {
+  --tw-gradient-from: #F3F0E6 !important;
+  --tw-gradient-to: rgba(243, 240, 230, 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .via-slate-950,
+html[data-theme="light"] #contenedor-app-segura .via-slate-900,
+html[data-theme="light"] #contenedor-app-segura .via-emerald-950\/20,
+html[data-theme="light"] #contenedor-app-segura .via-purple-950 {
+  --tw-gradient-stops: var(--tw-gradient-from), #EAE6DC, var(--tw-gradient-to) !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .to-slate-950,
+html[data-theme="light"] #contenedor-app-segura .to-slate-900 {
+  --tw-gradient-to: #FAF9F5 !important;
+}
+
+html[data-theme="light"] #contenedor-app-segura .border-slate-800,
+html[data-theme="light"] #contenedor-app-segura .border-slate-800\/80,
+html[data-theme="light"] #contenedor-app-segura .border-slate-800\/60,
+html[data-theme="light"] #contenedor-app-segura .border-slate-700 {
+  border-color: var(--bovi-border-strong) !important;
+}
+
+/* Textos claros sobre contenedores que ahora son pastel suave en Modo Claro */
+html[data-theme="light"] #pantalla-nutricion .text-white,
+html[data-theme="light"] #pantalla-nutricion .text-slate-100,
+html[data-theme="light"] #pantalla-nutricion .text-slate-200,
+html[data-theme="light"] .bg-slate-950 .text-white,
+html[data-theme="light"] .bg-slate-900 .text-white,
+html[data-theme="light"] .from-slate-950 .text-white,
+html[data-theme="light"] .from-indigo-950 .text-white {
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .text-slate-300,
+html[data-theme="light"] #pantalla-nutricion .text-slate-400,
+html[data-theme="light"] .bg-slate-950 .text-slate-300,
+html[data-theme="light"] .bg-slate-950 .text-slate-400,
+html[data-theme="light"] .bg-slate-900 .text-slate-300,
+html[data-theme="light"] .bg-slate-900 .text-slate-400,
+html[data-theme="light"] .from-indigo-950 .text-purple-200 {
+  color: var(--bovi-text-secondary) !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .text-emerald-300,
+html[data-theme="light"] #pantalla-nutricion .text-emerald-400,
+html[data-theme="light"] #pantalla-nutricion .text-emerald-200\/90 {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .text-cyan-300,
+html[data-theme="light"] #pantalla-nutricion .text-cyan-400,
+html[data-theme="light"] #pantalla-nutricion .text-cyan-200 {
+  color: #0E7490 !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .text-amber-200,
+html[data-theme="light"] #pantalla-nutricion .text-amber-300,
+html[data-theme="light"] #pantalla-nutricion .text-amber-400 {
+  color: #B45309 !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .text-purple-200,
+html[data-theme="light"] #pantalla-nutricion .text-purple-300 {
+  color: #6D28D9 !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .bg-emerald-950\/30,
+html[data-theme="light"] #pantalla-nutricion .bg-emerald-950\/40,
+html[data-theme="light"] #pantalla-nutricion .bg-emerald-950\/60 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .bg-amber-950\/30,
+html[data-theme="light"] #pantalla-nutricion .bg-amber-950\/60 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .bg-rose-950\/30 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+html[data-theme="light"] #pantalla-nutricion .bg-purple-950\/60 {
+  background-color: rgba(139, 92, 246, 0.12) !important;
+}
+
+/* Mantener texto blanco en botones de acción primarios con fondo sólido */
+html[data-theme="light"] .bg-emerald-600,
+html[data-theme="light"] .bg-emerald-500,
+html[data-theme="light"] .bg-purple-600,
+html[data-theme="light"] .bg-blue-600,
+html[data-theme="light"] .bg-rose-600,
+html[data-theme="light"] .bg-amber-600 {
+  color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   MODO OSCURO SUTIL Y ELEGANTE - ARMONIZACIÓN GLOBAL
+   ========================================================================== */
+html[data-theme="dark"] .bg-white {
+  background-color: var(--bovi-bg-card) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-50\/50,
+html[data-theme="dark"] .bg-slate-50\/80,
+html[data-theme="dark"] .bg-gray-50,
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-gray-100 {
+  background-color: var(--bovi-bg-elevated) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="dark"] .bg-slate-950 {
+  background-color: #121820 !important;
+}
+
+html[data-theme="dark"] .bg-slate-900 {
+  background-color: var(--bovi-bg-card) !important;
+}
+
+html[data-theme="dark"] .bg-slate-800 {
+  background-color: var(--bovi-bg-elevated) !important;
+}
+
+/* Suavizar textos oscuros o blancos puros en Modo Oscuro */
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-gray-900,
+html[data-theme="dark"] .text-gray-800,
+html[data-theme="dark"] .text-black {
+  color: var(--bovi-text-primary) !important;
+}
+
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-gray-700,
+html[data-theme="dark"] .text-gray-600,
+html[data-theme="dark"] .text-gray-500 {
+  color: var(--bovi-text-secondary) !important;
+}
+
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300,
+html[data-theme="dark"] .border-gray-100,
+html[data-theme="dark"] .border-gray-200,
+html[data-theme="dark"] .border-gray-300,
+html[data-theme="dark"] .border-slate-800,
+html[data-theme="dark"] .border-slate-700 {
+  border-color: var(--bovi-border) !important;
+}
+
+html[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--bovi-border) !important;
+}
+
+/* Inputs, Textareas y Controles de Formulario en ambos temas */
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="light"] textarea {
+  background-color: var(--bovi-select-bg) !important;
+  color: var(--bovi-text-primary) !important;
+  border-color: var(--bovi-border-strong) !important;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] textarea {
+  background-color: var(--bovi-bg-elevated) !important;
+  color: var(--bovi-text-primary) !important;
+  border-color: var(--bovi-border-strong) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--bovi-text-muted) !important;
+}
+
+/* Superficies pastel acentuadas en Modo Oscuro para evitar fondos chillones */
+html[data-theme="dark"] .bg-emerald-50,
+html[data-theme="dark"] .bg-emerald-50\/40,
+html[data-theme="dark"] .bg-emerald-50\/60,
+html[data-theme="dark"] .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  color: #6EE7B7 !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
+}
+
+html[data-theme="dark"] .bg-purple-50,
+html[data-theme="dark"] .bg-purple-50\/50,
+html[data-theme="dark"] .bg-purple-100 {
+  background-color: rgba(139, 92, 246, 0.12) !important;
+  color: #C4B5FD !important;
+  border-color: rgba(139, 92, 246, 0.28) !important;
+}
+
+html[data-theme="dark"] .bg-amber-50,
+html[data-theme="dark"] .bg-amber-50\/60,
+html[data-theme="dark"] .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  color: #FCD34D !important;
+  border-color: rgba(245, 158, 11, 0.28) !important;
+}
+
+html[data-theme="dark"] .bg-rose-50,
+html[data-theme="dark"] .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+  color: #FDA4AF !important;
+  border-color: rgba(244, 63, 94, 0.28) !important;
+}
+
+html[data-theme="dark"] .bg-blue-50,
+html[data-theme="dark"] .bg-blue-100,
+html[data-theme="dark"] .bg-cyan-50 {
+  background-color: rgba(56, 189, 248, 0.12) !important;
+  color: #7DD3FC !important;
+  border-color: rgba(56, 189, 248, 0.28) !important;
+}
+
+/* ==========================================================================
    ADAPTACIONES MÓVILES PARA CELULARES (<= 640px)
    ========================================================================== */
 @media (max-width: 640px) {
-  /* Evitar zoom automático en Safari iOS al tocar campos de texto */
   input[type="text"],
   input[type="number"],
   input[type="password"],
@@ -53,13 +515,11 @@ input[type="number"]::-webkit-outer-spin-button {
     min-height: 44px;
   }
 
-  /* Touch targets ergonómicos para botones de acción */
   button, 
   .btn-touch {
     min-height: 40px;
   }
 
-  /* Modales a pantalla completa en celulares para máxima visibilidad */
   .modal-fullscreen-mobile {
     inset: 0 !important;
     width: 100% !important;
@@ -70,7 +530,6 @@ input[type="number"]::-webkit-outer-spin-button {
     margin: 0 !important;
   }
 
-  /* Padding adaptado al viewport pequeño */
   .p-mobile-tight {
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
@@ -81,21 +540,24 @@ input[type="number"]::-webkit-outer-spin-button {
    BARRA DE NAVEGACIÓN INFERIOR MOBILE ERGONÓMICA
    ========================================================================== */
 .bottom-mobile-nav {
-  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.3), 0 -4px 6px -2px rgba(0, 0, 0, 0.15);
+  background-color: var(--bovi-header-bg) !important;
+  border-color: var(--bovi-border) !important;
+  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding-bottom: env(safe-area-inset-bottom, 6px);
 }
 
 .bottom-mobile-nav .nav-item-active {
-  color: #10b981 !important; /* emerald-500 */
+  color: #10b981 !important;
   background: rgba(16, 185, 129, 0.15);
   border-radius: 12px;
 }
 
-/* Menú flotante "Más Opciones" en Móvil */
 #menu-mas-opciones-mobile {
-  box-shadow: 0 -15px 30px rgba(0, 0, 0, 0.35);
+  background-color: var(--bovi-bg-card) !important;
+  border-color: var(--bovi-border-strong) !important;
+  box-shadow: 0 -15px 30px rgba(0, 0, 0, 0.25);
   animation: slideUpMobile 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   padding-bottom: calc(5rem + env(safe-area-inset-bottom, 12px));
 }
@@ -112,27 +574,25 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /* ==========================================================================
-   TARJETAS MÓVILES PARA LISTADOS (ANIMALES, REGISTROS, ACTIVIDAD)
+   TARJETAS MÓVILES Y AUTOSUGGEST
    ========================================================================== */
 .card-animal-mobile {
   border-radius: 1rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   touch-action: manipulation;
 }
 
 .card-animal-mobile:active {
   transform: scale(0.985);
-  background-color: #f8fafc;
 }
 
-/* ==========================================================================
-   DROPDOWN DE AUTOSUGGEST ADAPTADO A PANTALLA TÁCTIL
-   ========================================================================== */
 .autosuggest-dropdown-touch {
   max-height: 48vh !important;
   -webkit-overflow-scrolling: touch;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  background-color: var(--bovi-bg-card) !important;
+  border-color: var(--bovi-border-strong) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
 }
 
 .autosuggest-dropdown-touch .autosuggest-item {
@@ -140,49 +600,4 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-}
-
-
-/* ==========================================================================
-   SELECTORES Y LISTAS DESPLEGABLES (FINCAS, EMPRESAS Y OPCIONES EN COLOR NEGRO)
-   ========================================================================== */
-select {
-  color: #000000 !important;
-}
-
-select option {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-  font-weight: 600 !important;
-}
-
-#select-finca-nav,
-#select-empresa-nav,
-#select-finca-dashboard,
-#select-finca-importador,
-#select-finca-finanzas,
-#sel-filtro-finca,
-#sel-finca-origen-traslado,
-#sel-finca-destino-traslado,
-#select-filtro-empresa-usr,
-#usr-empresa,
-#edit-empresa {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-}
-
-#select-finca-nav option,
-#select-empresa-nav option,
-#select-finca-dashboard option,
-#select-finca-importador option,
-#select-finca-finanzas option,
-#sel-filtro-finca option,
-#sel-finca-origen-traslado option,
-#sel-finca-destino-traslado option,
-#select-filtro-empresa-usr option,
-#usr-empresa option,
-#edit-empresa option {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-  font-weight: 600 !important;
 }

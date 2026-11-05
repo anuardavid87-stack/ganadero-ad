@@ -22,6 +22,7 @@ import {
   obtenerModeloGeminiActivo,
   generarDiagnosticoNutricionalGemini
 } from '../core/nutricionIA.js';
+import { calcularEdadMeses, obtenerEdadMesesAnimal, obtenerPesoActualAnimal, formatearFecha } from '../core/zootecnia.js';
 import { conectarAutosuggestAnimales, buscarCoincidenciasAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class ModuloNutricion {
@@ -31,6 +32,7 @@ export class ModuloNutricion {
     getAnimalesBusqueda,
     getFincaActiva,
     getNutricion,
+    getPesajes,
     onGuardarPlan,
     onEliminarRegistro,
     onVerFicha,
@@ -43,6 +45,7 @@ export class ModuloNutricion {
     this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getFincaActiva = getFincaActiva;
     this.getNutricion = getNutricion;
+    this.getPesajes = getPesajes;
     this.onGuardarPlan = onGuardarPlan;
     this.onEliminarRegistro = onEliminarRegistro;
     this.onVerFicha = onVerFicha;
@@ -213,9 +216,38 @@ export class ModuloNutricion {
     }
   }
 
-  abrirEvaluacionParaAnimal(animal) {
+  obtenerAnimalSincronizado(animalBase) {
+    if (!animalBase) return null;
+    const inventario = this.getAnimales ? this.getAnimales() : [];
+    const tagTarget = String(animalBase.identificacionTag || animalBase.tag || animalBase.numero || '').trim().toUpperCase();
+    const enFicha = inventario.find((a) =>
+      a && (
+        (animalBase.id && a.id === animalBase.id) ||
+        (tagTarget && String(a.identificacionTag || a.tag || a.numero || '').trim().toUpperCase() === tagTarget)
+      )
+    );
+    const fusionado = enFicha ? { ...animalBase, ...enFicha } : { ...animalBase };
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoReal = obtenerPesoActualAnimal(fusionado, pesajes);
+    const edadReal = obtenerEdadMesesAnimal(fusionado);
+    if (pesoReal > 0) {
+      fusionado.ultimoPesoKg = pesoReal;
+      fusionado.pesoActual = pesoReal;
+    }
+    if (edadReal > 0) {
+      fusionado.edadMeses = edadReal;
+    }
+    return fusionado;
+  }
+
+  abrirEvaluacionParaAnimal(animalInput) {
+    const animal = this.obtenerAnimalSincronizado(animalInput);
     this.animalSeleccionado = animal;
     this.modoModalEvaluacion = true;
+
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoFicha = obtenerPesoActualAnimal(animal, pesajes);
+    const edadFicha = obtenerEdadMesesAnimal(animal);
 
     // Buscar si ya tiene un plan guardado
     const registros = this.getNutricion ? this.getNutricion() : [];
@@ -223,10 +255,12 @@ export class ModuloNutricion {
 
     if (regGuardado) {
       const razaGuardada = regGuardado.raza || regGuardado.sugerenciaDieta?.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
-      const pesoVal = regGuardado.pesoActualKg || animal.ultimoPesoKg || animal.peso || 450;
+      // Sincronización estricta con la ficha técnica (Single Source of Truth):
+      // El peso y la edad provienen SIEMPRE de la ficha del animal si están registrados
+      const pesoVal = pesoFicha > 0 ? pesoFicha : (regGuardado.pesoActualKg || 450);
+      const edadVal = edadFicha > 0 ? edadFicha : (regGuardado.edadMeses || regGuardado.sugerenciaDieta?.edadMeses || 24);
       const tallaVal = regGuardado.tallaCm || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.tallaCm) || (regGuardado.tallaFrame && regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i) ? Number(regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i)[1]) : 135);
-      const edadVal = regGuardado.edadMeses || regGuardado.sugerenciaDieta?.edadMeses || animal.edadMeses || 24;
-      const desRacial = regGuardado.desarrolloRacial || regGuardado.sugerenciaDieta?.desarrolloRacial || evaluarDesarrolloRacial({
+      const desRacial = evaluarDesarrolloRacial({
         animal,
         razaTexto: razaGuardada,
         pesoActual: pesoVal,
@@ -251,7 +285,7 @@ export class ModuloNutricion {
         statusCompacidad: regGuardado.statusCompacidad || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.statusCompacidad) || 'normal',
         condicionCorporal: regGuardado.condicionCorporal || 3.0,
         etapaProductiva: regGuardado.etapaProductiva || 'Vacía / Mantenimiento',
-        gdpEsperadaGDia: regGuardado.gdpEsperadaGDia || desRacial.gdpMetaCorrectivaGDia || 450,
+        gdpEsperadaGDia: desRacial.gdpMetaCorrectivaGDia || regGuardado.gdpEsperadaGDia || 450,
         desarrolloRacial: desRacial,
         sugerenciaDieta: regGuardado.sugerenciaDieta || {},
         sugerenciaMedicamentos: regGuardado.sugerenciaMedicamentos || [],
@@ -263,7 +297,8 @@ export class ModuloNutricion {
     } else {
       this.planGenerado = evaluarNutricionAnimal({
         animal,
-        pesoActual: animal.ultimoPesoKg || animal.peso || 450,
+        pesoActual: pesoFicha > 0 ? pesoFicha : 450,
+        edadMeses: edadFicha > 0 ? edadFicha : null,
         tallaCm: animal.tallaCm || null,
         tallaFrame: 'Medio (Frame 4-6)',
         condicionCorporal: 3.0
@@ -276,6 +311,12 @@ export class ModuloNutricion {
   async calcularPlanDesdeFormulario(consultarIAEnVivo = false) {
     if (!this.animalSeleccionado || !this.container) return;
 
+    // Sincronizar con la ficha técnica en tiempo real antes de recalcular
+    this.animalSeleccionado = this.obtenerAnimalSincronizado(this.animalSeleccionado);
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoFicha = obtenerPesoActualAnimal(this.animalSeleccionado, pesajes);
+    const edadFicha = obtenerEdadMesesAnimal(this.animalSeleccionado);
+
     const pesoInput = this.container.querySelector('#input-nutri-peso');
     const tallaCmInput = this.container.querySelector('#input-nutri-talla-cm');
     const tallaInput = this.container.querySelector('#input-nutri-talla');
@@ -287,12 +328,12 @@ export class ModuloNutricion {
     const gdpInput = this.container.querySelector('#input-nutri-gdp');
     const notasInput = this.container.querySelector('#input-nutri-notas');
 
-    const peso = pesoInput ? Number(pesoInput.value) : (this.animalSeleccionado.ultimoPesoKg || this.animalSeleccionado.peso || 450);
+    const peso = pesoFicha > 0 ? pesoFicha : (pesoInput ? Number(pesoInput.value) : 450);
     const tallaCm = tallaCmInput && tallaCmInput.value ? Number(tallaCmInput.value) : null;
     const talla = tallaInput ? tallaInput.value : 'Medio (Frame 4-6)';
     const bcs = bcsInput ? Number(bcsInput.value) : 3.0;
     const etapa = etapaInput ? etapaInput.value : 'Vacía / Mantenimiento';
-    const edadMeses = edadInput && edadInput.value ? Number(edadInput.value) : (this.planGenerado?.edadMeses || this.animalSeleccionado.edadMeses || 24);
+    const edadMeses = edadFicha > 0 ? edadFicha : (edadInput && edadInput.value ? Number(edadInput.value) : (this.planGenerado?.edadMeses || 24));
     const razaSeleccionada = razaInput && razaInput.value ? razaInput.value : (this.planGenerado?.raza || this.animalSeleccionado.raza || 'Brahman (Cebú)');
     const razaConfirmadaCheck = checkRazaInput ? Boolean(checkRazaInput.checked) : true;
     const gdp = gdpInput && gdpInput.value ? Number(gdpInput.value) : null;
@@ -586,10 +627,13 @@ export class ModuloNutricion {
           ` : `
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               ${enrolados.map(a => {
-                const reg = a.registroNutricion || {};
+                const aSync = this.obtenerAnimalSincronizado(a);
+                const reg = aSync.registroNutricion || a.registroNutricion || {};
                 const bcs = reg.condicionCorporal || 3.0;
-                const perfil = resolverPerfilRaza(a.raza);
+                const perfil = resolverPerfilRaza(aSync.raza || a.raza);
                 const esBuf = perfil.tipo === 'bufalo';
+                const pesoCard = obtenerPesoActualAnimal(aSync);
+                const edadCard = obtenerEdadMesesAnimal(aSync);
 
                 return `
                   <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between space-y-3">
@@ -597,14 +641,14 @@ export class ModuloNutricion {
                       <div>
                         <div class="flex items-center gap-1.5">
                           <span class="text-base">${esBuf ? '🐃' : '🐄'}</span>
-                          <span class="text-sm font-black text-white font-mono">${a.identificacionTag || a.tag}</span>
-                          ${a.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${a.nombreAlias}"</span>` : ''}
+                          <span class="text-sm font-black text-white font-mono">${aSync.identificacionTag || aSync.tag}</span>
+                          ${aSync.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${aSync.nombreAlias}"</span>` : ''}
                         </div>
-                        <div class="text-[11px] text-emerald-400 font-semibold mt-0.5">${a.raza || 'Comercial'} • ${a.sexo || 'Hembra'}</div>
+                        <div class="text-[11px] text-emerald-400 font-semibold mt-0.5">${aSync.raza || 'Comercial'} • ${aSync.sexo || 'Hembra'} • ${edadCard ? `${edadCard} meses` : 'Edad s/f'}</div>
                       </div>
                       <button
                         class="btn-retirar-nutri text-slate-500 hover:text-rose-400 p-1.5 text-xs transition rounded-lg hover:bg-slate-900"
-                        data-tag="${a.identificacionTag || a.tag}"
+                        data-tag="${aSync.identificacionTag || aSync.tag}"
                         title="Retirar del grupo especial"
                       >
                         ✕
@@ -613,8 +657,8 @@ export class ModuloNutricion {
 
                     <div class="grid grid-cols-4 gap-1.5 bg-slate-900/80 p-2.5 rounded-xl text-center">
                       <div>
-                        <div class="text-[9px] uppercase font-black text-slate-400">Peso (Báscula)</div>
-                        <div class="text-xs font-black text-white font-mono">${a.ultimoPesoKg || reg.pesoActualKg || a.peso || '---'} kg</div>
+                        <div class="text-[9px] uppercase font-black text-slate-400">Peso (Ficha)</div>
+                        <div class="text-xs font-black text-white font-mono">${pesoCard || reg.pesoActualKg || '---'} kg</div>
                       </div>
                       <div>
                         <div class="text-[9px] uppercase font-black text-emerald-400">Talla</div>
@@ -668,12 +712,14 @@ export class ModuloNutricion {
   }
 
   renderPanelEvaluacion() {
-    const animal = this.animalSeleccionado;
+    const animal = this.obtenerAnimalSincronizado(this.animalSeleccionado);
     const plan = this.planGenerado || {};
     const dieta = plan.sugerenciaDieta || {};
     const medicamentos = plan.sugerenciaMedicamentos || [];
     const suplementos = plan.sugerenciaSuplementos || [];
     const hormonas = plan.sugerenciaHormonas || [];
+    const pesoSincronizado = obtenerPesoActualAnimal(animal) || plan.pesoActualKg || 420;
+    const edadSincronizada = obtenerEdadMesesAnimal(animal) || plan.edadMeses || 24;
     const razaActivaTexto = plan.raza || dieta.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
     const perfil = resolverPerfilRaza(razaActivaTexto);
     const esBuf = perfil.tipo === 'bufalo' || perfil.especie === 'bufalino';
@@ -690,9 +736,9 @@ export class ModuloNutricion {
     const des = plan.desarrolloRacial || dieta.desarrolloRacial || evaluarDesarrolloRacial({
       animal,
       razaTexto: perfil.nombre,
-      pesoActual: plan.pesoActualKg || animal.ultimoPesoKg || animal.peso || 420,
+      pesoActual: pesoSincronizado,
       tallaCm: plan.tallaCm || 135,
-      edadMeses: plan.edadMeses || animal.edadMeses || 24,
+      edadMeses: edadSincronizada,
       sexo: animal.sexo || 'hembra'
     });
     const porcDesarrollo = des.indiceDesarrolloPorc || 100;
@@ -796,7 +842,7 @@ export class ModuloNutricion {
                   </label>
                   <select
                     id="input-nutri-raza"
-                    class="w-full bg-slate-950 border border-emerald-500/60 text-white px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
+                    class="bovi-select-raza w-full bg-slate-950 border border-emerald-500/60 text-slate-100 px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
                   >
                     ${Object.keys(gruposRazas).map(nombreGrupo => `
                       <optgroup label="── ${nombreGrupo} ──">
@@ -820,9 +866,12 @@ export class ModuloNutricion {
                     min="1"
                     max="240"
                     step="1"
-                    value="${plan.edadMeses || des.edadMesesEvaluada || 24}"
-                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono focus:border-cyan-400 outline-none"
+                    value="${edadSincronizada}"
+                    readonly
+                    title="Calculada automáticamente en tiempo real desde la fecha de nacimiento registrada en la ficha del animal"
+                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed"
                   />
+                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Nac: ${formatearFecha(animal.fechaNacimiento || animal.fecha_nacimiento, 'Según Ficha')}</span>
                 </div>
 
                 <div class="lg:col-span-5">
@@ -1036,15 +1085,16 @@ export class ModuloNutricion {
 
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
-                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">1. Peso en Báscula (kg)</label>
+                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">1. Peso en Ficha (kg)</label>
                   <input
                     id="input-nutri-peso"
                     type="number"
-                    value="${animal.ultimoPesoKg || animal.peso || plan.pesoActualKg || 0}"
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-400 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-80"
+                    value="${pesoSincronizado}"
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-90"
                     readonly
-                    title="El peso proviene de la báscula y no se puede editar aquí."
+                    title="Sincronizado automáticamente con el último pesaje válido de la ficha técnica."
                   />
+                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Ficha: ${formatearFecha(animal.fechaUltimoPesaje, 'Último pesaje')}</span>
                 </div>
 
                 <div>

@@ -10,6 +10,8 @@
  * - Análisis Morfológico Fotográfico Efímero (procesa en memoria y desecha la imagen de inmediato sin persistir binarios)
  */
 
+import { calcularEdadMeses, obtenerEdadMesesAnimal, obtenerPesoActualAnimal } from './zootecnia.js';
+
 export const TABLA_RAZAS_NUTRICION = {
   // === ⭐ RAZAS PRIORIZADAS DEL HATO (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO & BRAHMAN) ===
   red_sindhi: {
@@ -771,8 +773,10 @@ export function evaluarDesarrolloRacial({
   sexo = 'hembra'
 }) {
   const perfil = resolverPerfilRaza(razaTexto || animal?.raza || 'general');
-  const meses = Math.max(1, Number(edadMeses || animal?.edadMeses || 24));
-  const peso = Math.max(20, Number(pesoActual || animal?.ultimoPesoKg || animal?.peso || 420));
+  const edadDesdeFicha = (animal?.fechaNacimiento || animal?.fecha_nacimiento) ? obtenerEdadMesesAnimal(animal) : 0;
+  const meses = Math.max(1, Number(edadDesdeFicha || edadMeses || animal?.edadMeses || 24));
+  const pesoFicha = obtenerPesoActualAnimal(animal);
+  const peso = Math.max(20, Number(pesoActual || pesoFicha || 420));
   const sexoNorm = String(sexo || animal?.sexo || 'hembra').toLowerCase();
   const esMacho = sexoNorm.includes('macho') || sexoNorm.includes('toro') || sexoNorm.includes('novillo') || sexoNorm.includes('bucer');
 
@@ -1135,7 +1139,8 @@ export function evaluarNutricionAnimal({
     throw new Error('Debe proveer un animal para la evaluación nutricional');
   }
 
-  const peso = Number(pesoActual || animal.peso || animal.pesoActualKg || 420);
+  const pesoFicha = obtenerPesoActualAnimal(animal);
+  const peso = Number(pesoActual || pesoFicha || 420);
   const bcs = Math.min(5.0, Math.max(1.0, Number(condicionCorporal || 3.0)));
   const razaTextoEvaluado = (razaConfirmada && String(razaConfirmada).trim())
     ? String(razaConfirmada).trim()
@@ -1148,14 +1153,11 @@ export function evaluarNutricionAnimal({
     ? Boolean(razaConfirmadaCheck)
     : Boolean(razaConfirmada || (animal.raza && String(animal.raza).trim() && String(animal.raza).toLowerCase() !== 'comercial'));
 
-  // Estimación de edad en meses si no viene explícita
-  let meses = Number(edadMeses || animal.edadMeses || 0);
-  if (!meses && animal.fechaNacimiento) {
-    const fn = new Date(animal.fechaNacimiento);
-    if (!isNaN(fn.getTime())) {
-      meses = Math.max(1, Math.round((Date.now() - fn.getTime()) / (1000 * 60 * 60 * 24 * 30.4375)));
-    }
-  }
+  // Cálculo automático y en tiempo real de edad en meses desde fecha_nacimiento en la ficha del animal
+  const edadCalculadaFicha = (animal.fechaNacimiento || animal.fecha_nacimiento)
+    ? obtenerEdadMesesAnimal(animal)
+    : 0;
+  let meses = Number(edadCalculadaFicha || edadMeses || animal.edadMeses || 0);
   if (!meses) meses = 24;
 
   // 0. CÁLCULO BIOMÉTRICO DE TALLA EN CM, FRAME SCORE Y DESARROLLO RACIAL DIRECTO

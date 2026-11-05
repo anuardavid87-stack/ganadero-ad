@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-04T21:29:47.541Z
+ * Generado automáticamente: 2026-11-05T04:57:55.279Z
  */
 (function() {
   "use strict";
@@ -146,15 +146,93 @@ function calcularIEP(diasAbiertos, especie = 'bovino') {
 }
 
 /**
- * Calcula la edad en meses cumplidos.
+ * Calcula la edad en meses cumplidos a partir de fecha_nacimiento.
  */
 function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
   if (!fechaNacimiento) return 0;
   const fn = parsearFechaObjeto(fechaNacimiento);
   const fc = parsearFechaObjeto(fechaCorte);
+  if (isNaN(fn.getTime()) || isNaN(fc.getTime())) return 0;
   let m = (fc.getFullYear() - fn.getFullYear()) * 12 + (fc.getMonth() - fn.getMonth());
   if (fc.getDate() < fn.getDate()) m--;
   return Math.max(0, m);
+}
+
+/**
+ * Fuente Única de Verdad (Single Source of Truth) para la edad en meses de un ejemplar.
+ * Prioriza siempre el cálculo automático y en tiempo real desde `fechaNacimiento` / `fecha_nacimiento`
+ * registrada en la ficha del animal en la base de datos.
+ */
+function obtenerEdadMesesAnimal(animal, fechaCorte = new Date()) {
+  if (!animal) return 0;
+  const fNac = animal.fechaNacimiento || animal.fecha_nacimiento;
+  if (fNac) {
+    const fn = parsearFechaObjeto(fNac);
+    if (!isNaN(fn.getTime())) {
+      return calcularEdadMeses(fNac, fechaCorte);
+    }
+  }
+  const edadExplicita = Number(animal.edadMeses ?? animal.edad_meses ?? 0);
+  return !isNaN(edadExplicita) && edadExplicita > 0 ? Math.round(edadExplicita) : 0;
+}
+
+/**
+ * Fuente Única de Verdad (Single Source of Truth) para el peso actual de un ejemplar.
+ * Vincula directamente al último registro de pesaje válido o al peso actual almacenado
+ * en la ficha técnica del animal en el sistema.
+ */
+function obtenerPesoActualAnimal(animal, pesajes = null) {
+  if (!animal) return 0;
+  const listaPesajes = Array.isArray(pesajes)
+    ? pesajes
+    : (typeof globalThis !== 'undefined' && globalThis.boviApp?.state?.pesajes ? globalThis.boviApp.state.pesajes : null);
+
+  let pesoRecientePesajes = 0;
+  let fechaRecientePesajes = 0;
+
+  if (Array.isArray(listaPesajes) && listaPesajes.length > 0) {
+    const tagUpper = String(animal.identificacionTag || animal.tag || animal.numero || '').trim().toUpperCase();
+    const aId = animal.id;
+    const aFinca = animal.fincaId || animal.finca_id;
+
+    for (const p of listaPesajes) {
+      if (!p) continue;
+      const coincideId = aId && p.animalId === aId;
+      const pTag = String(p.tag || p.animalTag || '').trim().toUpperCase();
+      const coincideTag = tagUpper && pTag === tagUpper && (!aFinca || !p.fincaId || p.fincaId === aFinca);
+      if (coincideId || coincideTag) {
+        const valPeso = Number(p.pesoNuevo ?? p.peso ?? p.peso_kg ?? 0);
+        if (valPeso > 0) {
+          const ts = p.fecha ? parsearFechaObjeto(p.fecha).getTime() : 0;
+          const timeVal = !isNaN(ts) && ts > 0 ? ts : 1;
+          if (timeVal >= fechaRecientePesajes) {
+            fechaRecientePesajes = timeVal;
+            pesoRecientePesajes = valPeso;
+          }
+        }
+      }
+    }
+  }
+
+  const pesoFicha = Number(
+    animal.ultimoPesoKg ??
+    animal.ultimo_peso_kg ??
+    animal.pesoActual ??
+    animal.pesoActualKg ??
+    animal.peso ??
+    0
+  );
+
+  if (pesoFicha > 0 && pesoRecientePesajes > 0) {
+    const fFicha = animal.fechaUltimoPesaje || animal.fecha_ultimo_pesaje;
+    const tsFicha = fFicha ? parsearFechaObjeto(fFicha).getTime() : 0;
+    if (!isNaN(tsFicha) && tsFicha > 0 && tsFicha > fechaRecientePesajes) {
+      return pesoFicha;
+    }
+    return pesoRecientePesajes;
+  }
+
+  return pesoRecientePesajes > 0 ? pesoRecientePesajes : (pesoFicha > 0 ? pesoFicha : 0);
 }
 
 /**
@@ -2292,6 +2370,8 @@ class SupabaseSyncService {
  * - Análisis Morfológico Fotográfico Efímero (procesa en memoria y desecha la imagen de inmediato sin persistir binarios)
  */
 
+
+
 const TABLA_RAZAS_NUTRICION = {
   // === ⭐ RAZAS PRIORIZADAS DEL HATO (RED SINDHI, GYR, GUZERAT, NELORE, GIROLANDO & BRAHMAN) ===
   red_sindhi: {
@@ -3053,8 +3133,10 @@ function evaluarDesarrolloRacial({
   sexo = 'hembra'
 }) {
   const perfil = resolverPerfilRaza(razaTexto || animal?.raza || 'general');
-  const meses = Math.max(1, Number(edadMeses || animal?.edadMeses || 24));
-  const peso = Math.max(20, Number(pesoActual || animal?.ultimoPesoKg || animal?.peso || 420));
+  const edadDesdeFicha = (animal?.fechaNacimiento || animal?.fecha_nacimiento) ? obtenerEdadMesesAnimal(animal) : 0;
+  const meses = Math.max(1, Number(edadDesdeFicha || edadMeses || animal?.edadMeses || 24));
+  const pesoFicha = obtenerPesoActualAnimal(animal);
+  const peso = Math.max(20, Number(pesoActual || pesoFicha || 420));
   const sexoNorm = String(sexo || animal?.sexo || 'hembra').toLowerCase();
   const esMacho = sexoNorm.includes('macho') || sexoNorm.includes('toro') || sexoNorm.includes('novillo') || sexoNorm.includes('bucer');
 
@@ -3417,7 +3499,8 @@ function evaluarNutricionAnimal({
     throw new Error('Debe proveer un animal para la evaluación nutricional');
   }
 
-  const peso = Number(pesoActual || animal.peso || animal.pesoActualKg || 420);
+  const pesoFicha = obtenerPesoActualAnimal(animal);
+  const peso = Number(pesoActual || pesoFicha || 420);
   const bcs = Math.min(5.0, Math.max(1.0, Number(condicionCorporal || 3.0)));
   const razaTextoEvaluado = (razaConfirmada && String(razaConfirmada).trim())
     ? String(razaConfirmada).trim()
@@ -3430,14 +3513,11 @@ function evaluarNutricionAnimal({
     ? Boolean(razaConfirmadaCheck)
     : Boolean(razaConfirmada || (animal.raza && String(animal.raza).trim() && String(animal.raza).toLowerCase() !== 'comercial'));
 
-  // Estimación de edad en meses si no viene explícita
-  let meses = Number(edadMeses || animal.edadMeses || 0);
-  if (!meses && animal.fechaNacimiento) {
-    const fn = new Date(animal.fechaNacimiento);
-    if (!isNaN(fn.getTime())) {
-      meses = Math.max(1, Math.round((Date.now() - fn.getTime()) / (1000 * 60 * 60 * 24 * 30.4375)));
-    }
-  }
+  // Cálculo automático y en tiempo real de edad en meses desde fecha_nacimiento en la ficha del animal
+  const edadCalculadaFicha = (animal.fechaNacimiento || animal.fecha_nacimiento)
+    ? obtenerEdadMesesAnimal(animal)
+    : 0;
+  let meses = Number(edadCalculadaFicha || edadMeses || animal.edadMeses || 0);
   if (!meses) meses = 24;
 
   // 0. CÁLCULO BIOMÉTRICO DE TALLA EN CM, FRAME SCORE Y DESARROLLO RACIAL DIRECTO
@@ -9486,8 +9566,8 @@ class DashboardGrafico {
           ${fincasPermitidas.length > 1 ? `
             <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 bg-slate-50 p-2 rounded-2xl border border-slate-200">
               <span class="text-xs font-bold text-slate-600 pl-1 whitespace-nowrap">Predio:</span>
-              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white text-black shadow-sm outline-none cursor-pointer focus:border-emerald-600" style="color: #000000 !important; background-color: #ffffff !important;">
-                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
+              <select id="select-finca-dashboard" class="w-full sm:w-56 px-3 py-1.5 text-xs font-black rounded-xl border border-slate-300 bg-white text-slate-800 shadow-sm outline-none cursor-pointer focus:border-emerald-600">
+                ${fincasPermitidas.map((f) => `<option value="${f.id}" ${f.id === finca?.id ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('')}
               </select>
             </div>
           ` : ''}
@@ -10996,8 +11076,8 @@ class ImportadorExcel {
                 <span class="text-xs font-black uppercase text-slate-800 block">Finca de Destino:</span>
                 <span class="text-[10px] font-bold text-emerald-800">${nombreEmpresaActiva ? `🏢 ${nombreEmpresaActiva}` : 'Asignación automática'}</span>
               </div>
-              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-black shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
-                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Crea primero una finca)</option>'}
+              <select id="select-finca-importador" class="w-full sm:w-64 px-3.5 py-2 text-xs font-black rounded-xl border-2 border-emerald-500 bg-white text-slate-800 shadow-inner outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                ${fincas.length > 0 ? fincas.map((f) => `<option value="${f.id}" ${f.id === targetFincaId ? 'selected' : ''}>${f.nombre} (${f.areaHa || 0} Ha)</option>`).join('') : '<option value="">(Crea primero una finca)</option>'}
               </select>
             </div>
           </div>
@@ -12271,9 +12351,9 @@ class ModuloAdmin {
             class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 outline-none focus:border-purple-600"
           >
           ${esSuperAdmin ? `
-            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
-              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🏢 Todas las Empresas</option>
-              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre}</option>`).join('')}
+            <select id="select-filtro-empresa-usr" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
+              <option value="todos" ${this.filtroEmpresaUsuario === 'todos' ? 'selected' : ''}>Todas las Empresas</option>
+              ${empresas.map((e) => `<option value="${e.id}" ${this.filtroEmpresaUsuario === e.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
             </select>
           ` : ''}
         </div>
@@ -12425,11 +12505,11 @@ class ModuloAdmin {
 
           <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <label for="select-finca-finanzas" class="text-xs font-bold text-purple-200 whitespace-nowrap">Predio:</label>
-            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-300 bg-white text-black shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400" style="color: #000000 !important; background-color: #ffffff !important;">
+            <select id="select-finca-finanzas" class="w-full sm:w-64 px-3 py-2 text-xs font-black rounded-xl border border-purple-300 bg-white text-slate-800 shadow-inner outline-none cursor-pointer focus:ring-2 focus:ring-purple-400">
               ${fincas.map((f) => {
                 const emp = empresas.find(e => e.id === f.empresaId);
                 const labelEmp = emp ? ` [${emp.nombre}]` : '';
-                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}${labelEmp}</option>`;
+                return `<option value="${f.id}" ${f.id === fid ? 'selected' : ''}>${f.nombre}${labelEmp}</option>`;
               }).join('')}
             </select>
           </div>
@@ -13804,8 +13884,8 @@ class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
@@ -13918,8 +13998,8 @@ class ModuloAdmin {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-black" style="color: #000000 !important; background-color: #ffffff !important;">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${e.nombre} (${e.nit || e.id})</option>`).join('')}
+              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
+                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
               </select>
             </div>
 
@@ -18735,8 +18815,8 @@ class ModuloTraslados {
                 <label class="block font-black text-slate-800 uppercase tracking-wider text-[10px] flex items-center gap-1">
                   <span>🏡</span> Finca de Origen (Emisora) *:
                 </label>
-                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
-                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
+                <select id="sel-finca-origen-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-slate-800 rounded-lg border border-slate-300 outline-none focus:border-purple-600 cursor-pointer">
+                  ${fincas.map((f) => `<option value="${f.id}" ${f.id === this.fincaOrigenId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
                 </select>
                 <div class="text-[10px] text-slate-500 flex justify-between">
                   <span>Predio de salida</span>
@@ -18750,8 +18830,8 @@ class ModuloTraslados {
                   <span>🏁</span> Finca de Destino (Receptora) *:
                 </label>
                 ${fincasDestino.length > 0 ? `
-                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-black rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
-                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
+                  <select id="sel-finca-destino-traslado" class="w-full px-2.5 py-2 bg-white font-bold text-slate-800 rounded-lg border border-purple-300 outline-none focus:border-purple-600 cursor-pointer">
+                    ${fincasDestino.map((f) => `<option value="${f.id}" ${f.id === this.fincaDestinoId ? 'selected' : ''}>${f.nombre}</option>`).join('')}
                   </select>
                 ` : `
                   <div class="p-2 bg-amber-50 text-amber-900 font-bold rounded-lg text-[11px] border border-amber-200">
@@ -19459,9 +19539,9 @@ class ModuloIngresosDiarios {
               <!-- FILTRO FINCA -->
               <div class="flex items-center gap-1">
                 <span class="font-bold text-slate-600 text-[11px] whitespace-nowrap">🏡 Finca:</span>
-                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-black outline-none cursor-pointer" style="color: #000000 !important; background-color: #ffffff !important;">
-                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">🌐 Todas las Fincas</option>
-                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''} class="text-black bg-white" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`).join('')}
+                <select id="sel-filtro-finca" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 outline-none cursor-pointer">
+                  <option value="todas" ${this.filtroFinca === 'todas' ? 'selected' : ''}>Todas las Fincas</option>
+                  ${fincas.map((f) => `<option value="${f.id}" ${this.filtroFinca === f.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -19971,6 +20051,7 @@ class ModuloIngresosDiarios {
 
 
 
+
 class ModuloNutricion {
   constructor({
     containerId = 'pantalla-nutricion',
@@ -19978,6 +20059,7 @@ class ModuloNutricion {
     getAnimalesBusqueda,
     getFincaActiva,
     getNutricion,
+    getPesajes,
     onGuardarPlan,
     onEliminarRegistro,
     onVerFicha,
@@ -19990,6 +20072,7 @@ class ModuloNutricion {
     this.getAnimalesBusqueda = getAnimalesBusqueda;
     this.getFincaActiva = getFincaActiva;
     this.getNutricion = getNutricion;
+    this.getPesajes = getPesajes;
     this.onGuardarPlan = onGuardarPlan;
     this.onEliminarRegistro = onEliminarRegistro;
     this.onVerFicha = onVerFicha;
@@ -20160,9 +20243,38 @@ class ModuloNutricion {
     }
   }
 
-  abrirEvaluacionParaAnimal(animal) {
+  obtenerAnimalSincronizado(animalBase) {
+    if (!animalBase) return null;
+    const inventario = this.getAnimales ? this.getAnimales() : [];
+    const tagTarget = String(animalBase.identificacionTag || animalBase.tag || animalBase.numero || '').trim().toUpperCase();
+    const enFicha = inventario.find((a) =>
+      a && (
+        (animalBase.id && a.id === animalBase.id) ||
+        (tagTarget && String(a.identificacionTag || a.tag || a.numero || '').trim().toUpperCase() === tagTarget)
+      )
+    );
+    const fusionado = enFicha ? { ...animalBase, ...enFicha } : { ...animalBase };
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoReal = obtenerPesoActualAnimal(fusionado, pesajes);
+    const edadReal = obtenerEdadMesesAnimal(fusionado);
+    if (pesoReal > 0) {
+      fusionado.ultimoPesoKg = pesoReal;
+      fusionado.pesoActual = pesoReal;
+    }
+    if (edadReal > 0) {
+      fusionado.edadMeses = edadReal;
+    }
+    return fusionado;
+  }
+
+  abrirEvaluacionParaAnimal(animalInput) {
+    const animal = this.obtenerAnimalSincronizado(animalInput);
     this.animalSeleccionado = animal;
     this.modoModalEvaluacion = true;
+
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoFicha = obtenerPesoActualAnimal(animal, pesajes);
+    const edadFicha = obtenerEdadMesesAnimal(animal);
 
     // Buscar si ya tiene un plan guardado
     const registros = this.getNutricion ? this.getNutricion() : [];
@@ -20170,10 +20282,12 @@ class ModuloNutricion {
 
     if (regGuardado) {
       const razaGuardada = regGuardado.raza || regGuardado.sugerenciaDieta?.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
-      const pesoVal = regGuardado.pesoActualKg || animal.ultimoPesoKg || animal.peso || 450;
+      // Sincronización estricta con la ficha técnica (Single Source of Truth):
+      // El peso y la edad provienen SIEMPRE de la ficha del animal si están registrados
+      const pesoVal = pesoFicha > 0 ? pesoFicha : (regGuardado.pesoActualKg || 450);
+      const edadVal = edadFicha > 0 ? edadFicha : (regGuardado.edadMeses || regGuardado.sugerenciaDieta?.edadMeses || 24);
       const tallaVal = regGuardado.tallaCm || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.tallaCm) || (regGuardado.tallaFrame && regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i) ? Number(regGuardado.tallaFrame.match(/(\d{2,3})\s*cm/i)[1]) : 135);
-      const edadVal = regGuardado.edadMeses || regGuardado.sugerenciaDieta?.edadMeses || animal.edadMeses || 24;
-      const desRacial = regGuardado.desarrolloRacial || regGuardado.sugerenciaDieta?.desarrolloRacial || evaluarDesarrolloRacial({
+      const desRacial = evaluarDesarrolloRacial({
         animal,
         razaTexto: razaGuardada,
         pesoActual: pesoVal,
@@ -20198,7 +20312,7 @@ class ModuloNutricion {
         statusCompacidad: regGuardado.statusCompacidad || (regGuardado.sugerenciaDieta && regGuardado.sugerenciaDieta.statusCompacidad) || 'normal',
         condicionCorporal: regGuardado.condicionCorporal || 3.0,
         etapaProductiva: regGuardado.etapaProductiva || 'Vacía / Mantenimiento',
-        gdpEsperadaGDia: regGuardado.gdpEsperadaGDia || desRacial.gdpMetaCorrectivaGDia || 450,
+        gdpEsperadaGDia: desRacial.gdpMetaCorrectivaGDia || regGuardado.gdpEsperadaGDia || 450,
         desarrolloRacial: desRacial,
         sugerenciaDieta: regGuardado.sugerenciaDieta || {},
         sugerenciaMedicamentos: regGuardado.sugerenciaMedicamentos || [],
@@ -20210,7 +20324,8 @@ class ModuloNutricion {
     } else {
       this.planGenerado = evaluarNutricionAnimal({
         animal,
-        pesoActual: animal.ultimoPesoKg || animal.peso || 450,
+        pesoActual: pesoFicha > 0 ? pesoFicha : 450,
+        edadMeses: edadFicha > 0 ? edadFicha : null,
         tallaCm: animal.tallaCm || null,
         tallaFrame: 'Medio (Frame 4-6)',
         condicionCorporal: 3.0
@@ -20223,6 +20338,12 @@ class ModuloNutricion {
   async calcularPlanDesdeFormulario(consultarIAEnVivo = false) {
     if (!this.animalSeleccionado || !this.container) return;
 
+    // Sincronizar con la ficha técnica en tiempo real antes de recalcular
+    this.animalSeleccionado = this.obtenerAnimalSincronizado(this.animalSeleccionado);
+    const pesajes = this.getPesajes ? this.getPesajes() : null;
+    const pesoFicha = obtenerPesoActualAnimal(this.animalSeleccionado, pesajes);
+    const edadFicha = obtenerEdadMesesAnimal(this.animalSeleccionado);
+
     const pesoInput = this.container.querySelector('#input-nutri-peso');
     const tallaCmInput = this.container.querySelector('#input-nutri-talla-cm');
     const tallaInput = this.container.querySelector('#input-nutri-talla');
@@ -20234,12 +20355,12 @@ class ModuloNutricion {
     const gdpInput = this.container.querySelector('#input-nutri-gdp');
     const notasInput = this.container.querySelector('#input-nutri-notas');
 
-    const peso = pesoInput ? Number(pesoInput.value) : (this.animalSeleccionado.ultimoPesoKg || this.animalSeleccionado.peso || 450);
+    const peso = pesoFicha > 0 ? pesoFicha : (pesoInput ? Number(pesoInput.value) : 450);
     const tallaCm = tallaCmInput && tallaCmInput.value ? Number(tallaCmInput.value) : null;
     const talla = tallaInput ? tallaInput.value : 'Medio (Frame 4-6)';
     const bcs = bcsInput ? Number(bcsInput.value) : 3.0;
     const etapa = etapaInput ? etapaInput.value : 'Vacía / Mantenimiento';
-    const edadMeses = edadInput && edadInput.value ? Number(edadInput.value) : (this.planGenerado?.edadMeses || this.animalSeleccionado.edadMeses || 24);
+    const edadMeses = edadFicha > 0 ? edadFicha : (edadInput && edadInput.value ? Number(edadInput.value) : (this.planGenerado?.edadMeses || 24));
     const razaSeleccionada = razaInput && razaInput.value ? razaInput.value : (this.planGenerado?.raza || this.animalSeleccionado.raza || 'Brahman (Cebú)');
     const razaConfirmadaCheck = checkRazaInput ? Boolean(checkRazaInput.checked) : true;
     const gdp = gdpInput && gdpInput.value ? Number(gdpInput.value) : null;
@@ -20533,10 +20654,13 @@ class ModuloNutricion {
           ` : `
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               ${enrolados.map(a => {
-                const reg = a.registroNutricion || {};
+                const aSync = this.obtenerAnimalSincronizado(a);
+                const reg = aSync.registroNutricion || a.registroNutricion || {};
                 const bcs = reg.condicionCorporal || 3.0;
-                const perfil = resolverPerfilRaza(a.raza);
+                const perfil = resolverPerfilRaza(aSync.raza || a.raza);
                 const esBuf = perfil.tipo === 'bufalo';
+                const pesoCard = obtenerPesoActualAnimal(aSync);
+                const edadCard = obtenerEdadMesesAnimal(aSync);
 
                 return `
                   <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between space-y-3">
@@ -20544,14 +20668,14 @@ class ModuloNutricion {
                       <div>
                         <div class="flex items-center gap-1.5">
                           <span class="text-base">${esBuf ? '🐃' : '🐄'}</span>
-                          <span class="text-sm font-black text-white font-mono">${a.identificacionTag || a.tag}</span>
-                          ${a.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${a.nombreAlias}"</span>` : ''}
+                          <span class="text-sm font-black text-white font-mono">${aSync.identificacionTag || aSync.tag}</span>
+                          ${aSync.nombreAlias ? `<span class="text-xs text-slate-300 font-bold">"${aSync.nombreAlias}"</span>` : ''}
                         </div>
-                        <div class="text-[11px] text-emerald-400 font-semibold mt-0.5">${a.raza || 'Comercial'} • ${a.sexo || 'Hembra'}</div>
+                        <div class="text-[11px] text-emerald-400 font-semibold mt-0.5">${aSync.raza || 'Comercial'} • ${aSync.sexo || 'Hembra'} • ${edadCard ? `${edadCard} meses` : 'Edad s/f'}</div>
                       </div>
                       <button
                         class="btn-retirar-nutri text-slate-500 hover:text-rose-400 p-1.5 text-xs transition rounded-lg hover:bg-slate-900"
-                        data-tag="${a.identificacionTag || a.tag}"
+                        data-tag="${aSync.identificacionTag || aSync.tag}"
                         title="Retirar del grupo especial"
                       >
                         ✕
@@ -20560,8 +20684,8 @@ class ModuloNutricion {
 
                     <div class="grid grid-cols-4 gap-1.5 bg-slate-900/80 p-2.5 rounded-xl text-center">
                       <div>
-                        <div class="text-[9px] uppercase font-black text-slate-400">Peso (Báscula)</div>
-                        <div class="text-xs font-black text-white font-mono">${a.ultimoPesoKg || reg.pesoActualKg || a.peso || '---'} kg</div>
+                        <div class="text-[9px] uppercase font-black text-slate-400">Peso (Ficha)</div>
+                        <div class="text-xs font-black text-white font-mono">${pesoCard || reg.pesoActualKg || '---'} kg</div>
                       </div>
                       <div>
                         <div class="text-[9px] uppercase font-black text-emerald-400">Talla</div>
@@ -20615,12 +20739,14 @@ class ModuloNutricion {
   }
 
   renderPanelEvaluacion() {
-    const animal = this.animalSeleccionado;
+    const animal = this.obtenerAnimalSincronizado(this.animalSeleccionado);
     const plan = this.planGenerado || {};
     const dieta = plan.sugerenciaDieta || {};
     const medicamentos = plan.sugerenciaMedicamentos || [];
     const suplementos = plan.sugerenciaSuplementos || [];
     const hormonas = plan.sugerenciaHormonas || [];
+    const pesoSincronizado = obtenerPesoActualAnimal(animal) || plan.pesoActualKg || 420;
+    const edadSincronizada = obtenerEdadMesesAnimal(animal) || plan.edadMeses || 24;
     const razaActivaTexto = plan.raza || dieta.razaEvaluada || animal.raza || (animal.especie === 'bufalino' ? 'Búfalo Murrah (Lechero & Doble Propósito)' : 'Brahman (Cebú)');
     const perfil = resolverPerfilRaza(razaActivaTexto);
     const esBuf = perfil.tipo === 'bufalo' || perfil.especie === 'bufalino';
@@ -20637,9 +20763,9 @@ class ModuloNutricion {
     const des = plan.desarrolloRacial || dieta.desarrolloRacial || evaluarDesarrolloRacial({
       animal,
       razaTexto: perfil.nombre,
-      pesoActual: plan.pesoActualKg || animal.ultimoPesoKg || animal.peso || 420,
+      pesoActual: pesoSincronizado,
       tallaCm: plan.tallaCm || 135,
-      edadMeses: plan.edadMeses || animal.edadMeses || 24,
+      edadMeses: edadSincronizada,
       sexo: animal.sexo || 'hembra'
     });
     const porcDesarrollo = des.indiceDesarrolloPorc || 100;
@@ -20743,7 +20869,7 @@ class ModuloNutricion {
                   </label>
                   <select
                     id="input-nutri-raza"
-                    class="w-full bg-slate-950 border border-emerald-500/60 text-white px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
+                    class="bovi-select-raza w-full bg-slate-950 border border-emerald-500/60 text-slate-100 px-3 py-2.5 rounded-xl text-xs font-black focus:border-emerald-400 outline-none cursor-pointer"
                   >
                     ${Object.keys(gruposRazas).map(nombreGrupo => `
                       <optgroup label="── ${nombreGrupo} ──">
@@ -20767,9 +20893,12 @@ class ModuloNutricion {
                     min="1"
                     max="240"
                     step="1"
-                    value="${plan.edadMeses || des.edadMesesEvaluada || 24}"
-                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono focus:border-cyan-400 outline-none"
+                    value="${edadSincronizada}"
+                    readonly
+                    title="Calculada automáticamente en tiempo real desde la fecha de nacimiento registrada en la ficha del animal"
+                    class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed"
                   />
+                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Nac: ${formatearFecha(animal.fechaNacimiento || animal.fecha_nacimiento, 'Según Ficha')}</span>
                 </div>
 
                 <div class="lg:col-span-5">
@@ -20983,15 +21112,16 @@ class ModuloNutricion {
 
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
-                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">1. Peso en Báscula (kg)</label>
+                  <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">1. Peso en Ficha (kg)</label>
                   <input
                     id="input-nutri-peso"
                     type="number"
-                    value="${animal.ultimoPesoKg || animal.peso || plan.pesoActualKg || 0}"
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-400 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-80"
+                    value="${pesoSincronizado}"
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-300 px-3 py-2 rounded-xl text-sm font-black font-mono outline-none cursor-not-allowed opacity-90"
                     readonly
-                    title="El peso proviene de la báscula y no se puede editar aquí."
+                    title="Sincronizado automáticamente con el último pesaje válido de la ficha técnica."
                   />
+                  <span class="text-[9px] text-slate-400 mt-0.5 block truncate">📅 Ficha: ${formatearFecha(animal.fechaUltimoPesaje, 'Último pesaje')}</span>
                 </div>
 
                 <div>
@@ -23066,6 +23196,9 @@ class BoviTrackApp {
     this.escapeHTML = escapeHTML;
     this.keyStorage = 'bovitrack_pro_storage_v3';
     this.sessionKey = 'bovitrack_auth_session';
+    this.themeKey = 'bovitrack_theme_mode';
+    this.temaActual = 'light';
+    this.initTheme();
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
     this.online = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -24748,47 +24881,128 @@ class BoviTrackApp {
     });
   }
 
+  initTheme() {
+    let saved = 'light';
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(this.themeKey);
+        if (stored === 'dark' || stored === 'light') {
+          saved = stored;
+        }
+      }
+    } catch (_e) {
+      saved = 'light';
+    }
+    this.aplicarTema(saved, false);
+  }
+
+  aplicarTema(modo = 'light', persistir = true) {
+    const temaNormalizado = modo === 'dark' ? 'dark' : 'light';
+    this.temaActual = temaNormalizado;
+
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      if (root) {
+        root.setAttribute('data-theme', temaNormalizado);
+        if (root.classList) {
+          root.classList.toggle('dark', temaNormalizado === 'dark');
+          root.classList.toggle('theme-light', temaNormalizado === 'light');
+        }
+      }
+      if (document.body && document.body.classList) {
+        document.body.classList.toggle('dark', temaNormalizado === 'dark');
+        document.body.classList.toggle('theme-light', temaNormalizado === 'light');
+      }
+
+      const sunIcon = document.getElementById('icon-theme-sun');
+      const moonIcon = document.getElementById('icon-theme-moon');
+      if (sunIcon && sunIcon.classList) {
+        sunIcon.classList.toggle('hidden', temaNormalizado !== 'dark');
+      }
+      if (moonIcon && moonIcon.classList) {
+        moonIcon.classList.toggle('hidden', temaNormalizado === 'dark');
+      }
+
+      const labelDropdown = document.getElementById('theme-label-dropdown');
+      if (labelDropdown) {
+        labelDropdown.textContent = temaNormalizado === 'dark' ? 'Oscuro Sutil' : 'Claro Pastel';
+      }
+
+      const btnHeader = document.getElementById('btn-theme-toggle-header');
+      if (btnHeader) {
+        btnHeader.title = temaNormalizado === 'dark'
+          ? 'Tema actual: Modo Oscuro Sutil (Clic para cambiar a Modo Claro Pastel)'
+          : 'Tema actual: Modo Claro Pastel (Clic para cambiar a Modo Oscuro Sutil)';
+      }
+    }
+
+    if (persistir && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(this.themeKey, temaNormalizado);
+      } catch (_e) {}
+    }
+  }
+
+  toggleTema() {
+    const siguiente = this.temaActual === 'dark' ? 'light' : 'dark';
+    this.aplicarTema(siguiente, true);
+  }
+
   actualizarBadgeConexion(estadoOverride = null) {
     const el = document.getElementById('status-red-pwa');
     if (!el) return;
     const supabaseConfigurado = this.supabase && this.supabase.estaConfigurado();
 
+    el.className = 'relative flex items-center justify-center w-5 h-5 rounded-full focus:outline-none cursor-pointer group';
+
     if (!this.online) {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse cursor-pointer';
-      el.innerHTML = '<span class="hidden sm:inline">⚡ Modo Campo Offline</span><span class="sm:hidden">⚡ Offline</span>';
-      el.title = 'Sin conexión a internet. Los cambios se guardan localmente en este equipo.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-50 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+      `;
+      el.title = 'Sin conexión a internet (Modo Offline). Los cambios se guardan localmente en este dispositivo.';
       return;
     }
 
     if (estadoOverride === 'guardando') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1 cursor-pointer animate-pulse';
-      el.innerHTML = '<span class="hidden sm:inline">🔄 Guardando en Supabase...</span><span class="sm:hidden">🔄 Guardando...</span>';
-      el.title = 'Sincronizando cambios con Supabase Cloud.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+      `;
+      el.title = 'Sincronizando y guardando cambios en Supabase Cloud...';
       return;
     }
 
     if (estadoOverride === 'descargando') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1 cursor-pointer animate-pulse';
-      el.innerHTML = '<span class="hidden sm:inline">🔄 Conectando con Supabase...</span><span class="sm:hidden">🔄 Conectando...</span>';
-      el.title = 'Descargando datos más recientes desde Supabase Cloud.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+      `;
+      el.title = 'Sincronizando y descargando datos desde Supabase Cloud...';
       return;
     }
 
     if (estadoOverride === 'error') {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 cursor-pointer';
-      el.innerHTML = '<span class="hidden sm:inline">⚠️ Supabase (Reintentar)</span><span class="sm:hidden">⚠️ Reintentar</span>';
-      el.title = 'Hubo un error de conexión con Supabase. Haz clic para reintentar la sincronización.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-rose-400 opacity-60 animate-ping"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+      `;
+      el.title = 'Error de sincronización con Supabase Cloud. Haz clic para reintentar.';
       return;
     }
 
     if (supabaseConfigurado) {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/30 transition shadow-sm';
-      el.innerHTML = '<span class="hidden sm:inline">⚡ Supabase Cloud (En Línea)</span><span class="sm:hidden">⚡ En Línea</span>';
-      el.title = 'Base de datos conectada con Supabase. Clic para forzar sincronización ahora.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-50 animate-pulse"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      `;
+      el.title = 'Supabase Cloud: Sincronizado en línea (Clic para sincronizar ahora).';
     } else {
-      el.className = 'px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer hover:bg-emerald-500/30 transition';
-      el.innerHTML = '<span class="hidden sm:inline">● Conectado (Local)</span><span class="sm:hidden">● Local</span>';
-      el.title = 'Internet activo. Clic para conectar con Supabase.';
+      el.innerHTML = `
+        <span class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-40 animate-pulse"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      `;
+      el.title = 'Conectado en línea (Almacenamiento Local Activo).';
     }
   }
 
@@ -25043,6 +25257,7 @@ class BoviTrackApp {
       getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
       getFincaActiva: () => this.getFincaActiva(),
       getNutricion: () => this.state.nutricion || [],
+      getPesajes: () => this.state.pesajes || [],
       onGuardarPlan: (registro) => this.guardarPlanNutricion(registro),
       onEliminarRegistro: (tag) => this.eliminarPlanNutricion(tag),
       onVerFicha: (id) => this.abrirFichaAnimal(id),
@@ -28377,14 +28592,14 @@ class BoviTrackApp {
         if (selEmp) {
           const empList = this.state.empresas || [];
           if (empList.length === 0) {
-            selEmp.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Empresas Registradas)</option>';
+            selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
           } else {
             const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
               ? this.state.empresaActivaId
               : empList[0].id;
-            selEmp.innerHTML = `
-              ${empList.map((e) => `<option value="${e.id}" ${e.id === empActiva ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">🏢 ${e.nombre}</option>`).join('')}
-            `;
+            selEmp.innerHTML = empList
+              .map((e) => `<option value="${e.id}" ${e.id === empActiva ? 'selected' : ''}>${e.nombre}</option>`)
+              .join('');
           }
         }
       } else {
@@ -28399,25 +28614,28 @@ class BoviTrackApp {
     const selF = document.getElementById('select-finca-nav');
     if (selF) {
       if (fincasPermitidas.length === 0) {
-        selF.innerHTML = '<option value="" class="text-black bg-white" style="color: #000000; background-color: #ffffff;">(Sin Fincas Registradas)</option>';
+        selF.innerHTML = '<option value="">(Sin Fincas Registradas)</option>';
       } else {
         selF.innerHTML = fincasPermitidas
-          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''} class="text-black bg-white font-bold" style="color: #000000; background-color: #ffffff;">${f.nombre}</option>`)
+          .map((f) => `<option value="${f.id}" ${(fActiva && f.id === fActiva.id) ? 'selected' : ''}>${f.nombre}</option>`)
           .join('');
       }
     }
 
-    // 3. Identificador de Usuario en Sesión y Botón Salir
+    // 3. Perfil Compacto (Solo Iniciales en Avatar + Datos en Menú Desplegable)
     const uActual = this.state.usuarioActual;
     if (!uActual) return;
     const avatarEl = document.getElementById('user-avatar-nav');
+    const btnTrigger = document.getElementById('btn-user-menu-trigger');
     const nombreEl = document.getElementById('user-nombre-nav');
     const empresaEl = document.getElementById('user-empresa-nav');
     const badgeEl = document.getElementById('user-rol-badge-nav');
 
     if (avatarEl) {
       avatarEl.textContent = this.getInitials(uActual.nombre);
-      avatarEl.className = `w-6 h-6 rounded-full ${this.getColorBgAvatar(uActual.rol)} text-white flex items-center justify-center text-[10px] font-black`;
+    }
+    if (btnTrigger) {
+      btnTrigger.title = `${uActual.nombre || uActual.usuario} (${this.getNombreRol(uActual.rol)})`;
     }
     if (nombreEl) {
       nombreEl.textContent = uActual.nombre || uActual.usuario;
@@ -28427,13 +28645,18 @@ class BoviTrackApp {
     }
     if (badgeEl) {
       badgeEl.textContent = this.getNombreRol(uActual.rol);
-      badgeEl.className = `text-[9px] font-mono font-black uppercase ${
-        uActual.rol === 'superadmin' ? 'text-purple-300' :
-        uActual.rol === 'administrador' ? 'text-blue-300' :
-        uActual.rol === 'encargado' ? 'text-emerald-300' : 'text-amber-300'
+      badgeEl.className = `px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${
+        uActual.rol === 'superadmin'
+          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30'
+          : uActual.rol === 'administrador'
+          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30'
+          : uActual.rol === 'encargado'
+          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+          : 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30'
       }`;
     }
 
+    this.aplicarTema(this.temaActual || 'light', false);
     this.actualizarContadorAlertas();
     this.actualizarBadgeConexion();
   }
@@ -28571,6 +28794,8 @@ class BoviTrackApp {
     if (btnLogout && !btnLogout._listenerAdded) {
       btnLogout._listenerAdded = true;
       btnLogout.addEventListener('click', () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
         this.logout();
       });
     }
@@ -28587,8 +28812,54 @@ class BoviTrackApp {
     if (btnBackupHeader && !btnBackupHeader._listenerAdded) {
       btnBackupHeader._listenerAdded = true;
       btnBackupHeader.addEventListener('click', async () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
         await this.exportarCopiaSeguridadCompleta('xlsx');
       });
+    }
+
+    // Selector de Tema (Header y Dropdown)
+    const btnThemeHeader = document.getElementById('btn-theme-toggle-header');
+    if (btnThemeHeader && !btnThemeHeader._listenerAdded) {
+      btnThemeHeader._listenerAdded = true;
+      btnThemeHeader.addEventListener('click', () => {
+        this.toggleTema();
+      });
+    }
+
+    const btnThemeDropdown = document.getElementById('btn-theme-toggle-dropdown');
+    if (btnThemeDropdown && !btnThemeDropdown._listenerAdded) {
+      btnThemeDropdown._listenerAdded = true;
+      btnThemeDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleTema();
+      });
+    }
+
+    // Menú desplegable de Perfil de Usuario (Solo Iniciales)
+    const btnUserMenuTrigger = document.getElementById('btn-user-menu-trigger');
+    const userProfileDropdown = document.getElementById('user-profile-dropdown');
+    if (btnUserMenuTrigger && userProfileDropdown && !btnUserMenuTrigger._listenerAdded) {
+      btnUserMenuTrigger._listenerAdded = true;
+      btnUserMenuTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = userProfileDropdown.classList.contains('hidden');
+        userProfileDropdown.classList.toggle('hidden', !isHidden);
+        btnUserMenuTrigger.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      });
+
+      if (typeof document !== 'undefined' && !document._boviUserDropdownListener) {
+        document._boviUserDropdownListener = true;
+        document.addEventListener('click', (ev) => {
+          const wrapper = document.getElementById('badge-usuario-activo');
+          const dd = document.getElementById('user-profile-dropdown');
+          const trig = document.getElementById('btn-user-menu-trigger');
+          if (dd && wrapper && !wrapper.contains(ev.target)) {
+            dd.classList.add('hidden');
+            if (trig) trig.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
     }
   }
 

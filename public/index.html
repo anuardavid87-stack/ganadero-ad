@@ -23,6 +23,19 @@
   <!-- SheetJS para lectura offline de archivos Excel (.xlsx, .xls) y CSV -->
   <script src="./xlsx.full.min.js"></script>
   <script>
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('bovitrack_theme_mode') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
     if (typeof XLSX === 'undefined') {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
@@ -31,14 +44,14 @@
   </script>
   <style>
     * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
     input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    .bottom-mobile-nav { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15); }
+    .bottom-mobile-nav { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12); }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-900 antialiased min-h-screen flex flex-col pb-24 md:pb-6">
+<body class="bovi-theme-body antialiased min-h-screen flex flex-col pb-24 md:pb-6">
 
   <!-- ====================================================================== -->
   <!-- CONTENEDOR PRINCIPAL BLINDADO (OCULTO HASTA VERIFICAR AUTENTICACIÓN)    -->
@@ -46,75 +59,165 @@
   <div id="contenedor-app-segura" class="hidden flex flex-col flex-1 w-full min-h-screen">
 
   <!-- ====================================================================== -->
-  <!-- BARRA SUPERIOR PWA (HEADER)                                            -->
+  <!-- BARRA SUPERIOR MINIMALISTA PWA (HEADER / NAVBAR)                        -->
   <!-- ====================================================================== -->
-  <header class="bg-slate-950 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
-    <div class="max-w-7xl mx-auto px-2.5 sm:px-6">
-      <div class="flex items-center justify-between h-13 sm:h-14 py-1.5">
-        <!-- Logo Ganadero AD -->
-        <div class="flex items-center space-x-2 shrink-0">
-          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden shadow shrink-0 border border-emerald-500/40 flex items-center justify-center bg-slate-900">
+  <header id="app-header-main" class="bovi-header sticky top-0 z-30 border-b transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6">
+      <div class="flex items-center justify-between h-16 gap-2 sm:gap-4">
+
+        <!-- IZQUIERDA: Logo + Nombre + Punto Minimalista de Sincronización Supabase -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <div class="w-9 h-9 rounded-xl overflow-hidden shadow-sm shrink-0 border border-emerald-500/30 flex items-center justify-center bg-slate-900/80">
             <img src="./icon.png" alt="Ganadero AD Logo" class="w-full h-full object-cover">
           </div>
-          <div>
-            <div class="font-black text-xs sm:text-sm tracking-tight text-white flex items-center gap-1.5">
-              <span>Ganadero AD</span>
-              <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 hidden sm:inline">PRO PWA</span>
+          <div class="flex flex-col">
+            <div class="flex items-center gap-2">
+              <span class="font-black text-sm sm:text-base tracking-tight bovi-header-title">Ganadero AD</span>
+              <!-- Indicador Minimalista de Sincronización (Supabase Cloud Status Dot 10px) -->
+              <button
+                id="status-red-pwa"
+                type="button"
+                class="relative flex items-center justify-center w-5 h-5 rounded-full focus:outline-none cursor-pointer group"
+                title="Supabase Cloud: Sincronizado en línea"
+                aria-label="Estado de sincronización con Supabase Cloud"
+              >
+                <span id="status-dot-ping" class="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+                <span id="status-dot-supabase" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </button>
             </div>
-            <div class="text-[9px] text-slate-400 hidden sm:block">Zootecnia, Genealogía & IA en Campo</div>
+            <span class="text-[10px] bovi-header-subtitle hidden sm:block leading-none mt-0.5">Zootecnia, Genealogía & IA</span>
           </div>
         </div>
 
-        <!-- SELECTOR DE EMPRESA MULTI-TENANT (VISIBLE PARA SUPER ADMIN) -->
-        <div id="container-empresa-nav" class="hidden items-center gap-1.5 bg-purple-950/80 px-2 sm:px-2.5 py-1 rounded-xl border border-purple-700/60 shadow-sm">
-          <span class="text-xs text-purple-300 font-bold hidden md:inline">🏢 Empresa:</span>
-          <select id="select-empresa-nav" class="bg-white text-black font-black text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer max-w-[110px] sm:max-w-xs shadow-sm border border-purple-200" style="color: #000000 !important; background-color: #ffffff !important;">
-            <!-- Inyectado dinámicamente para Super Admin -->
-          </select>
+        <!-- CENTRO: Selectores de Contexto Unificados (Empresa & Finca) sin cajas pesadas ni emojis -->
+        <div class="flex items-center gap-2 flex-1 justify-center max-w-xl min-w-0">
+          <!-- Selector de Empresa (Visible para Super Admin) -->
+          <div id="container-empresa-nav" class="hidden items-center gap-2 px-2.5 h-9 rounded-xl border bovi-context-control min-w-0 max-w-[180px] sm:max-w-[230px] transition">
+            <svg class="w-3.5 h-3.5 shrink-0 bovi-context-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+            </svg>
+            <span class="text-[10px] uppercase tracking-wider font-bold bovi-context-label hidden lg:inline shrink-0">Empresa</span>
+            <select id="select-empresa-nav" class="bovi-nav-select text-xs font-bold bg-transparent outline-none cursor-pointer truncate w-full pr-1" title="Seleccionar Empresa">
+              <!-- Inyectado dinámicamente -->
+            </select>
+          </div>
+
+          <!-- Selector de Finca Global -->
+          <div id="container-finca-nav" class="flex items-center gap-2 px-2.5 h-9 rounded-xl border bovi-context-control min-w-0 max-w-[190px] sm:max-w-[250px] transition">
+            <svg class="w-3.5 h-3.5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span class="text-[10px] uppercase tracking-wider font-bold bovi-context-label hidden lg:inline shrink-0">Finca</span>
+            <select id="select-finca-nav" class="bovi-nav-select text-xs font-bold bg-transparent outline-none cursor-pointer truncate w-full pr-1" title="Seleccionar Finca Activa">
+              <!-- Inyectado dinámicamente -->
+            </select>
+          </div>
         </div>
 
-        <!-- SELECTOR DE FINCA GLOBAL -->
-        <div class="flex items-center gap-1.5 bg-slate-900 px-2 sm:px-2.5 py-1 rounded-xl border border-slate-800">
-          <span class="text-xs text-emerald-400 font-bold hidden md:inline">🏡 Finca:</span>
-          <span class="text-xs text-emerald-400 md:hidden">🏡</span>
-          <select id="select-finca-nav" class="bg-white text-black font-black text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer max-w-[120px] sm:max-w-xs shadow-sm border border-emerald-500/40" style="color: #000000 !important; background-color: #ffffff !important;">
-            <!-- Inyectado dinámicamente -->
-          </select>
-        </div>
-
-        <!-- ESTADO RED & PERFIL DE USUARIO EN SESIÓN -->
-        <div class="flex items-center gap-1.5 sm:gap-2">
-          <!-- BOTÓN COPIA DE SEGURIDAD EXCEL MULTI-HOJA -->
-          <button id="btn-backup-excel-header" class="px-2 sm:px-2.5 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 active:scale-95 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="Descargar Copia de Seguridad Completa en Excel (.xlsx) con todas las hojas">
-            <span>💾</span> <span class="hidden md:inline">Copia de Seguridad</span>
+        <!-- DERECHA: Toggle Rápido de Tema + Avatar Compacto (Solo Iniciales) con Menú Desplegable -->
+        <div class="flex items-center gap-2 shrink-0">
+          <!-- Botón de Cambio Rápido de Tema (Sol / Luna) -->
+          <button
+            id="btn-theme-toggle-header"
+            type="button"
+            class="w-9 h-9 rounded-xl border bovi-icon-btn flex items-center justify-center transition cursor-pointer active:scale-95"
+            title="Alternar entre Modo Claro Pastel y Modo Oscuro Sutil"
+            aria-label="Cambiar tema visual"
+          >
+            <!-- Icono Sol (visible cuando estamos en modo oscuro para pasar a claro, o viceversa) -->
+            <svg id="icon-theme-sun" class="w-4 h-4 text-amber-500 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+            </svg>
+            <!-- Icono Luna -->
+            <svg id="icon-theme-moon" class="w-4 h-4 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+            </svg>
           </button>
 
-          <div id="status-red-pwa" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 cursor-pointer" title="Sincronización con Supabase Cloud">
-            <span class="hidden sm:inline">● Conectado (Sync)</span>
-            <span class="sm:hidden">⚡</span>
-          </div>
+          <!-- Perfil de Usuario Compacto (Solo Iniciales + Dropdown) -->
+          <div id="badge-usuario-activo" class="relative">
+            <button
+              id="btn-user-menu-trigger"
+              type="button"
+              class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white flex items-center justify-center text-xs font-black tracking-tight shadow-sm ring-2 ring-emerald-500/25 transition cursor-pointer active:scale-95"
+              title="Menú de Perfil y Configuración"
+              aria-expanded="false"
+            >
+              <span id="user-avatar-nav">AD</span>
+            </button>
 
-          <!-- IDENTIFICADOR DE USUARIO ACTIVO (NO INTERACTIVO) -->
-          <div id="badge-usuario-activo" class="flex items-center gap-1.5 bg-slate-900 px-1.5 sm:px-2.5 py-1 rounded-xl border border-slate-800">
-            <span id="user-avatar-nav" class="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">AD</span>
-            <div class="hidden sm:flex flex-col leading-tight">
-              <div class="flex items-center gap-1.5">
-                <span id="user-nombre-nav" class="text-xs font-bold text-white max-w-[110px] truncate">Admin</span>
-                <span id="user-empresa-nav" class="text-[9px] text-purple-300 font-bold truncate max-w-[110px]">El Porvenir</span>
+            <!-- Menú Desplegable de Usuario (Dropdown Limpio y Elegante) -->
+            <div
+              id="user-profile-dropdown"
+              class="hidden absolute right-0 top-full mt-2 w-64 rounded-2xl border bovi-dropdown-menu shadow-xl p-2 z-50"
+            >
+              <!-- Encabezado con Nombre Completo y Rol -->
+              <div class="px-3 py-2.5 border-b bovi-dropdown-divider">
+                <div id="user-nombre-nav" class="text-xs font-black bovi-dropdown-title truncate">Administrador</div>
+                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span id="user-rol-badge-nav" class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                    Super Admin
+                  </span>
+                  <span id="user-empresa-nav" class="text-[11px] font-semibold bovi-dropdown-subtitle truncate">
+                    Acceso Global
+                  </span>
+                </div>
               </div>
-              <span id="user-rol-badge-nav" class="text-[9px] font-mono font-black text-purple-300 uppercase">Administrador</span>
+
+              <!-- Opciones del Menú -->
+              <div class="py-1.5 space-y-1">
+                <!-- Selector de Tema dentro del Dropdown -->
+                <button
+                  id="btn-theme-toggle-dropdown"
+                  type="button"
+                  class="w-full px-3 py-2 rounded-xl text-xs font-semibold bovi-dropdown-item flex items-center justify-between transition cursor-pointer"
+                >
+                  <span class="flex items-center gap-2.5">
+                    <svg class="w-4 h-4 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    <span>Tema de Interfaz</span>
+                  </span>
+                  <span id="theme-label-dropdown" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-500/10">Claro Pastel</span>
+                </button>
+
+                <!-- Copia de Seguridad -->
+                <button
+                  id="btn-backup-excel-header"
+                  type="button"
+                  class="w-full px-3 py-2 rounded-xl text-xs font-semibold bovi-dropdown-item flex items-center gap-2.5 transition cursor-pointer"
+                  title="Descargar Copia de Seguridad Completa en Excel (.xlsx) con todas las hojas"
+                >
+                  <svg class="w-4 h-4 text-emerald-500 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Copia de Seguridad (.xlsx)</span>
+                </button>
+              </div>
+
+              <!-- Cerrar Sesión / Salir -->
+              <div class="pt-1.5 border-t bovi-dropdown-divider">
+                <button
+                  id="btn-logout"
+                  type="button"
+                  class="w-full px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition cursor-pointer"
+                  title="Cerrar sesión en este dispositivo"
+                >
+                  <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>Cerrar Sesión / Salir</span>
+                </button>
+              </div>
             </div>
           </div>
-
-          <!-- BOTÓN CERRAR SESIÓN -->
-          <button id="btn-logout" class="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer" title="Cerrar sesión en este dispositivo">
-            <span>🚪</span> <span class="hidden sm:inline">Salir</span>
-          </button>
         </div>
       </div>
 
       <!-- NAVEGACIÓN DESKTOP -->
-      <nav class="hidden md:flex space-x-1 py-1.5 border-t border-slate-800/80 overflow-x-auto">
+      <nav id="app-desktop-nav" class="hidden md:flex items-center gap-1 py-1.5 border-t bovi-header-nav-border overflow-x-auto">
         <button class="btn-nav-bovi flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition text-emerald-400 bg-slate-800" data-vista="animales">
           <span>🏷️</span> Animales
         </button>
@@ -356,6 +459,6 @@
     </div>
   </div>
 
-  <script src="./bundle.js?v=1793827787572"></script>
+  <script src="./bundle.js?v=1793854675294"></script>
 </body>
 </html>

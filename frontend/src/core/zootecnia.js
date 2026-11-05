@@ -134,15 +134,93 @@ export function calcularIEP(diasAbiertos, especie = 'bovino') {
 }
 
 /**
- * Calcula la edad en meses cumplidos.
+ * Calcula la edad en meses cumplidos a partir de fecha_nacimiento.
  */
 export function calcularEdadMeses(fechaNacimiento, fechaCorte = new Date()) {
   if (!fechaNacimiento) return 0;
   const fn = parsearFechaObjeto(fechaNacimiento);
   const fc = parsearFechaObjeto(fechaCorte);
+  if (isNaN(fn.getTime()) || isNaN(fc.getTime())) return 0;
   let m = (fc.getFullYear() - fn.getFullYear()) * 12 + (fc.getMonth() - fn.getMonth());
   if (fc.getDate() < fn.getDate()) m--;
   return Math.max(0, m);
+}
+
+/**
+ * Fuente Única de Verdad (Single Source of Truth) para la edad en meses de un ejemplar.
+ * Prioriza siempre el cálculo automático y en tiempo real desde `fechaNacimiento` / `fecha_nacimiento`
+ * registrada en la ficha del animal en la base de datos.
+ */
+export function obtenerEdadMesesAnimal(animal, fechaCorte = new Date()) {
+  if (!animal) return 0;
+  const fNac = animal.fechaNacimiento || animal.fecha_nacimiento;
+  if (fNac) {
+    const fn = parsearFechaObjeto(fNac);
+    if (!isNaN(fn.getTime())) {
+      return calcularEdadMeses(fNac, fechaCorte);
+    }
+  }
+  const edadExplicita = Number(animal.edadMeses ?? animal.edad_meses ?? 0);
+  return !isNaN(edadExplicita) && edadExplicita > 0 ? Math.round(edadExplicita) : 0;
+}
+
+/**
+ * Fuente Única de Verdad (Single Source of Truth) para el peso actual de un ejemplar.
+ * Vincula directamente al último registro de pesaje válido o al peso actual almacenado
+ * en la ficha técnica del animal en el sistema.
+ */
+export function obtenerPesoActualAnimal(animal, pesajes = null) {
+  if (!animal) return 0;
+  const listaPesajes = Array.isArray(pesajes)
+    ? pesajes
+    : (typeof globalThis !== 'undefined' && globalThis.boviApp?.state?.pesajes ? globalThis.boviApp.state.pesajes : null);
+
+  let pesoRecientePesajes = 0;
+  let fechaRecientePesajes = 0;
+
+  if (Array.isArray(listaPesajes) && listaPesajes.length > 0) {
+    const tagUpper = String(animal.identificacionTag || animal.tag || animal.numero || '').trim().toUpperCase();
+    const aId = animal.id;
+    const aFinca = animal.fincaId || animal.finca_id;
+
+    for (const p of listaPesajes) {
+      if (!p) continue;
+      const coincideId = aId && p.animalId === aId;
+      const pTag = String(p.tag || p.animalTag || '').trim().toUpperCase();
+      const coincideTag = tagUpper && pTag === tagUpper && (!aFinca || !p.fincaId || p.fincaId === aFinca);
+      if (coincideId || coincideTag) {
+        const valPeso = Number(p.pesoNuevo ?? p.peso ?? p.peso_kg ?? 0);
+        if (valPeso > 0) {
+          const ts = p.fecha ? parsearFechaObjeto(p.fecha).getTime() : 0;
+          const timeVal = !isNaN(ts) && ts > 0 ? ts : 1;
+          if (timeVal >= fechaRecientePesajes) {
+            fechaRecientePesajes = timeVal;
+            pesoRecientePesajes = valPeso;
+          }
+        }
+      }
+    }
+  }
+
+  const pesoFicha = Number(
+    animal.ultimoPesoKg ??
+    animal.ultimo_peso_kg ??
+    animal.pesoActual ??
+    animal.pesoActualKg ??
+    animal.peso ??
+    0
+  );
+
+  if (pesoFicha > 0 && pesoRecientePesajes > 0) {
+    const fFicha = animal.fechaUltimoPesaje || animal.fecha_ultimo_pesaje;
+    const tsFicha = fFicha ? parsearFechaObjeto(fFicha).getTime() : 0;
+    if (!isNaN(tsFicha) && tsFicha > 0 && tsFicha > fechaRecientePesajes) {
+      return pesoFicha;
+    }
+    return pesoRecientePesajes;
+  }
+
+  return pesoRecientePesajes > 0 ? pesoRecientePesajes : (pesoFicha > 0 ? pesoFicha : 0);
 }
 
 /**
