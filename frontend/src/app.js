@@ -15,6 +15,7 @@ import { ModuloReproduccion } from './components/ModuloReproduccion.js';
 import { ModuloTraslados } from './components/ModuloTraslados.js';
 import { ModuloIngresosDiarios } from './components/ModuloIngresosDiarios.js';
 import { ModuloNutricion } from './components/ModuloNutricion.js';
+import { ModuloContabilidad } from './components/ModuloContabilidad.js';
 import { SupabaseSyncService } from './core/supabaseSync.js';
 import { detectarAlertasZootecnicas } from './core/auditorIA.js';
 import { ExportadorBackupService } from './core/exportadorBackup.js';
@@ -150,6 +151,15 @@ class BoviTrackApp {
     }
     if (!Array.isArray(state.nutricion)) {
       state.nutricion = [];
+    }
+    if (!Array.isArray(state.contabilidadMovimientos)) {
+      state.contabilidadMovimientos = [];
+    }
+    if (!Array.isArray(state.nominaTrabajadores)) {
+      state.nominaTrabajadores = [];
+    }
+    if (!Array.isArray(state.nominaPagos)) {
+      state.nominaPagos = [];
     }
 
     // 2. Asegurar que las fincas existentes tengan estructura de costos y metadatos de sincronización
@@ -888,6 +898,9 @@ class BoviTrackApp {
     fusionarColeccion('operacionesDiarias', datos.operacionesDiarias);
     fusionarColeccion('pesajes', datos.pesajes);
     fusionarColeccion('nutricion', datos.nutricion);
+    fusionarColeccion('contabilidadMovimientos', datos.contabilidadMovimientos);
+    fusionarColeccion('nominaTrabajadores', datos.nominaTrabajadores);
+    fusionarColeccion('nominaPagos', datos.nominaPagos);
 
     // Sincronizar Clave Global de IA Gemini para todas las empresas y todas las fincas
     const globalGeminiConfig = (this.state.operacionesDiarias || []).find(
@@ -1583,14 +1596,14 @@ class BoviTrackApp {
     if (r === 'encargado' || r === 'operario' || r === 'veterinario') {
       const vistasPermitidas = [
         'animales', 'masivo', 'alertas', 'dinamica',
-        'reproduccion', 'nutricion', 'excel', 'traslados', 'ingresos'
+        'reproduccion', 'nutricion', 'contabilidad', 'excel', 'traslados', 'ingresos'
       ];
       return vistasPermitidas.includes(vista);
     }
 
     // 3. Consultor / Solo Lectura (Estrictamente Lectura de Ganado, Alertas y Filtros)
     if (r === 'consultor' || r === 'consulta') {
-      const vistasPermitidas = ['animales', 'alertas', 'dinamica'];
+      const vistasPermitidas = ['animales', 'alertas', 'dinamica', 'contabilidad'];
       return vistasPermitidas.includes(vista);
     }
 
@@ -1621,7 +1634,7 @@ class BoviTrackApp {
 
       const vistasValidas = [
         'animales', 'masivo', 'alertas', 'dinamica', 'reproduccion',
-        'nutricion', 'dashboard', 'excel', 'traslados', 'ingresos', 'admin'
+        'nutricion', 'contabilidad', 'dashboard', 'excel', 'traslados', 'ingresos', 'admin'
       ];
 
       if (!vistasValidas.includes(hash)) {
@@ -2103,6 +2116,192 @@ class BoviTrackApp {
       onTrasladarAFinca: (animal, targetFincaId) => this.trasladarAnimalInmediato(animal, targetFincaId),
       onReactivarAnimal: (animal) => this.reactivarAnimalExtraido(animal)
     });
+
+    // 13. Módulo Integral de Contabilidad, Costos y Nómina Multi-Finca
+    this.compContabilidad = new ModuloContabilidad({
+      containerId: 'pantalla-contabilidad',
+      getFincas: () => this.getFincasEmpresa(),
+      getFincaActiva: () => this.getFincaActiva(),
+      getAnimales: () => {
+        const fIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+        return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
+      },
+      getMovimientos: () => this.state.contabilidadMovimientos || [],
+      getTrabajadores: () => this.state.nominaTrabajadores || [],
+      getPagosNomina: () => this.state.nominaPagos || [],
+      getRol: () => (this.state.usuarioActual ? this.state.usuarioActual.rol : 'consultor'),
+      onGuardarMovimiento: (mov) => this.guardarMovimientoContable(mov),
+      onEliminarMovimiento: (id) => this.eliminarMovimientoContable(id),
+      onCambiarEstadoMovimiento: (id, nuevoEstado) => this.cambiarEstadoMovimientoContable(id, nuevoEstado),
+      onGuardarTrabajador: (trab) => this.guardarTrabajadorNomina(trab),
+      onEliminarTrabajador: (id) => this.eliminarTrabajadorNomina(id),
+      onRegistrarPagoNomina: (pago) => this.registrarPagoNominaFinca(pago),
+      onEliminarPagoNomina: (id) => this.eliminarPagoNominaFinca(id)
+    });
+  }
+
+  guardarMovimientoContable(mov) {
+    if (!mov || this.esUsuarioSoloConsulta()) return null;
+    if (!Array.isArray(this.state.contabilidadMovimientos)) {
+      this.state.contabilidadMovimientos = [];
+    }
+    const fincaId = mov.fincaId || mov.finca_id || this.state.fincaActivaId;
+    const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
+    const id = mov.id || `MOV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const fecha = mov.fecha || new Date().toISOString().split('T')[0];
+
+    const nuevoMov = {
+      ...mov,
+      id,
+      fecha,
+      fincaId,
+      finca_id: fincaId,
+      fincaNombre: fincaObj ? fincaObj.nombre : (mov.fincaNombre || fincaId),
+      empresaId: fincaObj?.empresaId || this.state.empresaActivaId || 'EMP-01',
+      monto: Math.max(0, Number(mov.monto) || 0),
+      estado: mov.estado || 'Pagado',
+      creadoEn: new Date().toISOString()
+    };
+
+    const idx = this.state.contabilidadMovimientos.findIndex((x) => x && x.id === id);
+    if (idx >= 0) {
+      this.state.contabilidadMovimientos[idx] = nuevoMov;
+    } else {
+      this.state.contabilidadMovimientos.unshift(nuevoMov);
+    }
+
+    this.guardarEstado();
+    return nuevoMov;
+  }
+
+  eliminarMovimientoContable(id) {
+    if (!id || this.esUsuarioSoloConsulta()) return false;
+    if (!Array.isArray(this.state.contabilidadMovimientos)) return false;
+    this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter((m) => m && m.id !== id);
+    this.guardarEstado();
+    return true;
+  }
+
+  cambiarEstadoMovimientoContable(id, nuevoEstado = 'Pagado') {
+    if (!id || this.esUsuarioSoloConsulta()) return false;
+    const mov = (this.state.contabilidadMovimientos || []).find((m) => m && m.id === id);
+    if (!mov) return false;
+    mov.estado = nuevoEstado;
+    mov.actualizadoEn = new Date().toISOString();
+    this.guardarEstado();
+    return true;
+  }
+
+  guardarTrabajadorNomina(trab) {
+    if (!trab || this.esUsuarioSoloConsulta()) return null;
+    if (!Array.isArray(this.state.nominaTrabajadores)) {
+      this.state.nominaTrabajadores = [];
+    }
+    const fincaId = trab.fincaId || trab.finca_id || this.state.fincaActivaId;
+    const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
+    const id = trab.id || `TRAB-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const nuevoTrab = {
+      ...trab,
+      id,
+      fincaId,
+      finca_id: fincaId,
+      fincaNombre: fincaObj ? fincaObj.nombre : fincaId,
+      empresaId: fincaObj?.empresaId || this.state.empresaActivaId || 'EMP-01',
+      valorBase: Math.max(0, Number(trab.valorBase) || 0),
+      estado: trab.estado || 'Activo',
+      creadoEn: new Date().toISOString()
+    };
+
+    const idx = this.state.nominaTrabajadores.findIndex((t) => t && t.id === id);
+    if (idx >= 0) {
+      this.state.nominaTrabajadores[idx] = nuevoTrab;
+    } else {
+      this.state.nominaTrabajadores.unshift(nuevoTrab);
+    }
+
+    this.guardarEstado();
+    return nuevoTrab;
+  }
+
+  eliminarTrabajadorNomina(id) {
+    if (!id || this.esUsuarioSoloConsulta()) return false;
+    if (!Array.isArray(this.state.nominaTrabajadores)) return false;
+    this.state.nominaTrabajadores = this.state.nominaTrabajadores.filter((t) => t && t.id !== id);
+    this.guardarEstado();
+    return true;
+  }
+
+  registrarPagoNominaFinca(pago) {
+    if (!pago || this.esUsuarioSoloConsulta()) return null;
+    if (!Array.isArray(this.state.nominaPagos)) {
+      this.state.nominaPagos = [];
+    }
+    if (!Array.isArray(this.state.contabilidadMovimientos)) {
+      this.state.contabilidadMovimientos = [];
+    }
+
+    const fincaId = pago.fincaId || pago.finca_id || this.state.fincaActivaId;
+    const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
+    const idPago = pago.id || `NOM-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const idMovContable = `MOV-NOM-${idPago}`;
+    const fecha = pago.fecha || new Date().toISOString().split('T')[0];
+
+    const costoTotalFinca = Math.max(0, Number(pago.costoTotalFinca || pago.montoTotal || pago.netoTrabajador || 0));
+
+    const registroPago = {
+      ...pago,
+      id: idPago,
+      fecha,
+      fincaId,
+      finca_id: fincaId,
+      fincaNombre: fincaObj ? fincaObj.nombre : fincaId,
+      empresaId: fincaObj?.empresaId || this.state.empresaActivaId || 'EMP-01',
+      costoTotalFinca,
+      movimientoContableId: idMovContable,
+      creadoEn: new Date().toISOString()
+    };
+
+    this.state.nominaPagos.unshift(registroPago);
+
+    // Impactar automáticamente como un egreso contable en la finca específica
+    const asientoContable = {
+      id: idMovContable,
+      nominaPagoId: idPago,
+      fecha,
+      fincaId,
+      finca_id: fincaId,
+      fincaNombre: fincaObj ? fincaObj.nombre : fincaId,
+      empresaId: fincaObj?.empresaId || this.state.empresaActivaId || 'EMP-01',
+      tipo: 'nomina',
+      categoria: 'Nómina, Seguridad Social y Prestaciones',
+      concepto: `Pago Nómina (${pago.periodo || 'Mensual'}): ${pago.trabajadorNombre || 'Trabajador'} - ${pago.cargo || 'Campo'}`,
+      tercero: `${pago.trabajadorNombre || 'Trabajador'}${pago.cedula ? ` (CC ${pago.cedula})` : ''}`,
+      metodoPago: pago.metodoPago || 'Transferencia Bancaria',
+      estado: 'Pagado',
+      monto: costoTotalFinca,
+      creadoEn: new Date().toISOString()
+    };
+
+    this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter((m) => m && m.id !== idMovContable);
+    this.state.contabilidadMovimientos.unshift(asientoContable);
+
+    this.guardarEstado();
+    return { pago: registroPago, movimiento: asientoContable };
+  }
+
+  eliminarPagoNominaFinca(idPago) {
+    if (!idPago || this.esUsuarioSoloConsulta()) return false;
+    if (Array.isArray(this.state.nominaPagos)) {
+      this.state.nominaPagos = this.state.nominaPagos.filter((p) => p && p.id !== idPago);
+    }
+    if (Array.isArray(this.state.contabilidadMovimientos)) {
+      this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter(
+        (m) => m && m.nominaPagoId !== idPago && m.id !== `MOV-NOM-${idPago}`
+      );
+    }
+    this.guardarEstado();
+    return true;
   }
 
   guardarPlanNutricion(registro) {
@@ -5550,7 +5749,7 @@ class BoviTrackApp {
     // Indicador activo en botón 'Más' de móvil si la vista actual pertenece al drawer
     const btnMasMobile = document.getElementById('btn-toggle-mas-mobile');
     if (btnMasMobile) {
-      const vistasMas = ['reproduccion', 'nutricion', 'alertas', 'dinamica', 'dashboard', 'excel', 'admin'];
+      const vistasMas = ['reproduccion', 'nutricion', 'contabilidad', 'alertas', 'dinamica', 'dashboard', 'excel', 'admin'];
       if (vistasMas.includes(this.vistaActiva)) {
         btnMasMobile.classList.add('text-emerald-700', 'active');
         btnMasMobile.classList.remove('text-slate-600');
@@ -5563,6 +5762,7 @@ class BoviTrackApp {
     if (this.vistaActiva === 'masivo' && this.compCuadricula) this.compCuadricula.render();
     else if (this.vistaActiva === 'animales' && this.compAnimales) this.compAnimales.render();
     else if (this.vistaActiva === 'nutricion' && this.compNutricion) this.compNutricion.render();
+    else if (this.vistaActiva === 'contabilidad' && this.compContabilidad) this.compContabilidad.render();
     else if (this.vistaActiva === 'alertas' && this.compAlertas) this.compAlertas.render();
     else if (this.vistaActiva === 'dinamica' && this.compDinamica) this.compDinamica.render();
     else if (this.vistaActiva === 'dashboard' && this.compDashboard) this.compDashboard.render();

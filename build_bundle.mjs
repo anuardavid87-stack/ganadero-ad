@@ -29,6 +29,7 @@ const files = [
   'frontend/src/components/ModuloTraslados.js',
   'frontend/src/components/ModuloIngresosDiarios.js',
   'frontend/src/components/ModuloNutricion.js',
+  'frontend/src/components/ModuloContabilidad.js',
   'frontend/src/components/CuadriculaMasiva.js',
   'frontend/src/app.js'
 ];

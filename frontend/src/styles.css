@@ -1,51 +1,80 @@
 /* ==========================================================================
-   GANADERO AD PWA - SISTEMA DE TOKENS SEMÁNTICOS (ESTÁNDAR SHADCN/UI, LINEAR & VERCEL)
-   CUMPLIMIENTO ESTRICTO DE CONTRASTE WCAG AA (MODO CLARO PASTEL / MODO OSCURO PROFUNDO)
+   GANADERO AD PWA - SISTEMA DE DISEÑO "MODERN AGRO-TECH" & TOKENS SEMÁNTICOS WCAG AA
+   Paleta Armónica Agro-Tech + Estándar SaaS Moderno (Inter / Plus Jakarta Sans)
    ========================================================================== */
 
-/* PASO 1: PALETA MATEMÁTICA EN VARIABLES CSS RAÍZ */
 :root,
 html[data-theme="light"] {
-  /* Tokens Semánticos Primarios - Modo Claro (Pastel Cálido / Arena Suave) */
-  --bg-app: #F5F4F0;          /* Crema/Arena pastel súper suave para el fondo general (NUNCA blanco puro) */
-  --bg-card: #FCFBF9;         /* Marfil suave para tarjetas, tablas y paneles laterales */
-  --bg-muted: #EAE8E1;        /* Tono piedra suave para inputs, badges, cabeceras de tabla y elementos secundarios */
-  --border-subtle: #DDD9CE;   /* Bordes definidos pero elegantes */
-  --text-primary: #1C1917;    /* Gris carbón profundo para títulos, números y datos principales (legibilidad 100%) */
-  --text-secondary: #57534E;  /* Gris piedra medio-oscuro para etiquetas, subtítulos y descripciones (MÁS CLARO PERMITIDO) */
-  --accent-primary: #059669;  /* Verde esmeralda elegante para botones principales y estados activos */
+  /* Paleta "Modern Agro-Tech" - Modo Claro Descansado */
+  --bg-app-agrotech: #F4F5F0;       /* Gris cálido/piedra muy suave para reducir fatiga visual */
+  --bg-app-slate: #F8FAFC;          /* Variante piedra/slate suave */
+  --bg-card-pure: #FFFFFF;          /* Blanco puro para tarjetas, tablas y modales */
+  --nav-forest-deep: #0F291E;       /* Verde Bosque Profundo (Identidad Agro-Tech) */
+  --nav-forest-accent: #064E3B;     /* Verde Bosque Esmeralda Oscuro */
+  --nav-slate-dark: #0F172A;        /* Slate Oscuro complementario */
+  --nav-active-emerald: #10B981;    /* Indicador activo en Verde Esmeralda brillante */
+  --btn-primary-bg: #059669;        /* Verde Esmeralda principal */
+  --btn-primary-hover: #047857;     /* Hover Verde Esmeralda profundo */
+  --btn-amber-secondary: #D97706;   /* Tierra/Ámbar para alertas o acciones secundarias */
+
+  /* Colores Semánticos Financieros y de Estado (Estilo Badge Suave) */
+  --badge-ingreso-bg: #DCFCE7;
+  --badge-ingreso-text: #15803D;
+  --badge-costo-bg: #FEF3C7;
+  --badge-costo-text: #B45309;
+  --badge-gasto-bg: #FEE2E2;
+  --badge-gasto-text: #B91C1C;
+  --badge-nomina-bg: #DBEAFE;
+  --badge-nomina-text: #1D4ED8;
+
+  /* Tokens Semánticos Base (Compatibles con WCAG AA) */
+  --bg-app: #F5F4F0;
+  --bg-card: #FCFBF9;
+  --bg-muted: #EAE8E1;
+  --border-subtle: #DDD9CE;
+  --text-primary: #1C1917;
+  --text-secondary: #57534E;
+  --accent-primary: #059669;
   --accent-foreground: #FFFFFF;
 
-  /* Aliases arquitectónicos internos conectados al sistema semántico */
-  --bovi-bg-main: var(--bg-app);
-  --bovi-bg-card: var(--bg-card);
-  --bovi-bg-elevated: var(--bg-muted);
-  --bovi-bg-inset: var(--bg-muted);
-  --bovi-bg-hover: rgba(28, 25, 23, 0.055);
-  --bovi-border: var(--border-subtle);
-  --bovi-border-strong: #CFCAC0;
-  --bovi-text-primary: var(--text-primary);
-  --bovi-text-secondary: var(--text-secondary);
-  --bovi-text-muted: var(--text-secondary);
-  --bovi-header-bg: rgba(252, 251, 249, 0.95);
-  --bovi-select-bg: var(--bg-muted);
-  --bovi-select-text: var(--text-primary);
+  /* Aliases arquitectónicos internos */
+  --bovi-bg-main: #F4F5F0;
+  --bovi-bg-card: #FFFFFF;
+  --bovi-bg-elevated: #F8FAFC;
+  --bovi-bg-inset: #F1F5F9;
+  --bovi-bg-hover: rgba(5, 150, 105, 0.055);
+  --bovi-border: rgba(226, 232, 240, 0.9);
+  --bovi-border-strong: #CBD5E1;
+  --bovi-text-primary: #0F172A;
+  --bovi-text-secondary: #475569;
+  --bovi-text-muted: #64748B;
+  --bovi-header-bg: #0F291E;
+  --bovi-select-bg: #F8FAFC;
+  --bovi-select-text: #0F172A;
   color-scheme: light;
 }
 
 html[data-theme="dark"],
 html.dark {
   /* Tokens Semánticos Primarios - Modo Oscuro (Slate/Zinc Profundo - Cero Fatiga Visual) */
-  --bg-app: #0B0F17;          /* Azul/Gris nocturno profundo para el fondo general */
-  --bg-card: #151C28;         /* Superficie elevada para tarjetas, modales y contenedores */
-  --bg-muted: #1E293B;        /* Fondo para inputs, selects, cuadros de búsqueda y badges */
-  --border-subtle: #2A3649;   /* Bordes sutiles que separan las tarjetas del fondo */
-  --text-primary: #F1F5F9;    /* Blanco hueso/gris claro para datos principales, sin encandilar */
-  --text-secondary: #94A3B8;  /* Gris azulado claro para subtítulos y etiquetas, perfectamente legible sobre oscuro */
-  --accent-primary: #10B981;  /* Esmeralda vibrante controlado para acciones principales */
+  --bg-app: #0B0F17;
+  --bg-card: #151C28;
+  --bg-muted: #1E293B;
+  --border-subtle: #2A3649;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --accent-primary: #10B981;
   --accent-foreground: #FFFFFF;
 
-  /* Aliases arquitectónicos internos conectados al sistema semántico */
+  --nav-forest-deep: #0B1914;
+  --nav-forest-accent: #064E3B;
+  --nav-slate-dark: #0F172A;
+  --nav-active-emerald: #10B981;
+  --btn-primary-bg: #059669;
+  --btn-primary-hover: #047857;
+  --btn-amber-secondary: #D97706;
+
+  /* Aliases arquitectónicos internos en Modo Oscuro */
   --bovi-bg-main: var(--bg-app);
   --bovi-bg-card: var(--bg-card);
   --bovi-bg-elevated: var(--bg-muted);
@@ -56,7 +85,7 @@ html.dark {
   --bovi-text-primary: var(--text-primary);
   --bovi-text-secondary: var(--text-secondary);
   --bovi-text-muted: var(--text-secondary);
-  --bovi-header-bg: rgba(21, 28, 40, 0.95);
+  --bovi-header-bg: #0B1512;
   --bovi-select-bg: var(--bg-muted);
   --bovi-select-text: var(--text-primary);
   color-scheme: dark;
@@ -70,9 +99,9 @@ html.dark {
 
 body,
 .bovi-theme-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg-app) !important;
-  color: var(--text-primary) !important;
+  font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bovi-bg-main) !important;
+  color: var(--bovi-text-primary) !important;
   padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -90,7 +119,7 @@ body,
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
+  background: var(--bovi-border-strong);
   border-radius: 9999px;
 }
 
@@ -102,176 +131,272 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /* ==========================================================================
-   HEADER / NAVBAR MINIMALISTA Y COMPONENTES DE NAVEGACIÓN
+   SISTEMA DE COMPONENTES "MODERN AGRO-TECH" (BADGES FINANCIEROS, KPI & TARJETAS)
+   ========================================================================== */
+
+/* Badges Semánticos Financieros y de Estado (Estilo Suave) */
+.bovi-badge-ingreso,
+.bovi-badge-positivo {
+  background-color: #DCFCE7 !important;
+  color: #15803D !important;
+  border: 1px solid rgba(21, 128, 61, 0.22) !important;
+  font-weight: 700;
+}
+
+.bovi-badge-costo,
+.bovi-badge-pendiente {
+  background-color: #FEF3C7 !important;
+  color: #B45309 !important;
+  border: 1px solid rgba(180, 83, 9, 0.22) !important;
+  font-weight: 700;
+}
+
+.bovi-badge-gasto,
+.bovi-badge-egreso {
+  background-color: #FEE2E2 !important;
+  color: #B91C1C !important;
+  border: 1px solid rgba(185, 28, 28, 0.22) !important;
+  font-weight: 700;
+}
+
+.bovi-badge-nomina,
+.bovi-badge-info {
+  background-color: #DBEAFE !important;
+  color: #1D4ED8 !important;
+  border: 1px solid rgba(29, 78, 216, 0.22) !important;
+  font-weight: 700;
+}
+
+/* Tarjetas Estandarizadas Agro-Tech (Blanco puro #FFFFFF en Claro, bordes redondeados suaves, p-5/p-6) */
+.bovi-agrotech-card {
+  background-color: var(--bovi-bg-card) !important;
+  border: 1px solid var(--bovi-border) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-theme="light"] .bovi-agrotech-card:hover {
+  box-shadow: 0 4px 12px -1px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04);
+}
+
+/* Tipografía de Números Grandes y Moneda COP $ */
+.bovi-kpi-value {
+  font-family: 'Inter', 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Botones Principales Agro-Tech (#059669 -> hover #047857) y Secundarios Tierra/Ámbar (#D97706) */
+.bovi-btn-primary {
+  background-color: #059669 !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.bovi-btn-primary:hover {
+  background-color: #047857 !important;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+}
+
+.bovi-btn-amber {
+  background-color: #D97706 !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.bovi-btn-amber:hover {
+  background-color: #B45309 !important;
+}
+
+/* ==========================================================================
+   BARRA DE NAVEGACIÓN / IDENTIDAD AGRO-TECH (VERDE BOSQUE PROFUNDO #0F291E / #064E3B)
    ========================================================================== */
 .bovi-header {
-  background-color: var(--bovi-header-bg) !important;
-  border-color: var(--border-subtle) !important;
+  background: linear-gradient(135deg, #0F291E 0%, #064E3B 55%, #0F172A 100%) !important;
+  border-color: rgba(16, 185, 129, 0.22) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px -2px rgba(6, 78, 59, 0.18);
 }
 
 .bovi-header-title {
-  color: var(--text-primary) !important;
+  color: #FFFFFF !important;
 }
 
 .bovi-header-subtitle {
-  color: var(--text-secondary) !important;
+  color: #A7F3D0 !important;
 }
 
 .bovi-header-nav-border {
-  border-color: var(--border-subtle) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
 }
 
 .bovi-context-control {
-  background-color: var(--bg-muted) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  border-color: rgba(16, 185, 129, 0.30) !important;
+  color: #F8FAFC !important;
 }
 
 .bovi-context-control:hover,
 .bovi-context-control:focus-within {
-  border-color: var(--accent-primary) !important;
+  border-color: #10B981 !important;
+  background-color: rgba(15, 23, 42, 0.65) !important;
 }
 
-.bovi-context-icon,
+.bovi-context-icon {
+  color: #34D399 !important;
+}
+
 .bovi-context-label {
-  color: var(--text-secondary) !important;
+  color: #A7F3D0 !important;
 }
 
 .bovi-nav-select {
-  color: var(--text-primary) !important;
+  color: #FFFFFF !important;
   background-color: transparent !important;
-}
-
-.bovi-icon-btn {
-  background-color: var(--bg-muted) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
-}
-
-.bovi-icon-btn:hover {
-  background-color: var(--bovi-bg-hover) !important;
-}
-
-/* Menú desplegable de Perfil de Usuario */
-.bovi-dropdown-menu {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
-}
-
-.bovi-dropdown-divider {
-  border-color: var(--border-subtle) !important;
-}
-
-.bovi-dropdown-title,
-.bovi-dropdown-item {
-  color: var(--text-primary) !important;
-}
-
-.bovi-dropdown-subtitle {
-  color: var(--text-secondary) !important;
-}
-
-.bovi-dropdown-item:hover {
-  background-color: var(--bovi-bg-hover) !important;
-}
-
-/* Botones de navegación en barra superior Desktop */
-#app-desktop-nav .btn-nav-bovi {
-  color: var(--text-secondary) !important;
-  background-color: transparent !important;
-}
-
-#app-desktop-nav .btn-nav-bovi:hover {
-  color: var(--text-primary) !important;
-  background-color: var(--bovi-bg-hover) !important;
-}
-
-html[data-theme="light"] #app-desktop-nav .btn-nav-bovi.active {
-  color: var(--accent-primary) !important;
-  background-color: rgba(5, 150, 105, 0.12) !important;
-  box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.28);
-}
-
-html[data-theme="dark"] #app-desktop-nav .btn-nav-bovi.active {
-  color: var(--accent-primary) !important;
-  background-color: rgba(16, 185, 129, 0.14) !important;
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.30);
-}
-
-/* ==========================================================================
-   PASO 2 & PASO 3: REGLAS ESTRICTAS DE LEGIBILIDAD (GUARDRAILS) Y ESTÉTICA SHADCN/UI & LINEAR
-   ========================================================================== */
-
-/* 1. Selectores, Inputs y Opciones (<select>, <option>, <optgroup>) heredan --bg-muted y --text-primary */
-select,
-.bovi-select-raza,
-input:not([type="checkbox"]):not([type="radio"]),
-textarea {
-  background-color: var(--bg-muted) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-subtle) !important;
-}
-
-select option,
-select optgroup,
-.bovi-select-raza option,
-.bovi-select-raza optgroup {
-  background-color: var(--bg-muted) !important;
-  color: var(--text-primary) !important;
-  font-weight: 600;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-secondary) !important;
-  opacity: 1 !important;
 }
 
 #select-finca-nav,
 #select-empresa-nav {
   background-color: transparent !important;
   border-color: transparent !important;
-  color: var(--text-primary) !important;
+  color: #FFFFFF !important;
 }
 
 #select-finca-nav option,
 #select-empresa-nav option {
-  background-color: var(--bg-muted) !important;
-  color: var(--text-primary) !important;
+  background-color: #0F291E !important;
+  color: #F8FAFC !important;
 }
 
-/* 2. Cabeceras de módulo, barras de búsqueda, filas de tabla y resaltados semánticos */
+.bovi-icon-btn {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #F8FAFC !important;
+}
+
+.bovi-icon-btn:hover {
+  background-color: rgba(16, 185, 129, 0.22) !important;
+  border-color: #10B981 !important;
+}
+
+/* Menú desplegable de Perfil de Usuario */
+.bovi-dropdown-menu {
+  background-color: var(--bovi-bg-card) !important;
+  border-color: var(--bovi-border-strong) !important;
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-dropdown-divider {
+  border-color: var(--bovi-border) !important;
+}
+
+.bovi-dropdown-title,
+.bovi-dropdown-item {
+  color: var(--bovi-text-primary) !important;
+}
+
+.bovi-dropdown-subtitle {
+  color: var(--bovi-text-secondary) !important;
+}
+
+.bovi-dropdown-item:hover {
+  background-color: var(--bovi-bg-hover) !important;
+}
+
+/* Botones de navegación en barra superior Desktop (Texto blanco/gris claro e indicador activo en Verde Esmeralda #10B981) */
+#app-desktop-nav .btn-nav-bovi {
+  color: #E2E8F0 !important;
+  background-color: transparent !important;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+#app-desktop-nav .btn-nav-bovi:hover {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+#app-desktop-nav .btn-nav-bovi.active {
+  color: #FFFFFF !important;
+  background-color: rgba(16, 185, 129, 0.20) !important;
+  border-bottom: 2px solid #10B981 !important;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.38);
+}
+
+/* ==========================================================================
+   REGLAS ESTRICTAS DE LEGIBILIDAD (GUARDRAILS) Y FORMULARIOS
+   ========================================================================== */
+
+/* Selectores, Inputs y Opciones (<select>, <option>, <optgroup>) */
+select,
+.bovi-select-raza,
+input:not([type="checkbox"]):not([type="radio"]),
+textarea {
+  background-color: var(--bovi-select-bg) !important;
+  color: var(--bovi-select-text) !important;
+  border: 1px solid var(--bovi-border-strong) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+select:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus {
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.14) !important;
+  outline: none !important;
+}
+
+select option,
+select optgroup,
+.bovi-select-raza option,
+.bovi-select-raza optgroup {
+  background-color: var(--bovi-bg-card) !important;
+  color: var(--bovi-select-text) !important;
+  font-weight: 600;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--bovi-text-muted) !important;
+  opacity: 1 !important;
+}
+
+/* Cabeceras de módulo, barras de búsqueda, filas de tabla y resaltados semánticos */
 .bovi-module-header {
-  background-color: var(--bg-muted) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--bovi-bg-inset) !important;
+  border-color: var(--bovi-border) !important;
+  color: var(--bovi-text-primary) !important;
 }
 
 .bovi-module-title {
-  color: var(--text-primary) !important;
-  font-weight: 700 !important;
+  color: var(--bovi-text-primary) !important;
+  font-weight: 800 !important;
 }
 
 .bovi-module-subtitle {
-  color: var(--text-secondary) !important;
+  color: var(--bovi-text-secondary) !important;
 }
 
 .bovi-search-toolbar {
-  background-color: var(--bg-muted) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--bovi-bg-elevated) !important;
+  border-color: var(--bovi-border) !important;
+  color: var(--bovi-text-primary) !important;
 }
 
 .bovi-finca-destino-label {
-  color: var(--text-primary) !important;
+  color: var(--bovi-text-primary) !important;
   font-weight: 800 !important;
 }
 
 .bovi-max-gdp-label {
-  color: var(--text-secondary) !important;
+  color: var(--bovi-text-secondary) !important;
   font-weight: 700 !important;
 }
 
@@ -296,7 +421,7 @@ html[data-theme="dark"] .bovi-match-highlight {
   border: 1px solid rgba(56, 189, 248, 0.35) !important;
 }
 
-/* Selección / Hover con transparencia sutil */
+/* Selección / Hover limpio en tablas y listas */
 .bovi-table-row-hover:hover,
 .bovi-autosuggest-item:hover,
 .bovi-autosuggest-active,
@@ -304,24 +429,26 @@ tbody tr:hover {
   background-color: var(--bovi-bg-hover) !important;
 }
 
-/* Cabeceras de tabla en --bg-muted con texto --text-secondary */
+/* Cabeceras de tabla bien definidas */
 thead,
 thead tr {
-  background-color: var(--bg-muted) !important;
-  color: var(--text-secondary) !important;
-  border-color: var(--border-subtle) !important;
+  background-color: var(--bovi-bg-inset) !important;
+  color: var(--bovi-text-secondary) !important;
+  border-color: var(--bovi-border) !important;
 }
 
 thead th {
-  color: var(--text-secondary) !important;
-  border-color: var(--border-subtle) !important;
+  color: var(--bovi-text-secondary) !important;
+  border-color: var(--bovi-border) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
 }
 
 /* ==========================================================================
-   MODO CLARO (PASTEL CÁLIDO / ARENA SUAVE - ALTO CONTRASTE WCAG AA)
+   MODO CLARO ("MODERN AGRO-TECH" - TARJETAS #FFFFFF Y FONDO #F4F5F0)
    ========================================================================== */
 
-/* Tarjetas: Fondo --bg-card (#FCFBF9), borde 1px solid var(--border-subtle) y sombra ultra-sutil */
+/* Tarjetas, Tablas y Modales en Blanco Puro (#FFFFFF) */
 html[data-theme="light"] .bg-white,
 html[data-theme="light"] .bg-white\/90,
 html[data-theme="light"] .bg-slate-900,
@@ -329,11 +456,11 @@ html[data-theme="light"] .bg-slate-900\/90,
 html[data-theme="light"] .bg-slate-900\/80,
 html[data-theme="light"] .bg-slate-900\/60,
 html[data-theme="light"] .bg-slate-900\/50 {
-  background-color: var(--bg-card) !important;
-  color: var(--text-primary) !important;
+  background-color: #FFFFFF !important;
+  color: var(--bovi-text-primary) !important;
 }
 
-/* Superficies secundarias, badges, cabeceras y contenedores internos en --bg-muted (#EAE8E1) */
+/* Superficies secundarias, inputs, cabeceras de tabla en piedra/slate suave (#F8FAFC / #F1F5F9) */
 html[data-theme="light"] .bg-slate-50,
 html[data-theme="light"] .bg-slate-50\/50,
 html[data-theme="light"] .bg-slate-50\/70,
@@ -349,11 +476,11 @@ html[data-theme="light"] .bg-slate-950\/80,
 html[data-theme="light"] .bg-slate-800,
 html[data-theme="light"] .bg-slate-800\/90,
 html[data-theme="light"] .bg-slate-800\/80 {
-  background-color: var(--bg-muted) !important;
-  color: var(--text-primary) !important;
+  background-color: #F8FAFC !important;
+  color: var(--bovi-text-primary) !important;
 }
 
-/* Bordes unificados en --border-subtle (#DDD9CE) */
+/* Bordes sutiles (border-slate-200/80) */
 html[data-theme="light"] .border-slate-100,
 html[data-theme="light"] .border-slate-200,
 html[data-theme="light"] .border-slate-300,
@@ -365,25 +492,25 @@ html[data-theme="light"] .border-slate-800,
 html[data-theme="light"] .border-slate-800\/80,
 html[data-theme="light"] .border-slate-800\/60,
 html[data-theme="light"] .border-emerald-100 {
-  border-color: var(--border-subtle) !important;
+  border-color: rgba(226, 232, 240, 0.85) !important;
 }
 
 html[data-theme="light"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html[data-theme="light"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
 html[data-theme="light"] .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
-  border-color: var(--border-subtle) !important;
+  border-color: rgba(226, 232, 240, 0.85) !important;
 }
 
-/* Sombras ultra-sutiles estilo shadcn/ui en Modo Claro */
+/* Sombras limpias en Modo Claro */
 html[data-theme="light"] .shadow-sm,
 html[data-theme="light"] .shadow,
 html[data-theme="light"] .shadow-md,
 html[data-theme="light"] .shadow-lg,
 html[data-theme="light"] .shadow-xl {
-  box-shadow: 0 1px 2px 0 rgba(28, 25, 23, 0.05) !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04) !important;
 }
 
-/* Textos Principales (#1C1917) y Secundarios (#57534E - PROHIBIDO más claro en Modo Claro) */
+/* Textos Principales y Secundarios en Modo Claro */
 html[data-theme="light"] .text-slate-950,
 html[data-theme="light"] .text-slate-900,
 html[data-theme="light"] .text-slate-800,
@@ -394,7 +521,7 @@ html[data-theme="light"] .text-stone-800,
 html[data-theme="light"] .text-zinc-900,
 html[data-theme="light"] .text-zinc-800,
 html[data-theme="light"] .text-black {
-  color: var(--text-primary) !important;
+  color: #0F172A !important;
 }
 
 html[data-theme="light"] .text-slate-700,
@@ -413,10 +540,10 @@ html[data-theme="light"] .text-stone-500,
 html[data-theme="light"] .text-zinc-600,
 html[data-theme="light"] .text-zinc-500,
 html[data-theme="light"] .text-zinc-400 {
-  color: var(--text-secondary) !important;
+  color: #475569 !important;
 }
 
-/* Textos de acento en Modo Claro con contraste WCAG AA sobre #FCFBF9 y #EAE8E1 */
+/* Textos de acento en Modo Claro con contraste WCAG AA */
 html[data-theme="light"] .text-emerald-500,
 html[data-theme="light"] .text-emerald-600,
 html[data-theme="light"] .text-emerald-700,
@@ -425,7 +552,7 @@ html[data-theme="light"] .text-green-600,
 html[data-theme="light"] .text-green-700,
 html[data-theme="light"] .text-teal-600,
 html[data-theme="light"] .text-teal-700 {
-  color: #065F46 !important;
+  color: #15803D !important;
 }
 
 html[data-theme="light"] .text-amber-500,
@@ -436,7 +563,7 @@ html[data-theme="light"] .text-orange-600,
 html[data-theme="light"] .text-orange-700,
 html[data-theme="light"] .text-yellow-600,
 html[data-theme="light"] .text-yellow-700 {
-  color: #92400E !important;
+  color: #B45309 !important;
 }
 
 html[data-theme="light"] .text-blue-500,
@@ -447,7 +574,7 @@ html[data-theme="light"] .text-sky-600,
 html[data-theme="light"] .text-sky-700,
 html[data-theme="light"] .text-cyan-600,
 html[data-theme="light"] .text-cyan-700 {
-  color: #1E40AF !important;
+  color: #1D4ED8 !important;
 }
 
 html[data-theme="light"] .text-purple-500,
@@ -467,10 +594,10 @@ html[data-theme="light"] .text-rose-700,
 html[data-theme="light"] .text-rose-800,
 html[data-theme="light"] .text-red-600,
 html[data-theme="light"] .text-red-700 {
-  color: #9F1239 !important;
+  color: #B91C1C !important;
 }
 
-/* Armonización de gradientes oscuros heredados hacia superficies --bg-muted / --bg-card en Modo Claro */
+/* Armonización de gradientes oscuros heredados hacia superficies limpias en Modo Claro */
 html[data-theme="light"] .from-slate-950,
 html[data-theme="light"] .from-slate-900,
 html[data-theme="light"] .from-indigo-950,
@@ -479,10 +606,10 @@ html[data-theme="light"] .from-purple-900,
 html[data-theme="light"] .from-emerald-950,
 html[data-theme="light"] .from-emerald-900,
 html[data-theme="light"] .from-blue-950 {
-  --tw-gradient-from: var(--bg-muted) !important;
-  --tw-gradient-to: var(--bg-card) !important;
+  --tw-gradient-from: #F8FAFC !important;
+  --tw-gradient-to: #FFFFFF !important;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
-  color: var(--text-primary) !important;
+  color: #0F172A !important;
 }
 
 html[data-theme="light"] .via-slate-950,
@@ -492,14 +619,14 @@ html[data-theme="light"] .via-purple-950,
 html[data-theme="light"] .via-indigo-950,
 html[data-theme="light"] .via-teal-900,
 html[data-theme="light"] .via-green-900 {
-  --tw-gradient-stops: var(--tw-gradient-from), var(--bg-muted), var(--tw-gradient-to) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), #F1F5F9, var(--tw-gradient-to) !important;
 }
 
 html[data-theme="light"] .to-slate-950,
 html[data-theme="light"] .to-slate-900,
 html[data-theme="light"] .to-purple-950,
 html[data-theme="light"] .to-indigo-950 {
-  --tw-gradient-to: var(--bg-card) !important;
+  --tw-gradient-to: #FFFFFF !important;
 }
 
 /* Hover con transparencia en Modo Claro */
@@ -518,7 +645,6 @@ html[data-theme="light"] .hover\:bg-white:hover {
    MODO OSCURO (SLATE/ZINC PROFUNDO - CERO FATIGA VISUAL, CONTRASTE WCAG AA)
    ========================================================================== */
 
-/* Tarjetas y contenedores principales en --bg-card (#151C28) */
 html[data-theme="dark"] .bg-white,
 html[data-theme="dark"] .bg-white\/90,
 html[data-theme="dark"] .bg-slate-900,
@@ -530,7 +656,6 @@ html[data-theme="dark"] .bg-slate-900\/50 {
   color: var(--text-primary) !important;
 }
 
-/* Inputs, badges, cabeceras de tabla y elementos secundarios en --bg-muted (#1E293B) */
 html[data-theme="dark"] .bg-slate-50,
 html[data-theme="dark"] .bg-slate-50\/50,
 html[data-theme="dark"] .bg-slate-50\/70,
@@ -550,7 +675,6 @@ html[data-theme="dark"] .bg-slate-800\/80 {
   color: var(--text-primary) !important;
 }
 
-/* PASO 3: En Modo Oscuro ninguna sombra en tarjetas, solo el borde --border-subtle (#2A3649) */
 html[data-theme="dark"] .shadow-sm,
 html[data-theme="dark"] .shadow,
 html[data-theme="dark"] .shadow-md,
@@ -582,7 +706,6 @@ html[data-theme="dark"] .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--border-subtle) !important;
 }
 
-/* Gradientes claros u oscuros unificados en --bg-muted / --bg-card en Modo Oscuro */
 html[data-theme="dark"] .from-emerald-50,
 html[data-theme="dark"] .from-indigo-50,
 html[data-theme="dark"] .from-purple-50,
@@ -607,7 +730,6 @@ html[data-theme="dark"] .to-slate-900 {
   --tw-gradient-to: var(--bg-card) !important;
 }
 
-/* PASO 2.2: Prohibido texto oscuro sobre fondo oscuro -> mapear a --text-primary (#F1F5F9) y --text-secondary (#94A3B8) */
 html[data-theme="dark"] .text-white,
 html[data-theme="dark"] .text-slate-100,
 html[data-theme="dark"] .text-slate-200,
@@ -642,7 +764,6 @@ html[data-theme="dark"] .text-zinc-400 {
   color: var(--text-secondary) !important;
 }
 
-/* Textos de acento en Modo Oscuro: conversión automática a tonos luminosos WCAG AA sobre fondos oscuros (#151C28 / #1E293B) */
 html[data-theme="dark"] .text-emerald-600,
 html[data-theme="dark"] .text-emerald-700,
 html[data-theme="dark"] .text-emerald-800,
@@ -713,7 +834,6 @@ html[data-theme="dark"] .text-pink-700 {
   color: #FB7185 !important;
 }
 
-/* Badges y contenedores semánticos de colores suaves adaptados a Modo Oscuro */
 html[data-theme="dark"] .bg-emerald-50,
 html[data-theme="dark"] .bg-emerald-50\/40,
 html[data-theme="dark"] .bg-emerald-50\/50,
@@ -778,7 +898,6 @@ html[data-theme="dark"] .bg-cyan-50 {
   border-color: rgba(56, 189, 248, 0.28) !important;
 }
 
-/* Todos los hovers de filas, botones y listas en Modo Oscuro usan transparencia suave */
 html[data-theme="dark"] .hover\:bg-slate-50:hover,
 html[data-theme="dark"] .hover\:bg-slate-100:hover,
 html[data-theme="dark"] .hover\:bg-slate-200:hover,
@@ -807,7 +926,7 @@ html[data-theme="dark"] .hover\:bg-rose-100:hover {
   background-color: var(--bovi-bg-hover) !important;
 }
 
-/* Botones principales de acción con fondo sólido mantienen texto blanco (#FFFFFF) en ambos modos */
+/* Botones principales de acción en Verde Esmeralda (#059669 -> hover #047857) y Tierra/Ámbar (#D97706) */
 button.bg-emerald-600,
 button.bg-emerald-700,
 button.bg-emerald-500,
@@ -819,11 +938,22 @@ button.bg-rose-600,
 button.bg-red-600,
 button.bg-amber-600 {
   color: #FFFFFF !important;
+  transition: all 0.2s ease;
 }
 
 button.bg-emerald-600,
 button.bg-emerald-500 {
-  background-color: var(--accent-primary) !important;
+  background-color: #059669 !important;
+}
+
+button.bg-emerald-600:hover,
+button.bg-emerald-500:hover {
+  background-color: #047857 !important;
+}
+
+button.bg-amber-600,
+button.bg-amber-500 {
+  background-color: #D97706 !important;
 }
 
 /* ==========================================================================
@@ -863,26 +993,32 @@ button.bg-emerald-500 {
 }
 
 /* ==========================================================================
-   BARRA DE NAVEGACIÓN INFERIOR MOBILE ERGONÓMICA
+   BARRA DE NAVEGACIÓN INFERIOR MOBILE ERGONÓMICA (VERDE BOSQUE PROFUNDO #0F291E)
    ========================================================================== */
 .bottom-mobile-nav {
-  background-color: var(--bovi-header-bg) !important;
-  border-color: var(--border-subtle) !important;
-  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(135deg, #0F291E 0%, #064E3B 60%, #0F172A 100%) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 -10px 25px -5px rgba(0, 0, 0, 0.20);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding-bottom: env(safe-area-inset-bottom, 6px);
 }
 
+.bottom-mobile-nav .btn-nav-bovi,
+.bottom-mobile-nav #btn-toggle-mas-mobile {
+  color: #CBD5E1 !important;
+}
+
+.bottom-mobile-nav .btn-nav-bovi.active,
 .bottom-mobile-nav .nav-item-active {
-  color: var(--accent-primary) !important;
-  background: rgba(16, 185, 129, 0.14);
+  color: #10B981 !important;
+  background: rgba(16, 185, 129, 0.16);
   border-radius: 12px;
 }
 
 #menu-mas-opciones-mobile {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-subtle) !important;
+  background-color: var(--bovi-bg-card) !important;
+  border-color: var(--bovi-border-strong) !important;
   box-shadow: 0 -15px 30px rgba(0, 0, 0, 0.25);
   animation: slideUpMobile 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   padding-bottom: calc(5rem + env(safe-area-inset-bottom, 12px));
@@ -904,9 +1040,9 @@ button.bg-emerald-500 {
    ========================================================================== */
 .card-animal-mobile {
   border-radius: 0.75rem;
-  border: 1px solid var(--border-subtle);
-  background-color: var(--bg-card);
-  transition: transform 0.15s ease;
+  border: 1px solid var(--bovi-border);
+  background-color: var(--bovi-bg-card);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
   touch-action: manipulation;
 }
 
@@ -917,8 +1053,8 @@ button.bg-emerald-500 {
 .autosuggest-dropdown-touch {
   max-height: 48vh !important;
   -webkit-overflow-scrolling: touch;
-  background-color: var(--bg-card) !important;
-  border: 1px solid var(--border-subtle) !important;
+  background-color: var(--bovi-bg-card) !important;
+  border: 1px solid var(--bovi-border-strong) !important;
 }
 
 .autosuggest-dropdown-touch .autosuggest-item {

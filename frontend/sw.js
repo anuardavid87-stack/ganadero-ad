@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.4.0-tokens-semanticos-wcag';
+const CACHE_NAME = 'ganadero-ad-v4.5.0-agrotech-contabilidad-nomina';
 const CORE_FILES = [
   './',
   './index.html',

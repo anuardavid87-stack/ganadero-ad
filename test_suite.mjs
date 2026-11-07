@@ -16,6 +16,7 @@ import { buscarCoincidenciasAnimales, normalizarTextoBusqueda, conectarAutosugge
 import { ImportadorExcel } from './frontend/src/components/ImportadorExcel.js';
 import { evaluarNutricionAnimal, analizarMorfologiaFotoEfimera, resolverPerfilRaza, TABLA_RAZAS_NUTRICION, calcularFrameScore, calcularCompacidadPista, evaluarDesarrolloRacial, obtenerCatalogoRazasNutricion, invocarGeminiAPI, generarDiagnosticoNutricionalGemini, probarConexionGemini, descubrirModelosGeminiDisponibles } from './frontend/src/core/nutricionIA.js';
 import { ModuloNutricion } from './frontend/src/components/ModuloNutricion.js';
+import { ModuloContabilidad, CATEGORIAS_CONTABILIDAD, calcularLiquidacionNomina, calcularResumenContableFinca } from './frontend/src/components/ModuloContabilidad.js';
 import { ExportadorBackupService } from './frontend/src/core/exportadorBackup.js';
 import { BoviTrackApp, escapeHTML } from './frontend/src/app.js';
 
@@ -7085,6 +7086,225 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
     !pestanaAnimSrc.includes('text-black') &&
     !pestanaAnimSrc.includes('opacity-50'),
     'Sistema de Tokens Semánticos WCAG AA: Variables matemáticas (#F5F4F0/#FCFBF9/#1C1917/#57534E y #0B0F17/#151C28/#F1F5F9/#94A3B8) y eliminación de grises claros/opacidades'
+  );
+
+  // =========================================================================
+  // 61. Paleta "Modern Agro-Tech" y Módulo Integral de Contabilidad y Nómina Multi-Finca
+  // =========================================================================
+  console.log('\n--- 61. Diseño Modern Agro-Tech y Módulo de Contabilidad, Costos y Nómina Multi-Finca ---');
+
+  // 61.1: Paleta Modern Agro-Tech, Tipografía Inter/Plus Jakarta Sans y Badges Semánticos Financieros
+  test(
+    stylesCssContent.includes('#F4F5F0') &&
+    stylesCssContent.includes('#FFFFFF') &&
+    stylesCssContent.includes('#0F291E') &&
+    stylesCssContent.includes('#064E3B') &&
+    stylesCssContent.includes('#059669') &&
+    stylesCssContent.includes('#047857') &&
+    stylesCssContent.includes('#D97706') &&
+    stylesCssContent.includes('#DCFCE7') &&
+    stylesCssContent.includes('#15803D') &&
+    stylesCssContent.includes('#FEF3C7') &&
+    stylesCssContent.includes('#B45309') &&
+    stylesCssContent.includes('#FEE2E2') &&
+    stylesCssContent.includes('#B91C1C') &&
+    stylesCssContent.includes('#DBEAFE') &&
+    stylesCssContent.includes('#1D4ED8') &&
+    indexHtmlContent.includes('Plus+Jakarta+Sans') &&
+    indexHtmlContent.includes('data-vista="contabilidad"'),
+    'Modern Agro-Tech UI/UX: Paleta (#F4F5F0, #FFFFFF, #0F291E, #059669/#047857, #D97706), Badges Financieros (#DCFCE7/#15803D, #FEF3C7/#B45309, #FEE2E2/#B91C1C, #DBEAFE/#1D4ED8) y tipografía Inter/Plus Jakarta Sans'
+  );
+
+  // 61.2: Categorías Agropecuarias Oficiales (Ingresos, Costos Directos y Gastos Administrativos)
+  test(
+    Array.isArray(CATEGORIAS_CONTABILIDAD.ingreso) &&
+    CATEGORIAS_CONTABILIDAD.ingreso.some(c => c.includes('Venta de ganado')) &&
+    CATEGORIAS_CONTABILIDAD.ingreso.some(c => c.includes('Venta de leche')) &&
+    Array.isArray(CATEGORIAS_CONTABILIDAD.costo_directo) &&
+    CATEGORIAS_CONTABILIDAD.costo_directo.some(c => c.includes('Sanidad y medicamentos')) &&
+    CATEGORIAS_CONTABILIDAD.costo_directo.some(c => c.includes('Suplementación')) &&
+    CATEGORIAS_CONTABILIDAD.costo_directo.some(c => c.includes('Mantenimiento de potreros')) &&
+    Array.isArray(CATEGORIAS_CONTABILIDAD.gasto_admin) &&
+    CATEGORIAS_CONTABILIDAD.gasto_admin.some(c => c.includes('Honorarios profesionales')),
+    'Categorías Agropecuarias: Define catálogo oficial para Ingresos, Costos Directos de Producción y Gastos Administrativos'
+  );
+
+  // 61.3: Cálculo de Liquidación de Nómina, Seguridad Social (EPS, AFP, ARL, Caja) y Prestaciones (Prima, Cesantías, Intereses, Vacaciones)
+  const liqMayordomo = calcularLiquidacionNomina({
+    modalidad: 'Sueldo fijo mensual',
+    valorBase: 2000000,
+    tipoPeriodo: 'Mensual',
+    diasTrabajados: 30,
+    bonificaciones: 200000,
+    descuentoPrestamos: 150000
+  });
+  const liqJornalero = calcularLiquidacionNomina({
+    modalidad: 'Jornal diario',
+    valorBase: 70000,
+    tipoPeriodo: 'Jornales',
+    diasTrabajados: 10,
+    bonificaciones: 50000,
+    descuentoPrestamos: 20000
+  });
+
+  test(
+    liqMayordomo.salarioBasePeriodo === 2000000 &&
+    liqMayordomo.netoTrabajador === 2050000 &&
+    liqMayordomo.saludEps > 0 &&
+    liqMayordomo.pensionAfp > 0 &&
+    liqMayordomo.arlRiesgo > 0 &&
+    liqMayordomo.cajaCompensacion > 0 &&
+    liqMayordomo.prima > 0 &&
+    liqMayordomo.cesantias > 0 &&
+    liqMayordomo.interesesCesantias > 0 &&
+    liqMayordomo.vacaciones > 0 &&
+    liqMayordomo.costoTotalFinca === (liqMayordomo.netoTrabajador + liqMayordomo.totalSeguridadSocial + liqMayordomo.totalPrestaciones) &&
+    liqJornalero.salarioBasePeriodo === 700000 &&
+    liqJornalero.netoTrabajador === 730000,
+    'Liquidación de Nómina y Seguridad Social: Calcula salario/jornales, bonificaciones, préstamos, EPS, AFP, ARL, Caja, Prima, Cesantías, Intereses y Vacaciones'
+  );
+
+  // 61.4: Impacto Automático de Nómina en la Contabilidad de la Finca Específica
+  const appContabTest = Object.create(BoviTrackApp.prototype);
+  appContabTest.state = {
+    empresaActivaId: 'EMP-TEST',
+    fincaActivaId: 'FIN-A',
+    fincas: [
+      { id: 'FIN-A', nombre: 'Hacienda La Esperanza', hectareas: 100, empresaId: 'EMP-TEST' },
+      { id: 'FIN-B', nombre: 'Finca El Roble', hectareas: 50, empresaId: 'EMP-TEST' }
+    ],
+    animales: [
+      { id: 'A-1', fincaId: 'FIN-A', estadoVida: 'activo' },
+      { id: 'A-2', fincaId: 'FIN-A', estadoVida: 'activo' },
+      { id: 'A-3', fincaId: 'FIN-A', estadoVida: 'activo' },
+      { id: 'A-4', fincaId: 'FIN-A', estadoVida: 'activo' },
+      { id: 'B-1', fincaId: 'FIN-B', estadoVida: 'activo' },
+      { id: 'B-2', fincaId: 'FIN-B', estadoVida: 'activo' }
+    ],
+    contabilidadMovimientos: [],
+    nominaTrabajadores: [],
+    nominaPagos: []
+  };
+  appContabTest.esUsuarioSoloConsulta = () => false;
+  appContabTest.guardarEstado = () => {};
+
+  appContabTest.guardarMovimientoContable({
+    fecha: '2026-11-01',
+    fincaId: 'FIN-A',
+    tipo: 'ingreso',
+    categoria: 'Venta de ganado (novillos, destetos, descarte)',
+    concepto: 'Venta lote 5 novillos cebados',
+    tercero: 'Frigorífico Central',
+    metodoPago: 'Transferencia Bancaria',
+    estado: 'Pagado',
+    monto: 20000000
+  });
+
+  appContabTest.guardarMovimientoContable({
+    fecha: '2026-11-02',
+    fincaId: 'FIN-A',
+    tipo: 'costo_directo',
+    categoria: 'Suplementación (sal, melaza, silo, concentrado)',
+    concepto: 'Compra sal mineralizada y melaza',
+    tercero: 'Agrocampo',
+    metodoPago: 'Transferencia Bancaria',
+    estado: 'Pagado',
+    monto: 3000000
+  });
+
+  appContabTest.guardarMovimientoContable({
+    fecha: '2026-11-03',
+    fincaId: 'FIN-B',
+    tipo: 'gasto_admin',
+    categoria: 'Honorarios profesionales',
+    concepto: 'Asesoría veterinaria y contable',
+    tercero: 'Dr. Pérez',
+    metodoPago: 'Transferencia Bancaria',
+    estado: 'Cuenta por Pagar',
+    monto: 1200000
+  });
+
+  const resPagoNomina = appContabTest.registrarPagoNominaFinca({
+    fecha: '2026-11-05',
+    periodo: 'Mensual',
+    trabajadorNombre: 'Pedro Vaquero',
+    cedula: '10203040',
+    cargo: 'Mayordomo',
+    fincaId: 'FIN-A',
+    modalidad: 'Sueldo fijo mensual',
+    netoTrabajador: 1600000,
+    totalSeguridadSocial: 400000,
+    totalPrestaciones: 300000,
+    costoTotalFinca: 2300000
+  });
+
+  test(
+    Boolean(resPagoNomina && resPagoNomina.pago && resPagoNomina.movimiento) &&
+    appContabTest.state.nominaPagos.length === 1 &&
+    appContabTest.state.contabilidadMovimientos.some(m => m.tipo === 'nomina' && m.fincaId === 'FIN-A' && m.monto === 2300000),
+    'BoviTrackApp.registrarPagoNominaFinca: Al confirmar nómina y seguridad social, genera automáticamente el egreso contable en la finca específica (FIN-A)'
+  );
+
+  // 61.5: Aislamiento Multi-Finca vs Consolidado General + Indicadores Unitarios ($/Cabeza y $/Hectárea) + P&G
+  const resumenFincaA = calcularResumenContableFinca({
+    movimientos: appContabTest.state.contabilidadMovimientos,
+    pagosNomina: appContabTest.state.nominaPagos,
+    animales: appContabTest.state.animales,
+    fincas: appContabTest.state.fincas,
+    fincaFiltroId: 'FIN-A'
+  });
+
+  const resumenConsolidado = calcularResumenContableFinca({
+    movimientos: appContabTest.state.contabilidadMovimientos,
+    pagosNomina: appContabTest.state.nominaPagos,
+    animales: appContabTest.state.animales,
+    fincas: appContabTest.state.fincas,
+    fincaFiltroId: 'ALL'
+  });
+
+  // En FIN-A: Ingresos = 20,000,000 | Costos Directos = 3,000,000 | Nómina = 2,300,000 | Total Egresos = 5,300,000
+  // Animales activos en FIN-A = 4 -> Costo por Cabeza = 5,300,000 / 4 = 1,325,000
+  // Hectáreas en FIN-A = 100 -> Costo por Hectárea = 5,300,000 / 100 = 53,000
+  test(
+    resumenFincaA.totalIngresos === 20000000 &&
+    resumenFincaA.totalCostosDirectos === 3000000 &&
+    resumenFincaA.totalGastosAdmin === 0 &&
+    resumenFincaA.totalNominaSeguridadSocial === 2300000 &&
+    resumenFincaA.utilidadNeta === 14700000 &&
+    resumenFincaA.animalesActivosCount === 4 &&
+    resumenFincaA.costoMensualPorCabeza === 1325000 &&
+    resumenFincaA.costoPorHectarea === 53000 &&
+    resumenConsolidado.totalEgresos === 6500000 &&
+    resumenConsolidado.animalesActivosCount === 6 &&
+    resumenConsolidado.hectareasTotales === 150,
+    'Dashboard Financiero y P&G: Calcula utilidad neta, aísla contabilidad por finca (FIN-A vs Consolidado General) y cruza costo por cabeza ($1.325.000) y por hectárea ($53.000)'
+  );
+
+  // 61.6: Renderizado completo de ModuloContabilidad y exportación CSV
+  const modContabUI = new ModuloContabilidad({
+    containerId: 'test-contabilidad-ui',
+    getFincas: () => appContabTest.state.fincas,
+    getFincaActiva: () => appContabTest.state.fincas[0],
+    getAnimales: () => appContabTest.state.animales,
+    getMovimientos: () => appContabTest.state.contabilidadMovimientos,
+    getTrabajadores: () => appContabTest.state.nominaTrabajadores,
+    getPagosNomina: () => appContabTest.state.nominaPagos,
+    getRol: () => 'superadmin'
+  });
+  modContabUI.container = new MockDomElement('test-contabilidad-ui');
+  modContabUI.render();
+  const htmlContabUI = modContabUI.container.innerHTML;
+  const expCsv = modContabUI.exportarDatosContables('csv');
+
+  test(
+    htmlContabUI.includes('Consolidado General (Todas las Fincas)') &&
+    htmlContabUI.includes('Estado de Resultados (P&G)') &&
+    htmlContabUI.includes('Costo Mensual por Cabeza de Ganado') &&
+    htmlContabUI.includes('Directorio de Personal por Finca') &&
+    htmlContabUI.includes('Liquidación de Nómina, Seguridad Social') &&
+    expCsv.ok === true &&
+    expCsv.filas === 4,
+    'ModuloContabilidad (UI & Exportación): Renderiza selector Multi-Finca/Consolidado, KPIs, P&G, gráficos SVG, Directorio de Personal, Liquidación de Nómina y exporta CSV/Excel'
   );
 }
 
