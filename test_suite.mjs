@@ -7308,6 +7308,99 @@ console.log('\n--- 58. Pruebas de Catálogo de Razas, Desarrollo Racial, Casilla
   );
 }
 
+// ============================================================================
+// 62. PRUEBAS DE RESILIENCIA DE SINCRONIZACIÓN EN MÓVIL (QUOTA EXCEEDED Y SESIÓN LIMPIA)
+// ============================================================================
+console.log('\n--- 62. Pruebas de Resiliencia Móvil (QuotaExceededError y Condición de Carrera Pre/Post Login) ---');
+{
+  // 62.1: persistirEstadoSeguro maneja QuotaExceededError en móvil sin abortar actualizarHeader ni mostrarVistaActiva
+  let headerActualizadoMovil = false;
+  let vistaMostradaMovil = false;
+  const origSetItem = globalThis.localStorage.setItem;
+  let llamadasSetItem = 0;
+
+  globalThis.localStorage.setItem = function(k, v) {
+    llamadasSetItem++;
+    if (llamadasSetItem === 1) {
+      const err = new Error('QuotaExceededError: The quota has been exceeded.');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    return origSetItem.call(this, k, v);
+  };
+
+  const mockAppMovil = {
+    keyStorage: 'bovitrack_test_mobile_quota',
+    sessionKey: 'bovitrack_test_mobile_session',
+    vistaActiva: 'animales',
+    state: {
+      empresaActivaId: null,
+      fincaActivaId: null,
+      empresas: [],
+      fincas: [],
+      usuarios: [{ id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin', activo: true }],
+      usuarioActual: { id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin', activo: true },
+      animales: [],
+      servicios: [],
+      pesajes: [{ id: 'PES-1', fincaId: 'FIN-1789697106872', tag: '101', peso: 420 }],
+      operacionesDiarias: [{ id: 'ACT-PES-PES-1', fincaId: 'FIN-1789697106872', accion: 'pesajes', modulo: 'pesajes' }],
+      costosFijos: {}
+    },
+    persistirEstadoSeguro: BoviTrackApp.prototype.persistirEstadoSeguro,
+    getFincasEmpresa: BoviTrackApp.prototype.getFincasEmpresa,
+    getFincaActiva: BoviTrackApp.prototype.getFincaActiva,
+    integrarDatosSupabase: BoviTrackApp.prototype.integrarDatosSupabase,
+    sincronizarConSupabaseDebounced: () => {},
+    actualizarHeader: () => { headerActualizadoMovil = true; },
+    mostrarVistaActiva: () => { vistaMostradaMovil = true; },
+    actualizarContadorAlertas: () => {},
+    refrescarVistas: () => {}
+  };
+
+  mockAppMovil.integrarDatosSupabase({
+    empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES', activa: true }],
+    fincas: [{ id: 'FIN-1789697106872', nombre: 'Vesubio', empresaId: 'EMP-01', areaHa: 250 }],
+    animales: [{ id: 'ANM-M1', fincaId: 'FIN-1789697106872', identificacionTag: '101', especie: 'bufalino', estadoVida: 'activo' }]
+  });
+
+  globalThis.localStorage.setItem = origSetItem;
+
+  test(
+    headerActualizadoMovil === true &&
+    vistaMostradaMovil === true &&
+    mockAppMovil.state.empresaActivaId === 'EMP-01' &&
+    mockAppMovil.state.fincaActivaId === 'FIN-1789697106872' &&
+    mockAppMovil.state.animales.length === 1 &&
+    llamadasSetItem >= 2,
+    'Resiliencia Móvil (QuotaExceededError & Auto-Heal): Supera límite de cuota en localStorage mediante fallback compacto, auto-asigna empresaActivaId/fincaActivaId y renderiza animales sin bloqueo'
+  );
+
+  // 62.2: Condición de carrera en sesión móvil limpia (sincronizarConSupabaseInicial durante pre-login en curso)
+  let pullPostLoginEjecutado = false;
+  const mockAppRace = {
+    online: true,
+    _syncEnCurso: true,
+    _pullInicialPendiente: false,
+    _syncPendiente: false,
+    state: {
+      usuarioActual: { id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin' }
+    },
+    supabase: {
+      estaConfigurado: () => true
+    },
+    actualizarBadgeConexion: () => {},
+    sincronizarConSupabaseInicial: BoviTrackApp.prototype.sincronizarConSupabaseInicial
+  };
+
+  await mockAppRace.sincronizarConSupabaseInicial();
+  pullPostLoginEjecutado = mockAppRace._pullInicialPendiente === true;
+
+  test(
+    pullPostLoginEjecutado === true,
+    'Sincronización Post-Login en Sesión Limpia: Encola automáticamente _pullInicialPendiente cuando el usuario inicia sesión mientras el sync pre-login sigue en curso'
+  );
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

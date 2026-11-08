@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-07T19:10:25.919Z
+ * Generado automáticamente: 2026-11-08T14:47:28.391Z
  */
 (function() {
   "use strict";
@@ -1252,8 +1252,9 @@ class SupabaseSyncService {
           );
         }
 
-        const fincasEmpresaMap = {};
-        const fincasOrdenosMap = {};
+        const prevDir = (this._ultimoDirectorioCloud && typeof this._ultimoDirectorioCloud === 'object') ? this._ultimoDirectorioCloud : {};
+        const fincasEmpresaMap = { ...(prevDir.fincasEmpresaMap || {}) };
+        const fincasOrdenosMap = { ...(prevDir.fincasOrdenosMap || {}) };
         (appState.fincas || []).forEach(f => {
           if (f && f.id) {
             if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
@@ -1262,37 +1263,53 @@ class SupabaseSyncService {
             }
           }
         });
-        const usuariosEmpresaMap = {};
+        const usuariosEmpresaMap = { ...(prevDir.usuariosEmpresaMap || {}) };
         (appState.usuarios || []).forEach(u => {
           if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
         });
-        const registroDirectorio = [{
-          id: 'SYS_DIRECTORIO_EMPRESAS',
-          empresa_id: null,
-          fecha: new Date().toISOString().split('T')[0],
-          finca_id: null,
-          finca_nombre: 'SISTEMA',
-          accion: 'SYS_DIRECTORIO_EMPRESAS',
-          modulo: 'sistema_empresas',
-          detalles: {
+
+        // Proteger el directorio global contra sobrescritura accidental desde una sesión recién abierta sin fincas cargadas
+        if (esSuperAdmin || (Array.isArray(appState.fincas) && appState.fincas.length > 0 && Object.keys(prevDir).length > 0)) {
+          const empresasDirMap = new Map();
+          if (Array.isArray(prevDir.empresas)) {
+            prevDir.empresas.forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          }
+          (appState.empresas || []).forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          const elimEmpSet = new Set(appState._empresasEliminadas || prevDir.empresasEliminadas || []);
+          const empresasFusionadas = esSuperAdmin
+            ? appState.empresas
+            : Array.from(empresasDirMap.values()).filter(e => !elimEmpSet.has(e.id));
+
+          const detallesDir = {
             _esSistemaDirectorio: true,
-            empresas: appState.empresas,
-            empresasEliminadas: appState._empresasEliminadas || [],
-            fincasEliminadas: appState._fincasEliminadas || [],
-            usuariosEliminados: appState._usuariosEliminados || [],
-            fincasPurgadas: appState._fincasPurgadas || {},
-            animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
+            empresas: empresasFusionadas,
+            empresasEliminadas: appState._empresasEliminadas || prevDir.empresasEliminadas || [],
+            fincasEliminadas: appState._fincasEliminadas || prevDir.fincasEliminadas || [],
+            usuariosEliminados: appState._usuariosEliminados || prevDir.usuariosEliminados || [],
+            fincasPurgadas: { ...(prevDir.fincasPurgadas || {}), ...(appState._fincasPurgadas || {}) },
+            animalesEliminados: (appState._animalesEliminados || prevDir.animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
             fincasOrdenosMap,
             usuariosEmpresaMap
-          },
-          usuario: 'Sistema'
-        }];
-        tareasOla1.push(
-          this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-            .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
-            .catch(() => {})
-        );
+          };
+          this._ultimoDirectorioCloud = detallesDir;
+          const registroDirectorio = [{
+            id: 'SYS_DIRECTORIO_EMPRESAS',
+            empresa_id: null,
+            fecha: new Date().toISOString().split('T')[0],
+            finca_id: null,
+            finca_nombre: 'SISTEMA',
+            accion: 'SYS_DIRECTORIO_EMPRESAS',
+            modulo: 'sistema_empresas',
+            detalles: detallesDir,
+            usuario: 'Sistema'
+          }];
+          tareasOla1.push(
+            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+              .catch(() => {})
+          );
+        }
       }
 
       // 1. Sincronizar Fincas
@@ -1588,7 +1605,7 @@ class SupabaseSyncService {
    * Aplica aislamiento multi-tenant: si el usuario no es superadmin, delimita
    * automáticamente las consultas REST a su empresa y fincas autorizadas.
    */
-  async descargarDatosDeSupabase(timeoutMs = 10000, tenantContext = null) {
+  async descargarDatosDeSupabase(timeoutMs = 15000, tenantContext = null) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
@@ -1599,6 +1616,7 @@ class SupabaseSyncService {
 
     try {
       this.estadoConexion = 'sincronizando';
+      const effectiveTimeout = Math.max(Number(timeoutMs) || 15000, 12000);
 
       const ctx = this.tenantContext;
       const esSuperAdmin = ctx && ctx.esSuperAdmin;
@@ -1621,50 +1639,26 @@ class SupabaseSyncService {
         const empIdEnc = encodeURIComponent(empId);
         if (empId === 'EMP-01') {
           qEmpresas = `id=eq.${empIdEnc}`;
-          qFincas = `empresa_id=eq.${empIdEnc}`;
-          qUsuarios = `empresa_id=eq.${empIdEnc}`;
           qTraslados = `empresa_id=eq.${empIdEnc}`;
           qOperaciones = `empresa_id=eq.${empIdEnc}`;
         }
-
-        if (fincasIds && fincasIds.length > 0) {
-          const fincasFilter = `finca_id=in.(${fincasIds.map(encodeURIComponent).join(',')})`;
-          qAnimales = fincasFilter;
-          qServicios = fincasFilter;
-          qCostos = fincasFilter;
-          qInversiones = fincasFilter;
-          qPesajes = fincasFilter;
-          qNutricion = fincasFilter;
-        }
       }
 
-      const resultados = await Promise.allSettled([
-        this._postgrestGet('empresas', timeoutMs, qEmpresas),
-        this._postgrestGet('fincas', timeoutMs, qFincas),
-        this._postgrestGet('usuarios', timeoutMs, qUsuarios),
-        this._postgrestGet('animales', timeoutMs, qAnimales),
-        this._postgrestGet('servicios_reproductivos', timeoutMs, qServicios),
-        this._postgrestGet('costos_fijos_finca', timeoutMs, qCostos),
-        this._postgrestGet('inversiones_diferidas', timeoutMs, qInversiones),
-        this._postgrestGet('traslados_animales', timeoutMs, qTraslados),
-        this._postgrestGet('operaciones_diarias', timeoutMs, qOperaciones),
-        this._postgrestGet('pesajes_animales', timeoutMs, qPesajes),
-        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion),
-        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
+      // ======================================================================
+      // FASE 1: ESTRUCTURA MAESTRA Y DIRECTORIO MULTI-TENANT
+      // Se descarga primero para resolver fincasIds incluso en dispositivos móviles limpios
+      // ======================================================================
+      const resultadosFase1 = await Promise.allSettled([
+        this._postgrestGet('empresas', effectiveTimeout, qEmpresas),
+        this._postgrestGet('fincas', effectiveTimeout, qFincas),
+        this._postgrestGet('usuarios', effectiveTimeout, qUsuarios),
+        this._postgrestGet('operaciones_diarias', effectiveTimeout, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
-      const empresasRes = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
-      const fincasRes = resultados[1].status === 'fulfilled' ? resultados[1].value : [];
-      const usuariosRes = resultados[2].status === 'fulfilled' ? resultados[2].value : [];
-      const animalesRes = resultados[3].status === 'fulfilled' ? resultados[3].value : [];
-      const serviciosRes = resultados[4].status === 'fulfilled' ? resultados[4].value : [];
-      const costosRes = resultados[5].status === 'fulfilled' ? resultados[5].value : [];
-      const inversionesRes = resultados[6].status === 'fulfilled' ? resultados[6].value : [];
-      const trasladosRes = resultados[7].status === 'fulfilled' ? resultados[7].value : [];
-      const operacionesRes = resultados[8].status === 'fulfilled' ? resultados[8].value : [];
-      const pesajesRes = resultados[9].status === 'fulfilled' ? resultados[9].value : [];
-      const nutricionRes = resultados[10].status === 'fulfilled' ? resultados[10].value : [];
-      const dirExplicitoRes = resultados[11] && resultados[11].status === 'fulfilled' ? resultados[11].value : [];
+      const empresasRes = resultadosFase1[0].status === 'fulfilled' ? resultadosFase1[0].value : [];
+      const fincasRes = resultadosFase1[1].status === 'fulfilled' ? resultadosFase1[1].value : [];
+      const usuariosRes = resultadosFase1[2].status === 'fulfilled' ? resultadosFase1[2].value : [];
+      const dirExplicitoRes = resultadosFase1[3].status === 'fulfilled' ? resultadosFase1[3].value : [];
 
       const empresas = (empresasRes || []).map(r => this.mapearEmpresaCloudALocal(r));
       let fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
@@ -1686,11 +1680,11 @@ class SupabaseSyncService {
       let fincasPurgadasCloud = {};
       let animalesEliminadosCloud = [];
 
-      // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
-      const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
-        (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      // Integrar directorio espejo de empresas desde SYS_DIRECTORIO_EMPRESAS
+      const regDir = Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null;
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
+        this._ultimoDirectorioCloud = det;
         empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
         fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
         fincasPurgadasCloud = (det.fincasPurgadas && typeof det.fincasPurgadas === 'object') ? det.fincasPurgadas : {};
@@ -1746,7 +1740,52 @@ class SupabaseSyncService {
       if (!esSuperAdmin && empId) {
         fincas = fincas.filter(f => f.empresaId === empId);
         usuarios = usuarios.filter(u => u.rol === 'superadmin' || u.empresaId === empId);
+
+        const fincasIdsEfectivas = (fincasIds && fincasIds.length > 0)
+          ? fincasIds
+          : fincas.map(f => f && f.id).filter(Boolean);
+
+        if (fincasIdsEfectivas.length > 0) {
+          const fincasFilter = `finca_id=in.(${fincasIdsEfectivas.map(encodeURIComponent).join(',')})`;
+          qAnimales = fincasFilter;
+          qServicios = fincasFilter;
+          qCostos = fincasFilter;
+          qInversiones = fincasFilter;
+          qPesajes = fincasFilter;
+          qNutricion = fincasFilter;
+        }
       }
+
+      // ======================================================================
+      // FASE 2A: INVENTARIO DE ANIMALES Y CONFIGURACIONES DE FINCA (Prioridad Alta)
+      // Se ejecuta antes del histórico pesado para no saturar redes móviles
+      // ======================================================================
+      const resultadosFase2A = await Promise.allSettled([
+        this._postgrestGet('animales', effectiveTimeout, qAnimales),
+        this._postgrestGet('servicios_reproductivos', effectiveTimeout, qServicios),
+        this._postgrestGet('costos_fijos_finca', effectiveTimeout, qCostos),
+        this._postgrestGet('inversiones_diferidas', effectiveTimeout, qInversiones),
+        this._postgrestGet('traslados_animales', effectiveTimeout, qTraslados),
+        this._postgrestGet('nutricion_animales', effectiveTimeout, qNutricion)
+      ]);
+
+      const animalesRes = resultadosFase2A[0].status === 'fulfilled' ? resultadosFase2A[0].value : [];
+      const serviciosRes = resultadosFase2A[1].status === 'fulfilled' ? resultadosFase2A[1].value : [];
+      const costosRes = resultadosFase2A[2].status === 'fulfilled' ? resultadosFase2A[2].value : [];
+      const inversionesRes = resultadosFase2A[3].status === 'fulfilled' ? resultadosFase2A[3].value : [];
+      const trasladosRes = resultadosFase2A[4].status === 'fulfilled' ? resultadosFase2A[4].value : [];
+      const nutricionRes = resultadosFase2A[5].status === 'fulfilled' ? resultadosFase2A[5].value : [];
+
+      // ======================================================================
+      // FASE 2B: HISTÓRICO DE PESAJES Y BITÁCORA DE OPERACIONES
+      // ======================================================================
+      const resultadosFase2B = await Promise.allSettled([
+        this._postgrestGet('pesajes_animales', effectiveTimeout, qPesajes),
+        this._postgrestGet('operaciones_diarias', effectiveTimeout, qOperaciones)
+      ]);
+
+      const pesajesRes = resultadosFase2B[0].status === 'fulfilled' ? resultadosFase2B[0].value : [];
+      const operacionesRes = resultadosFase2B[1].status === 'fulfilled' ? resultadosFase2B[1].value : [];
 
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
@@ -1962,6 +2001,7 @@ class SupabaseSyncService {
       const regDir = (dirData || [])[0];
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
+        this._ultimoDirectorioCloud = det;
         const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
@@ -25174,10 +25214,12 @@ class BoviTrackApp {
     this.initTheme();
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
-    this.online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    this.online = (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') ? navigator.onLine : true;
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
+    this._pullInicialPendiente = false;
+    this._descargaCompletaRealizada = Array.isArray(this.state?.fincas) && this.state.fincas.length > 0;
     this._tokenSesion = null;
 
     if (this.state && this.state.globalGeminiApiKey && typeof localStorage !== 'undefined') {
@@ -25215,22 +25257,79 @@ class BoviTrackApp {
     this.verificarAutenticacion();
   }
 
+  persistirEstadoSeguro(estadoOpcional = null) {
+    const targetState = estadoOpcional || this.state;
+    if (!targetState || typeof localStorage === 'undefined') return false;
+
+    try {
+      // Compactar bitácora redundante de pesajes (ACT-PES-...) que ya existe en targetState.pesajes
+      // para evitar superar el límite de 5MB UTF-16 de localStorage en navegadores móviles (iOS Safari / Android Chrome)
+      let opsParaStorage = targetState.operacionesDiarias;
+      if (Array.isArray(opsParaStorage) && opsParaStorage.length > 400 && Array.isArray(targetState.pesajes) && targetState.pesajes.length > 0) {
+        const pesajesIds = new Set(targetState.pesajes.map((p) => p && p.id).filter(Boolean));
+        opsParaStorage = opsParaStorage.filter((op) => {
+          if (!op) return false;
+          const idStr = String(op.id || '');
+          if (idStr.startsWith('SYS_') || op.accion === 'SYS_DIRECTORIO_EMPRESAS') return true;
+          if (idStr.startsWith('ACT-PES-') && pesajesIds.has(idStr.slice(4))) return false;
+          return true;
+        });
+      }
+
+      const snapshot = opsParaStorage !== targetState.operacionesDiarias
+        ? { ...targetState, operacionesDiarias: opsParaStorage }
+        : targetState;
+
+      localStorage.setItem(this.keyStorage, JSON.stringify(snapshot));
+      return true;
+    } catch (err) {
+      // Fallback progresivo ante QuotaExceededError en dispositivos móviles con memoria restringida
+      try {
+        const opsCriticas = (targetState.operacionesDiarias || []).filter((op) => {
+          if (!op) return false;
+          const idStr = String(op.id || '');
+          if (idStr.startsWith('SYS_') || op.accion === 'SYS_DIRECTORIO_EMPRESAS') return true;
+          return op.modulo !== 'pesajes' && op.accion !== 'pesajes';
+        }).slice(0, 400);
+        const pesajesRecientes = (targetState.pesajes || []).slice(-600);
+        const snapshotReducido = {
+          ...targetState,
+          operacionesDiarias: opsCriticas,
+          pesajes: pesajesRecientes
+        };
+        localStorage.setItem(this.keyStorage, JSON.stringify(snapshotReducido));
+        return true;
+      } catch (_err2) {
+        try {
+          const snapshotEsencial = {
+            ...targetState,
+            operacionesDiarias: (targetState.operacionesDiarias || []).filter((op) => op && String(op.id || '').startsWith('SYS_')),
+            pesajes: []
+          };
+          localStorage.setItem(this.keyStorage, JSON.stringify(snapshotEsencial));
+          return true;
+        } catch (_err3) {
+          console.warn('[BoviTrack] Límite de almacenamiento local alcanzado en dispositivo móvil:', err?.message || err);
+          return false;
+        }
+      }
+    }
+  }
+
   cargarEstado() {
     const raw = localStorage.getItem(this.keyStorage);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         this.migrarEstadoMultiTenant(parsed);
-        localStorage.setItem(this.keyStorage, JSON.stringify(parsed));
+        this.persistirEstadoSeguro(parsed);
         return parsed;
       } catch (e) {
         console.warn('Error leyendo almacenamiento, usando datos iniciales nuevos:', e);
       }
     }
     const inicial = this.generarDatosIniciales();
-    try {
-      localStorage.setItem(this.keyStorage, JSON.stringify(inicial));
-    } catch (e) {}
+    this.persistirEstadoSeguro(inicial);
     return inicial;
   }
 
@@ -25503,8 +25602,8 @@ class BoviTrackApp {
   }
 
   guardarEstado() {
+    this.persistirEstadoSeguro();
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
       // Mantener sincronizada la empresaActivaId dentro de la sesión autenticada
       // para que una recarga de página nunca revierta a una empresa anterior
       if (this.state && this.state.usuarioActual && this.state.empresaActivaId) {
@@ -25535,6 +25634,16 @@ class BoviTrackApp {
   async _ejecutarSyncCola() {
     if (!this.online || !this.supabase || !this.supabase.estaConfigurado()) return;
 
+    // Si es una sesión recién iniciada sin fincas ni animales descargados aún,
+    // priorizar la descarga inicial antes de intentar subir un estado vacío
+    if (this.state?.usuarioActual && !this._descargaCompletaRealizada &&
+        (!Array.isArray(this.state.fincas) || this.state.fincas.length === 0) &&
+        (!Array.isArray(this.state.animales) || this.state.animales.length === 0)) {
+      this._syncPendiente = true;
+      this.sincronizarConSupabaseInicial();
+      return;
+    }
+
     if (this._syncEnCurso) {
       this._syncPendiente = true;
       return;
@@ -25557,7 +25666,10 @@ class BoviTrackApp {
       this.actualizarBadgeConexion('error');
     } finally {
       this._syncEnCurso = false;
-      if (this._syncPendiente) {
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        this.sincronizarConSupabaseInicial();
+      } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
       }
@@ -25655,6 +25767,20 @@ class BoviTrackApp {
       if (empCambiaron && (nuevasEmpresas.length > 0 || actualesEmp.length === 0)) {
         this.state.empresas = nuevasEmpresas;
         huboCambios = true;
+      }
+      if (Array.isArray(this.state.empresas) && this.state.empresas.length > 0) {
+        const empActivaValida = this.state.empresaActivaId &&
+          this.state.empresaActivaId !== 'todas' &&
+          this.state.empresas.some((e) => e && e.id === this.state.empresaActivaId);
+        if (!empActivaValida) {
+          const usr = this.state.usuarioActual;
+          if (usr && usr.rol !== 'superadmin' && usr.empresaId && this.state.empresas.some((e) => e && e.id === usr.empresaId)) {
+            this.state.empresaActivaId = usr.empresaId;
+          } else {
+            this.state.empresaActivaId = this.state.empresas[0].id;
+          }
+          huboCambios = true;
+        }
       }
       if (hayEmpresasLocalesPendientes) {
         this.sincronizarConSupabaseDebounced(500);
@@ -26053,13 +26179,23 @@ class BoviTrackApp {
       }
     }
 
-    if (huboCambios) {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
+    // Garantizar que si existen fincas cargadas para la empresa activa, siempre haya una fincaActivaId seleccionada
+    if (Array.isArray(this.state.fincas) && this.state.fincas.length > 0 && this.state.usuarioActual) {
+      const fPermitidas = this.getFincasEmpresa();
+      if (fPermitidas.length > 0 && (!this.state.fincaActivaId || !fPermitidas.some((f) => f && f.id === this.state.fincaActivaId))) {
+        this.state.fincaActivaId = fPermitidas[0].id;
+        huboCambios = true;
       }
+    }
+
+    if (huboCambios) {
+      this.persistirEstadoSeguro();
       this.actualizarHeader();
       if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
         this.compCuadricula.cargarFilasDesdeInventario();
+      }
+      if (typeof this.refrescarVistas === 'function') {
+        this.refrescarVistas();
       }
 
       // Si el usuario está escribiendo activamente o tiene una previsualización de Excel abierta, evitar interrumpirlo
@@ -26077,26 +26213,42 @@ class BoviTrackApp {
   }
 
   async sincronizarConSupabaseInicial() {
-    if (!this.online || !this.supabase || !this.supabase.estaConfigurado() || this._syncEnCurso) {
+    if (!this.supabase || !this.supabase.estaConfigurado()) {
+      this.actualizarBadgeConexion();
+      return;
+    }
+
+    if (this._syncEnCurso) {
+      // Si ya hay un sync en curso (ej. el pre-login de directorio) y el usuario acaba de iniciar sesión,
+      // dejar encolada la descarga completa post-login para ejecutarse inmediatamente al finalizar
+      if (this.state?.usuarioActual) {
+        this._pullInicialPendiente = true;
+      }
       this.actualizarBadgeConexion();
       return;
     }
 
     this._syncEnCurso = true;
+    const inicioSinSesion = !this.state?.usuarioActual;
     try {
       this.actualizarBadgeConexion('descargando');
 
       // Blindaje Multi-Tenant: Si no hay usuario autenticado, solo sincronizar el directorio
       // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
-      if (!this.state.usuarioActual) {
+      if (inicioSinSesion) {
         if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
           const resPre = await this.supabase.descargarDirectorioPreLogin(8000);
           if (resPre && resPre.ok && resPre.datos) {
+            this.online = true;
             this.integrarDatosSupabase(resPre.datos);
             this.actualizarBadgeConexion('sincronizado');
           } else {
             this.actualizarBadgeConexion();
           }
+        }
+        // Si durante la espera de pre-login el usuario autenticó su sesión, disparar de inmediato la descarga completa
+        if (this.state?.usuarioActual) {
+          this._pullInicialPendiente = true;
         }
         return;
       }
@@ -26111,11 +26263,22 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
+        this.online = true;
+        this._descargaCompletaRealizada = true;
         this.integrarDatosSupabase(res.datos);
+        this.getFincaActiva();
+        this.persistirEstadoSeguro();
         this.actualizarHeader();
+        if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+          this.compCuadricula.cargarFilasDesdeInventario();
+        }
+        if (typeof this.refrescarVistas === 'function') {
+          this.refrescarVistas();
+        }
         this.mostrarVistaActiva();
+        this.actualizarContadorAlertas();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         this.actualizarBadgeConexion();
@@ -26126,7 +26289,10 @@ class BoviTrackApp {
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
-      if (this._syncPendiente) {
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+      } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
       }
@@ -26152,8 +26318,9 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
+        this._descargaCompletaRealizada = true;
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
           this.actualizarBadgeConexion('sincronizado');
@@ -26169,6 +26336,10 @@ class BoviTrackApp {
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+      }
     }
   }
 
@@ -26346,7 +26517,16 @@ class BoviTrackApp {
     }
 
     if (sesion && sesion.usuarioId) {
-      const user = (this.state.usuarios || []).find((u) => u.id === sesion.usuarioId || u.usuario === sesion.usuarioId);
+      let user = (this.state.usuarios || []).find((u) =>
+        u.id === sesion.usuarioId ||
+        u.usuario === sesion.usuarioId ||
+        (sesion.usuarioLogin && u.usuario === sesion.usuarioLogin)
+      );
+      if (!user && sesion.usuarioSnapshot && sesion.usuarioSnapshot.usuario) {
+        user = sesion.usuarioSnapshot;
+        if (!Array.isArray(this.state.usuarios)) this.state.usuarios = [];
+        this.state.usuarios.push(user);
+      }
       if (user && user.activo !== false) {
         // Si no es superadmin, verificar que la empresa activa no haya vencido
         if (user.rol !== 'superadmin') {
@@ -26572,7 +26752,7 @@ class BoviTrackApp {
         };
         if (!Array.isArray(this.state.usuarios)) this.state.usuarios = [];
         this.state.usuarios.unshift(user);
-        this.guardarEstado();
+        if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
       } else {
         user.usuario = 'anuardavid';
         user.rol = 'superadmin';
@@ -26582,6 +26762,31 @@ class BoviTrackApp {
     }
 
     if (!user) {
+      if (this.supabase && typeof this.supabase.descargarDirectorioPreLogin === 'function' && !this._reintentoLoginCloud) {
+        this._reintentoLoginCloud = true;
+        this.supabase.descargarDirectorioPreLogin(8000).then((resPre) => {
+          this._reintentoLoginCloud = false;
+          if (resPre && resPre.ok && resPre.datos) {
+            if (typeof this.integrarDatosSupabase === 'function') {
+              this.integrarDatosSupabase(resPre.datos);
+            }
+            const userRetry = (this.state.usuarios || []).find((u) => {
+              const uNom = this.normalizarTexto(u.usuario).replace(/\s+/g, '');
+              const uEmail = (u.email || '').trim().toLowerCase();
+              return uNom === usrClean || uEmail === usrClean || (u.usuario && u.usuario.toLowerCase() === usrRaw.toLowerCase());
+            });
+            if (userRetry) {
+              this.ejecutarLogin({ empresaTexto, empresaId, usuario, password });
+              return;
+            }
+          }
+          mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
+        }).catch(() => {
+          this._reintentoLoginCloud = false;
+          mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
+        });
+        return;
+      }
       mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
       return;
     }
@@ -26653,12 +26858,12 @@ class BoviTrackApp {
 
         if (!user.empresaId) {
           user.empresaId = empresaIngresada.id;
-          this.guardarEstado();
+          if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
         }
 
         this.state.empresaActivaId = empresaIngresada.id;
       } else {
-        this.state.empresaActivaId = this.state.empresaActivaId || null;
+        this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId || null;
       }
     }
 
@@ -26676,13 +26881,24 @@ class BoviTrackApp {
     }
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.sessionKey, JSON.stringify({
-        usuarioId: user.id,
-        usuarioLogin: user.usuario,
-        empresaId: this.state.empresaActivaId,
-        token: this._tokenSesion,
-        fecha: new Date().toISOString()
-      }));
+      try {
+        localStorage.setItem(this.sessionKey, JSON.stringify({
+          usuarioId: user.id,
+          usuarioLogin: user.usuario,
+          empresaId: this.state.empresaActivaId,
+          token: this._tokenSesion,
+          fecha: new Date().toISOString(),
+          usuarioSnapshot: {
+            id: user.id,
+            usuario: user.usuario,
+            nombre: user.nombre,
+            rol: user.rol,
+            empresaId: user.empresaId || null,
+            fincasAsignadas: user.fincasAsignadas || 'todas',
+            activo: user.activo !== false
+          }
+        }));
+      } catch (_) {}
     }
 
     if (errBox) errBox.classList.add('hidden');

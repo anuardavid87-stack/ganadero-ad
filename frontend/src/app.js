@@ -41,10 +41,12 @@ class BoviTrackApp {
     this.initTheme();
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
-    this.online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    this.online = (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') ? navigator.onLine : true;
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
+    this._pullInicialPendiente = false;
+    this._descargaCompletaRealizada = Array.isArray(this.state?.fincas) && this.state.fincas.length > 0;
     this._tokenSesion = null;
 
     if (this.state && this.state.globalGeminiApiKey && typeof localStorage !== 'undefined') {
@@ -82,22 +84,79 @@ class BoviTrackApp {
     this.verificarAutenticacion();
   }
 
+  persistirEstadoSeguro(estadoOpcional = null) {
+    const targetState = estadoOpcional || this.state;
+    if (!targetState || typeof localStorage === 'undefined') return false;
+
+    try {
+      // Compactar bitácora redundante de pesajes (ACT-PES-...) que ya existe en targetState.pesajes
+      // para evitar superar el límite de 5MB UTF-16 de localStorage en navegadores móviles (iOS Safari / Android Chrome)
+      let opsParaStorage = targetState.operacionesDiarias;
+      if (Array.isArray(opsParaStorage) && opsParaStorage.length > 400 && Array.isArray(targetState.pesajes) && targetState.pesajes.length > 0) {
+        const pesajesIds = new Set(targetState.pesajes.map((p) => p && p.id).filter(Boolean));
+        opsParaStorage = opsParaStorage.filter((op) => {
+          if (!op) return false;
+          const idStr = String(op.id || '');
+          if (idStr.startsWith('SYS_') || op.accion === 'SYS_DIRECTORIO_EMPRESAS') return true;
+          if (idStr.startsWith('ACT-PES-') && pesajesIds.has(idStr.slice(4))) return false;
+          return true;
+        });
+      }
+
+      const snapshot = opsParaStorage !== targetState.operacionesDiarias
+        ? { ...targetState, operacionesDiarias: opsParaStorage }
+        : targetState;
+
+      localStorage.setItem(this.keyStorage, JSON.stringify(snapshot));
+      return true;
+    } catch (err) {
+      // Fallback progresivo ante QuotaExceededError en dispositivos móviles con memoria restringida
+      try {
+        const opsCriticas = (targetState.operacionesDiarias || []).filter((op) => {
+          if (!op) return false;
+          const idStr = String(op.id || '');
+          if (idStr.startsWith('SYS_') || op.accion === 'SYS_DIRECTORIO_EMPRESAS') return true;
+          return op.modulo !== 'pesajes' && op.accion !== 'pesajes';
+        }).slice(0, 400);
+        const pesajesRecientes = (targetState.pesajes || []).slice(-600);
+        const snapshotReducido = {
+          ...targetState,
+          operacionesDiarias: opsCriticas,
+          pesajes: pesajesRecientes
+        };
+        localStorage.setItem(this.keyStorage, JSON.stringify(snapshotReducido));
+        return true;
+      } catch (_err2) {
+        try {
+          const snapshotEsencial = {
+            ...targetState,
+            operacionesDiarias: (targetState.operacionesDiarias || []).filter((op) => op && String(op.id || '').startsWith('SYS_')),
+            pesajes: []
+          };
+          localStorage.setItem(this.keyStorage, JSON.stringify(snapshotEsencial));
+          return true;
+        } catch (_err3) {
+          console.warn('[BoviTrack] Límite de almacenamiento local alcanzado en dispositivo móvil:', err?.message || err);
+          return false;
+        }
+      }
+    }
+  }
+
   cargarEstado() {
     const raw = localStorage.getItem(this.keyStorage);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         this.migrarEstadoMultiTenant(parsed);
-        localStorage.setItem(this.keyStorage, JSON.stringify(parsed));
+        this.persistirEstadoSeguro(parsed);
         return parsed;
       } catch (e) {
         console.warn('Error leyendo almacenamiento, usando datos iniciales nuevos:', e);
       }
     }
     const inicial = this.generarDatosIniciales();
-    try {
-      localStorage.setItem(this.keyStorage, JSON.stringify(inicial));
-    } catch (e) {}
+    this.persistirEstadoSeguro(inicial);
     return inicial;
   }
 
@@ -370,8 +429,8 @@ class BoviTrackApp {
   }
 
   guardarEstado() {
+    this.persistirEstadoSeguro();
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
       // Mantener sincronizada la empresaActivaId dentro de la sesión autenticada
       // para que una recarga de página nunca revierta a una empresa anterior
       if (this.state && this.state.usuarioActual && this.state.empresaActivaId) {
@@ -402,6 +461,16 @@ class BoviTrackApp {
   async _ejecutarSyncCola() {
     if (!this.online || !this.supabase || !this.supabase.estaConfigurado()) return;
 
+    // Si es una sesión recién iniciada sin fincas ni animales descargados aún,
+    // priorizar la descarga inicial antes de intentar subir un estado vacío
+    if (this.state?.usuarioActual && !this._descargaCompletaRealizada &&
+        (!Array.isArray(this.state.fincas) || this.state.fincas.length === 0) &&
+        (!Array.isArray(this.state.animales) || this.state.animales.length === 0)) {
+      this._syncPendiente = true;
+      this.sincronizarConSupabaseInicial();
+      return;
+    }
+
     if (this._syncEnCurso) {
       this._syncPendiente = true;
       return;
@@ -424,7 +493,10 @@ class BoviTrackApp {
       this.actualizarBadgeConexion('error');
     } finally {
       this._syncEnCurso = false;
-      if (this._syncPendiente) {
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        this.sincronizarConSupabaseInicial();
+      } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
       }
@@ -522,6 +594,20 @@ class BoviTrackApp {
       if (empCambiaron && (nuevasEmpresas.length > 0 || actualesEmp.length === 0)) {
         this.state.empresas = nuevasEmpresas;
         huboCambios = true;
+      }
+      if (Array.isArray(this.state.empresas) && this.state.empresas.length > 0) {
+        const empActivaValida = this.state.empresaActivaId &&
+          this.state.empresaActivaId !== 'todas' &&
+          this.state.empresas.some((e) => e && e.id === this.state.empresaActivaId);
+        if (!empActivaValida) {
+          const usr = this.state.usuarioActual;
+          if (usr && usr.rol !== 'superadmin' && usr.empresaId && this.state.empresas.some((e) => e && e.id === usr.empresaId)) {
+            this.state.empresaActivaId = usr.empresaId;
+          } else {
+            this.state.empresaActivaId = this.state.empresas[0].id;
+          }
+          huboCambios = true;
+        }
       }
       if (hayEmpresasLocalesPendientes) {
         this.sincronizarConSupabaseDebounced(500);
@@ -920,13 +1006,23 @@ class BoviTrackApp {
       }
     }
 
-    if (huboCambios) {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(this.keyStorage, JSON.stringify(this.state));
+    // Garantizar que si existen fincas cargadas para la empresa activa, siempre haya una fincaActivaId seleccionada
+    if (Array.isArray(this.state.fincas) && this.state.fincas.length > 0 && this.state.usuarioActual) {
+      const fPermitidas = this.getFincasEmpresa();
+      if (fPermitidas.length > 0 && (!this.state.fincaActivaId || !fPermitidas.some((f) => f && f.id === this.state.fincaActivaId))) {
+        this.state.fincaActivaId = fPermitidas[0].id;
+        huboCambios = true;
       }
+    }
+
+    if (huboCambios) {
+      this.persistirEstadoSeguro();
       this.actualizarHeader();
       if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
         this.compCuadricula.cargarFilasDesdeInventario();
+      }
+      if (typeof this.refrescarVistas === 'function') {
+        this.refrescarVistas();
       }
 
       // Si el usuario está escribiendo activamente o tiene una previsualización de Excel abierta, evitar interrumpirlo
@@ -944,26 +1040,42 @@ class BoviTrackApp {
   }
 
   async sincronizarConSupabaseInicial() {
-    if (!this.online || !this.supabase || !this.supabase.estaConfigurado() || this._syncEnCurso) {
+    if (!this.supabase || !this.supabase.estaConfigurado()) {
+      this.actualizarBadgeConexion();
+      return;
+    }
+
+    if (this._syncEnCurso) {
+      // Si ya hay un sync en curso (ej. el pre-login de directorio) y el usuario acaba de iniciar sesión,
+      // dejar encolada la descarga completa post-login para ejecutarse inmediatamente al finalizar
+      if (this.state?.usuarioActual) {
+        this._pullInicialPendiente = true;
+      }
       this.actualizarBadgeConexion();
       return;
     }
 
     this._syncEnCurso = true;
+    const inicioSinSesion = !this.state?.usuarioActual;
     try {
       this.actualizarBadgeConexion('descargando');
 
       // Blindaje Multi-Tenant: Si no hay usuario autenticado, solo sincronizar el directorio
       // seguro de acceso (empresas y usuarios activos), impidiendo Cross-Tenant Data Leakage
-      if (!this.state.usuarioActual) {
+      if (inicioSinSesion) {
         if (typeof this.supabase.descargarDirectorioPreLogin === 'function') {
           const resPre = await this.supabase.descargarDirectorioPreLogin(8000);
           if (resPre && resPre.ok && resPre.datos) {
+            this.online = true;
             this.integrarDatosSupabase(resPre.datos);
             this.actualizarBadgeConexion('sincronizado');
           } else {
             this.actualizarBadgeConexion();
           }
+        }
+        // Si durante la espera de pre-login el usuario autenticó su sesión, disparar de inmediato la descarga completa
+        if (this.state?.usuarioActual) {
+          this._pullInicialPendiente = true;
         }
         return;
       }
@@ -978,11 +1090,22 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
+        this.online = true;
+        this._descargaCompletaRealizada = true;
         this.integrarDatosSupabase(res.datos);
+        this.getFincaActiva();
+        this.persistirEstadoSeguro();
         this.actualizarHeader();
+        if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+          this.compCuadricula.cargarFilasDesdeInventario();
+        }
+        if (typeof this.refrescarVistas === 'function') {
+          this.refrescarVistas();
+        }
         this.mostrarVistaActiva();
+        this.actualizarContadorAlertas();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         this.actualizarBadgeConexion();
@@ -993,7 +1116,10 @@ class BoviTrackApp {
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
-      if (this._syncPendiente) {
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+      } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
       }
@@ -1019,8 +1145,9 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(12000, tenantContext);
+      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
+        this._descargaCompletaRealizada = true;
         const cambios = this.integrarDatosSupabase(res.datos);
         if (cambios) {
           this.actualizarBadgeConexion('sincronizado');
@@ -1036,6 +1163,10 @@ class BoviTrackApp {
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
+      if (this._pullInicialPendiente && this.state?.usuarioActual) {
+        this._pullInicialPendiente = false;
+        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+      }
     }
   }
 
@@ -1213,7 +1344,16 @@ class BoviTrackApp {
     }
 
     if (sesion && sesion.usuarioId) {
-      const user = (this.state.usuarios || []).find((u) => u.id === sesion.usuarioId || u.usuario === sesion.usuarioId);
+      let user = (this.state.usuarios || []).find((u) =>
+        u.id === sesion.usuarioId ||
+        u.usuario === sesion.usuarioId ||
+        (sesion.usuarioLogin && u.usuario === sesion.usuarioLogin)
+      );
+      if (!user && sesion.usuarioSnapshot && sesion.usuarioSnapshot.usuario) {
+        user = sesion.usuarioSnapshot;
+        if (!Array.isArray(this.state.usuarios)) this.state.usuarios = [];
+        this.state.usuarios.push(user);
+      }
       if (user && user.activo !== false) {
         // Si no es superadmin, verificar que la empresa activa no haya vencido
         if (user.rol !== 'superadmin') {
@@ -1439,7 +1579,7 @@ class BoviTrackApp {
         };
         if (!Array.isArray(this.state.usuarios)) this.state.usuarios = [];
         this.state.usuarios.unshift(user);
-        this.guardarEstado();
+        if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
       } else {
         user.usuario = 'anuardavid';
         user.rol = 'superadmin';
@@ -1449,6 +1589,31 @@ class BoviTrackApp {
     }
 
     if (!user) {
+      if (this.supabase && typeof this.supabase.descargarDirectorioPreLogin === 'function' && !this._reintentoLoginCloud) {
+        this._reintentoLoginCloud = true;
+        this.supabase.descargarDirectorioPreLogin(8000).then((resPre) => {
+          this._reintentoLoginCloud = false;
+          if (resPre && resPre.ok && resPre.datos) {
+            if (typeof this.integrarDatosSupabase === 'function') {
+              this.integrarDatosSupabase(resPre.datos);
+            }
+            const userRetry = (this.state.usuarios || []).find((u) => {
+              const uNom = this.normalizarTexto(u.usuario).replace(/\s+/g, '');
+              const uEmail = (u.email || '').trim().toLowerCase();
+              return uNom === usrClean || uEmail === usrClean || (u.usuario && u.usuario.toLowerCase() === usrRaw.toLowerCase());
+            });
+            if (userRetry) {
+              this.ejecutarLogin({ empresaTexto, empresaId, usuario, password });
+              return;
+            }
+          }
+          mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
+        }).catch(() => {
+          this._reintentoLoginCloud = false;
+          mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
+        });
+        return;
+      }
       mostrarError(`El usuario "@${usrRaw}" no existe en el sistema. Verifica haberlo escrito correctamente.`);
       return;
     }
@@ -1520,12 +1685,12 @@ class BoviTrackApp {
 
         if (!user.empresaId) {
           user.empresaId = empresaIngresada.id;
-          this.guardarEstado();
+          if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
         }
 
         this.state.empresaActivaId = empresaIngresada.id;
       } else {
-        this.state.empresaActivaId = this.state.empresaActivaId || null;
+        this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId || null;
       }
     }
 
@@ -1543,13 +1708,24 @@ class BoviTrackApp {
     }
 
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.sessionKey, JSON.stringify({
-        usuarioId: user.id,
-        usuarioLogin: user.usuario,
-        empresaId: this.state.empresaActivaId,
-        token: this._tokenSesion,
-        fecha: new Date().toISOString()
-      }));
+      try {
+        localStorage.setItem(this.sessionKey, JSON.stringify({
+          usuarioId: user.id,
+          usuarioLogin: user.usuario,
+          empresaId: this.state.empresaActivaId,
+          token: this._tokenSesion,
+          fecha: new Date().toISOString(),
+          usuarioSnapshot: {
+            id: user.id,
+            usuario: user.usuario,
+            nombre: user.nombre,
+            rol: user.rol,
+            empresaId: user.empresaId || null,
+            fincasAsignadas: user.fincasAsignadas || 'todas',
+            activo: user.activo !== false
+          }
+        }));
+      } catch (_) {}
     }
 
     if (errBox) errBox.classList.add('hidden');

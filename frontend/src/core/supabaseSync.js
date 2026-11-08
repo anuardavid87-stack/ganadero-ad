@@ -547,8 +547,9 @@ export class SupabaseSyncService {
           );
         }
 
-        const fincasEmpresaMap = {};
-        const fincasOrdenosMap = {};
+        const prevDir = (this._ultimoDirectorioCloud && typeof this._ultimoDirectorioCloud === 'object') ? this._ultimoDirectorioCloud : {};
+        const fincasEmpresaMap = { ...(prevDir.fincasEmpresaMap || {}) };
+        const fincasOrdenosMap = { ...(prevDir.fincasOrdenosMap || {}) };
         (appState.fincas || []).forEach(f => {
           if (f && f.id) {
             if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
@@ -557,37 +558,53 @@ export class SupabaseSyncService {
             }
           }
         });
-        const usuariosEmpresaMap = {};
+        const usuariosEmpresaMap = { ...(prevDir.usuariosEmpresaMap || {}) };
         (appState.usuarios || []).forEach(u => {
           if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
         });
-        const registroDirectorio = [{
-          id: 'SYS_DIRECTORIO_EMPRESAS',
-          empresa_id: null,
-          fecha: new Date().toISOString().split('T')[0],
-          finca_id: null,
-          finca_nombre: 'SISTEMA',
-          accion: 'SYS_DIRECTORIO_EMPRESAS',
-          modulo: 'sistema_empresas',
-          detalles: {
+
+        // Proteger el directorio global contra sobrescritura accidental desde una sesión recién abierta sin fincas cargadas
+        if (esSuperAdmin || (Array.isArray(appState.fincas) && appState.fincas.length > 0 && Object.keys(prevDir).length > 0)) {
+          const empresasDirMap = new Map();
+          if (Array.isArray(prevDir.empresas)) {
+            prevDir.empresas.forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          }
+          (appState.empresas || []).forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          const elimEmpSet = new Set(appState._empresasEliminadas || prevDir.empresasEliminadas || []);
+          const empresasFusionadas = esSuperAdmin
+            ? appState.empresas
+            : Array.from(empresasDirMap.values()).filter(e => !elimEmpSet.has(e.id));
+
+          const detallesDir = {
             _esSistemaDirectorio: true,
-            empresas: appState.empresas,
-            empresasEliminadas: appState._empresasEliminadas || [],
-            fincasEliminadas: appState._fincasEliminadas || [],
-            usuariosEliminados: appState._usuariosEliminados || [],
-            fincasPurgadas: appState._fincasPurgadas || {},
-            animalesEliminados: (appState._animalesEliminados || []).slice(-1000),
+            empresas: empresasFusionadas,
+            empresasEliminadas: appState._empresasEliminadas || prevDir.empresasEliminadas || [],
+            fincasEliminadas: appState._fincasEliminadas || prevDir.fincasEliminadas || [],
+            usuariosEliminados: appState._usuariosEliminados || prevDir.usuariosEliminados || [],
+            fincasPurgadas: { ...(prevDir.fincasPurgadas || {}), ...(appState._fincasPurgadas || {}) },
+            animalesEliminados: (appState._animalesEliminados || prevDir.animalesEliminados || []).slice(-1000),
             fincasEmpresaMap,
             fincasOrdenosMap,
             usuariosEmpresaMap
-          },
-          usuario: 'Sistema'
-        }];
-        tareasOla1.push(
-          this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-            .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
-            .catch(() => {})
-        );
+          };
+          this._ultimoDirectorioCloud = detallesDir;
+          const registroDirectorio = [{
+            id: 'SYS_DIRECTORIO_EMPRESAS',
+            empresa_id: null,
+            fecha: new Date().toISOString().split('T')[0],
+            finca_id: null,
+            finca_nombre: 'SISTEMA',
+            accion: 'SYS_DIRECTORIO_EMPRESAS',
+            modulo: 'sistema_empresas',
+            detalles: detallesDir,
+            usuario: 'Sistema'
+          }];
+          tareasOla1.push(
+            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+              .catch(() => {})
+          );
+        }
       }
 
       // 1. Sincronizar Fincas
@@ -883,7 +900,7 @@ export class SupabaseSyncService {
    * Aplica aislamiento multi-tenant: si el usuario no es superadmin, delimita
    * automáticamente las consultas REST a su empresa y fincas autorizadas.
    */
-  async descargarDatosDeSupabase(timeoutMs = 10000, tenantContext = null) {
+  async descargarDatosDeSupabase(timeoutMs = 15000, tenantContext = null) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado.' };
     }
@@ -894,6 +911,7 @@ export class SupabaseSyncService {
 
     try {
       this.estadoConexion = 'sincronizando';
+      const effectiveTimeout = Math.max(Number(timeoutMs) || 15000, 12000);
 
       const ctx = this.tenantContext;
       const esSuperAdmin = ctx && ctx.esSuperAdmin;
@@ -916,50 +934,26 @@ export class SupabaseSyncService {
         const empIdEnc = encodeURIComponent(empId);
         if (empId === 'EMP-01') {
           qEmpresas = `id=eq.${empIdEnc}`;
-          qFincas = `empresa_id=eq.${empIdEnc}`;
-          qUsuarios = `empresa_id=eq.${empIdEnc}`;
           qTraslados = `empresa_id=eq.${empIdEnc}`;
           qOperaciones = `empresa_id=eq.${empIdEnc}`;
         }
-
-        if (fincasIds && fincasIds.length > 0) {
-          const fincasFilter = `finca_id=in.(${fincasIds.map(encodeURIComponent).join(',')})`;
-          qAnimales = fincasFilter;
-          qServicios = fincasFilter;
-          qCostos = fincasFilter;
-          qInversiones = fincasFilter;
-          qPesajes = fincasFilter;
-          qNutricion = fincasFilter;
-        }
       }
 
-      const resultados = await Promise.allSettled([
-        this._postgrestGet('empresas', timeoutMs, qEmpresas),
-        this._postgrestGet('fincas', timeoutMs, qFincas),
-        this._postgrestGet('usuarios', timeoutMs, qUsuarios),
-        this._postgrestGet('animales', timeoutMs, qAnimales),
-        this._postgrestGet('servicios_reproductivos', timeoutMs, qServicios),
-        this._postgrestGet('costos_fijos_finca', timeoutMs, qCostos),
-        this._postgrestGet('inversiones_diferidas', timeoutMs, qInversiones),
-        this._postgrestGet('traslados_animales', timeoutMs, qTraslados),
-        this._postgrestGet('operaciones_diarias', timeoutMs, qOperaciones),
-        this._postgrestGet('pesajes_animales', timeoutMs, qPesajes),
-        this._postgrestGet('nutricion_animales', timeoutMs, qNutricion),
-        this._postgrestGet('operaciones_diarias', timeoutMs, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
+      // ======================================================================
+      // FASE 1: ESTRUCTURA MAESTRA Y DIRECTORIO MULTI-TENANT
+      // Se descarga primero para resolver fincasIds incluso en dispositivos móviles limpios
+      // ======================================================================
+      const resultadosFase1 = await Promise.allSettled([
+        this._postgrestGet('empresas', effectiveTimeout, qEmpresas),
+        this._postgrestGet('fincas', effectiveTimeout, qFincas),
+        this._postgrestGet('usuarios', effectiveTimeout, qUsuarios),
+        this._postgrestGet('operaciones_diarias', effectiveTimeout, 'id=eq.SYS_DIRECTORIO_EMPRESAS')
       ]);
 
-      const empresasRes = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
-      const fincasRes = resultados[1].status === 'fulfilled' ? resultados[1].value : [];
-      const usuariosRes = resultados[2].status === 'fulfilled' ? resultados[2].value : [];
-      const animalesRes = resultados[3].status === 'fulfilled' ? resultados[3].value : [];
-      const serviciosRes = resultados[4].status === 'fulfilled' ? resultados[4].value : [];
-      const costosRes = resultados[5].status === 'fulfilled' ? resultados[5].value : [];
-      const inversionesRes = resultados[6].status === 'fulfilled' ? resultados[6].value : [];
-      const trasladosRes = resultados[7].status === 'fulfilled' ? resultados[7].value : [];
-      const operacionesRes = resultados[8].status === 'fulfilled' ? resultados[8].value : [];
-      const pesajesRes = resultados[9].status === 'fulfilled' ? resultados[9].value : [];
-      const nutricionRes = resultados[10].status === 'fulfilled' ? resultados[10].value : [];
-      const dirExplicitoRes = resultados[11] && resultados[11].status === 'fulfilled' ? resultados[11].value : [];
+      const empresasRes = resultadosFase1[0].status === 'fulfilled' ? resultadosFase1[0].value : [];
+      const fincasRes = resultadosFase1[1].status === 'fulfilled' ? resultadosFase1[1].value : [];
+      const usuariosRes = resultadosFase1[2].status === 'fulfilled' ? resultadosFase1[2].value : [];
+      const dirExplicitoRes = resultadosFase1[3].status === 'fulfilled' ? resultadosFase1[3].value : [];
 
       const empresas = (empresasRes || []).map(r => this.mapearEmpresaCloudALocal(r));
       let fincas = (fincasRes || []).map(r => this.mapearFincaCloudALocal(r));
@@ -981,11 +975,11 @@ export class SupabaseSyncService {
       let fincasPurgadasCloud = {};
       let animalesEliminadosCloud = [];
 
-      // Integrar directorio espejo de empresas (desde consulta dedicada #12 o desde operaciones_diarias)
-      const regDir = (Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null) ||
-        (operacionesRes || []).find(r => r && (r.id === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS'));
+      // Integrar directorio espejo de empresas desde SYS_DIRECTORIO_EMPRESAS
+      const regDir = Array.isArray(dirExplicitoRes) && dirExplicitoRes.length > 0 ? dirExplicitoRes[0] : null;
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
+        this._ultimoDirectorioCloud = det;
         empresasEliminadasCloud = Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : [];
         fincasEliminadasCloud = Array.isArray(det.fincasEliminadas) ? det.fincasEliminadas : [];
         fincasPurgadasCloud = (det.fincasPurgadas && typeof det.fincasPurgadas === 'object') ? det.fincasPurgadas : {};
@@ -1041,7 +1035,52 @@ export class SupabaseSyncService {
       if (!esSuperAdmin && empId) {
         fincas = fincas.filter(f => f.empresaId === empId);
         usuarios = usuarios.filter(u => u.rol === 'superadmin' || u.empresaId === empId);
+
+        const fincasIdsEfectivas = (fincasIds && fincasIds.length > 0)
+          ? fincasIds
+          : fincas.map(f => f && f.id).filter(Boolean);
+
+        if (fincasIdsEfectivas.length > 0) {
+          const fincasFilter = `finca_id=in.(${fincasIdsEfectivas.map(encodeURIComponent).join(',')})`;
+          qAnimales = fincasFilter;
+          qServicios = fincasFilter;
+          qCostos = fincasFilter;
+          qInversiones = fincasFilter;
+          qPesajes = fincasFilter;
+          qNutricion = fincasFilter;
+        }
       }
+
+      // ======================================================================
+      // FASE 2A: INVENTARIO DE ANIMALES Y CONFIGURACIONES DE FINCA (Prioridad Alta)
+      // Se ejecuta antes del histórico pesado para no saturar redes móviles
+      // ======================================================================
+      const resultadosFase2A = await Promise.allSettled([
+        this._postgrestGet('animales', effectiveTimeout, qAnimales),
+        this._postgrestGet('servicios_reproductivos', effectiveTimeout, qServicios),
+        this._postgrestGet('costos_fijos_finca', effectiveTimeout, qCostos),
+        this._postgrestGet('inversiones_diferidas', effectiveTimeout, qInversiones),
+        this._postgrestGet('traslados_animales', effectiveTimeout, qTraslados),
+        this._postgrestGet('nutricion_animales', effectiveTimeout, qNutricion)
+      ]);
+
+      const animalesRes = resultadosFase2A[0].status === 'fulfilled' ? resultadosFase2A[0].value : [];
+      const serviciosRes = resultadosFase2A[1].status === 'fulfilled' ? resultadosFase2A[1].value : [];
+      const costosRes = resultadosFase2A[2].status === 'fulfilled' ? resultadosFase2A[2].value : [];
+      const inversionesRes = resultadosFase2A[3].status === 'fulfilled' ? resultadosFase2A[3].value : [];
+      const trasladosRes = resultadosFase2A[4].status === 'fulfilled' ? resultadosFase2A[4].value : [];
+      const nutricionRes = resultadosFase2A[5].status === 'fulfilled' ? resultadosFase2A[5].value : [];
+
+      // ======================================================================
+      // FASE 2B: HISTÓRICO DE PESAJES Y BITÁCORA DE OPERACIONES
+      // ======================================================================
+      const resultadosFase2B = await Promise.allSettled([
+        this._postgrestGet('pesajes_animales', effectiveTimeout, qPesajes),
+        this._postgrestGet('operaciones_diarias', effectiveTimeout, qOperaciones)
+      ]);
+
+      const pesajesRes = resultadosFase2B[0].status === 'fulfilled' ? resultadosFase2B[0].value : [];
+      const operacionesRes = resultadosFase2B[1].status === 'fulfilled' ? resultadosFase2B[1].value : [];
 
       const animales = (animalesRes || []).map(r => this.mapearAnimalCloudALocal(r));
       const servicios = (serviciosRes || []).map(r => this.mapearServicioCloudALocal(r));
@@ -1257,6 +1296,7 @@ export class SupabaseSyncService {
       const regDir = (dirData || [])[0];
       if (regDir && regDir.detalles && typeof regDir.detalles === 'object') {
         const det = regDir.detalles;
+        this._ultimoDirectorioCloud = det;
         const eliminadasSet = new Set(Array.isArray(det.empresasEliminadas) ? det.empresasEliminadas : []);
         if (Array.isArray(det.empresas)) {
           det.empresas.forEach(eDir => {
