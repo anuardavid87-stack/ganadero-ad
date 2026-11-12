@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-08T14:47:28.391Z
+ * Generado automáticamente: 2026-11-12T04:26:54.492Z
  */
 (function() {
   "use strict";
@@ -775,6 +775,122 @@ class SupabaseSyncService {
     this.estadoConexion = 'desconectado'; // 'desconectado' | 'conectado' | 'error' | 'sincronizando'
     this.ultimoSync = typeof localStorage !== 'undefined' ? (localStorage.getItem(this.storageSyncKey) || null) : null;
     this.tenantContext = null; // { empresaId, esSuperAdmin, fincasIds, token }
+    this._cacheHuellasCloud = new Map(); // tabla -> Map(clave -> jsonStr) para evitar re-subir registros idénticos
+    this._ultimaFirmaRemota = null; // firma ultraligera (< 350 bytes) para evitar descargas completas innecesarias
+  }
+
+  _filtrarRegistrosModificados(tabla, registros, fnClave, forzarCompleta = false) {
+    if (!Array.isArray(registros) || registros.length === 0) {
+      return { pendientes: [], confirmarSubida: () => {} };
+    }
+    if (!this._cacheHuellasCloud) this._cacheHuellasCloud = new Map();
+    if (!this._cacheHuellasCloud.has(tabla)) {
+      this._cacheHuellasCloud.set(tabla, new Map());
+    }
+    const mapa = this._cacheHuellasCloud.get(tabla);
+    const pendientes = [];
+    const nuevasHuellas = [];
+
+    for (const r of registros) {
+      if (!r) continue;
+      const clave = String(fnClave(r) || '');
+      const huella = JSON.stringify(r);
+      if (forzarCompleta || !clave || mapa.get(clave) !== huella) {
+        pendientes.push(r);
+        if (clave) nuevasHuellas.push([clave, huella]);
+      }
+    }
+
+    return {
+      pendientes,
+      confirmarSubida: () => {
+        for (const [k, h] of nuevasHuellas) {
+          mapa.set(k, h);
+        }
+      }
+    };
+  }
+
+  _registrarHuellasDescargadas(datosLocales, fincaActivaFallback = null) {
+    if (!datosLocales) return;
+    if (!this._cacheHuellasCloud) this._cacheHuellasCloud = new Map();
+
+    const guardarMapa = (tabla, lista, fnMapear, fnClave) => {
+      if (!Array.isArray(lista)) return;
+      if (!this._cacheHuellasCloud.has(tabla)) {
+        this._cacheHuellasCloud.set(tabla, new Map());
+      }
+      const mapa = this._cacheHuellasCloud.get(tabla);
+      for (const item of lista) {
+        if (!item) continue;
+        const payload = fnMapear ? fnMapear(item) : item;
+        const clave = String(fnClave(payload) || '');
+        if (clave) {
+          mapa.set(clave, JSON.stringify(payload));
+        }
+      }
+    };
+
+    guardarMapa('empresas', datosLocales.empresas, (e) => this.mapearEmpresaLocalACloud(e), (r) => r.id);
+    guardarMapa('fincas', datosLocales.fincas, (f) => this.mapearFincaLocalACloud(f), (r) => r.id);
+    guardarMapa('usuarios', datosLocales.usuarios, (u) => ({
+      id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+      empresa_id: u.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      usuario: u.usuario,
+      nombre: u.nombre,
+      rol: u.rol,
+      password: u.password || null,
+      fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+      email: u.email || null,
+      telefono: u.telefono || null,
+      activo: u.activo !== false
+    }), (r) => r.usuario);
+    guardarMapa('animales', datosLocales.animales, (a) => this.mapearAnimalLocalACloud(a, fincaActivaFallback), (r) => `${r.finca_id}__${r.identificacion_tag}`);
+    guardarMapa('servicios_reproductivos', datosLocales.servicios, (s) => this.mapearServicioLocalACloud(s, fincaActivaFallback), (r) => r.id);
+    guardarMapa('inversiones_diferidas', datosLocales.inversiones, (i) => ({
+      id: i.id,
+      finca_id: i.fincaId || fincaActivaFallback,
+      descripcion_activo: i.descripcionActivo || 'Inversión',
+      monto_total_inversion: Number(i.montoTotalInversion || 0),
+      plazo_meses_diferido: Number(i.plazoMesesDiferido || 12),
+      cuota_mensual: Number(i.cuotaMensual || 0),
+      estado: i.estado || 'Activa'
+    }), (r) => r.id);
+    guardarMapa('traslados_animales', datosLocales.traslados, (t) => ({
+      id: t.id,
+      empresa_id: t.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
+      finca_origen_id: t.fincaOrigenId || null,
+      finca_origen_nombre: t.fincaOrigenNombre || '',
+      finca_destino_id: t.fincaDestinoId || null,
+      finca_destino_nombre: t.fincaDestinoNombre || '',
+      motivo: t.motivo || '',
+      observaciones: t.observaciones || '',
+      total_animales: t.totalAnimales || 1,
+      animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
+      usuario_nombre: t.responsable || t.usuarioNombre || ''
+    }), (r) => r.id);
+    guardarMapa('operaciones_diarias', datosLocales.operacionesDiarias, (o) => ({
+      id: o.id,
+      empresa_id: o.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
+      finca_id: o.fincaId === 'GLOBAL' ? null : (o.fincaId || null),
+      finca_nombre: o.fincaNombre || '',
+      accion: o.accion || '',
+      modulo: o.modulo || o.accion || '',
+      detalles: o,
+      usuario: o.responsable || o.usuario || 'Sistema'
+    }), (r) => r.id);
+    guardarMapa('pesajes_animales', datosLocales.pesajes, (p) => ({
+      id: p.id,
+      finca_id: p.fincaId || fincaActivaFallback,
+      animal_tag: p.tag || p.animalTag || '',
+      fecha_pesaje: normalizarFechaISO(p.fecha || p.fechaPesaje) || new Date().toISOString().split('T')[0],
+      peso_kg: Number(p.pesoNuevo || p.peso || 0),
+      gdp_calculada_g_dia: p.gdp ? Number(p.gdp) : null,
+      notas: p.observaciones || p.responsable || 'Registro de Manga'
+    }), (r) => r.id);
+    guardarMapa('nutricion_animales', datosLocales.nutricion, (n) => this.mapearNutricionLocalACloud(n, fincaActivaFallback), (r) => `${r.finca_id}__${r.animal_tag}`);
   }
 
   setTenantContext(context) {
@@ -944,7 +1060,7 @@ class SupabaseSyncService {
       estado_reproductivo: animal.estadoReproductivo || 'Vacía',
       dias_gestacion_actual: Number(animal.diasGestacionActual || 0),
       fecha_ultimo_parto: normalizarFechaISO(animal.fechaUltimoParto),
-      ultimo_peso_kg: animal.ultimoPesoKg ? Number(animal.ultimoPesoKg) : null,
+      ultimo_peso_kg: (animal.ultimoPesoKg || animal.pesoActualKg || animal.peso) ? Number(animal.ultimoPesoKg || animal.pesoActualKg || animal.peso) : null,
       fecha_ultimo_pesaje: normalizarFechaISO(animal.fechaUltimoPesaje),
       gdp_promedio_g_dia: animal.gdpPromedioGDia ? Number(animal.gdpPromedioGDia) : null,
       promedio_leche_diaria_l: animal.promedioLecheDiariaL ? Number(animal.promedioLecheDiariaL) : 0,
@@ -1194,7 +1310,7 @@ class SupabaseSyncService {
   /**
    * Sube todos los registros locales a Supabase usando Upsert (merge duplicates)
    */
-  async subirDatosASupabase(appState) {
+  async subirDatosASupabase(appState, forzarCompleta = false) {
     if (!this.estaConfigurado()) {
       return { ok: false, error: 'Supabase no está configurado. Ingrese sus credenciales primero.' };
     }
@@ -1244,12 +1360,16 @@ class SupabaseSyncService {
           ? appState.empresas
           : appState.empresas.filter(e => e.id === empresaIdActiva);
         if (empresasFiltradas.length > 0) {
-          const payloadEmpresas = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
-          tareasOla1.push(
-            this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
-              .then(() => { resultados.empresas = payloadEmpresas.length; })
-              .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
-          );
+          const payloadEmpresasFull = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
+          const { pendientes: payloadEmpresas, confirmarSubida: confirmarEmp } =
+            this._filtrarRegistrosModificados('empresas', payloadEmpresasFull, (r) => r.id, forzarCompleta);
+          if (payloadEmpresas.length > 0) {
+            tareasOla1.push(
+              this._postgrestUpsert('empresas', payloadEmpresas, 'id', 10000)
+                .then(() => { confirmarEmp(); resultados.empresas = payloadEmpresas.length; })
+                .catch(err => { console.warn('Supabase Sync empresas:', err.message); })
+            );
+          }
         }
 
         const prevDir = (this._ultimoDirectorioCloud && typeof this._ultimoDirectorioCloud === 'object') ? this._ultimoDirectorioCloud : {};
@@ -1293,7 +1413,7 @@ class SupabaseSyncService {
             usuariosEmpresaMap
           };
           this._ultimoDirectorioCloud = detallesDir;
-          const registroDirectorio = [{
+          const registroDirectorioFull = [{
             id: 'SYS_DIRECTORIO_EMPRESAS',
             empresa_id: null,
             fecha: new Date().toISOString().split('T')[0],
@@ -1304,11 +1424,15 @@ class SupabaseSyncService {
             detalles: detallesDir,
             usuario: 'Sistema'
           }];
-          tareasOla1.push(
-            this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-              .then(() => { if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
-              .catch(() => {})
-          );
+          const { pendientes: registroDirectorio, confirmarSubida: confirmarDir } =
+            this._filtrarRegistrosModificados('sys_directorio', registroDirectorioFull, (r) => r.id, forzarCompleta);
+          if (registroDirectorio.length > 0) {
+            tareasOla1.push(
+              this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
+                .then(() => { confirmarDir(); if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+                .catch(() => {})
+            );
+          }
         }
       }
 
@@ -1326,22 +1450,27 @@ class SupabaseSyncService {
       const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
 
       if (fincasFiltradas.length > 0) {
-        const payloadFincas = fincasFiltradas.map(f => this.mapearFincaLocalACloud(f));
-        tareasOla1.push(
-          this._postgrestUpsert('fincas', payloadFincas, 'id', 10000)
-            .then(() => { resultados.fincas = payloadFincas.length; })
-            .catch(async (err) => {
-              if (String(err.message || '').includes('23503')) {
-                const payloadSinFk = payloadFincas.map(f => ({ ...f, empresa_id: null }));
-                try {
-                  await this._postgrestUpsert('fincas', payloadSinFk, 'id', 10000);
-                  resultados.fincas = payloadSinFk.length;
-                  return;
-                } catch (_) {}
-              }
-              console.warn('Supabase Sync fincas:', err.message);
-            })
-        );
+        const payloadFincasFull = fincasFiltradas.map(f => this.mapearFincaLocalACloud(f));
+        const { pendientes: payloadFincas, confirmarSubida: confirmarFincas } =
+          this._filtrarRegistrosModificados('fincas', payloadFincasFull, (r) => r.id, forzarCompleta);
+        if (payloadFincas.length > 0) {
+          tareasOla1.push(
+            this._postgrestUpsert('fincas', payloadFincas, 'id', 10000)
+              .then(() => { confirmarFincas(); resultados.fincas = payloadFincas.length; })
+              .catch(async (err) => {
+                if (String(err.message || '').includes('23503')) {
+                  const payloadSinFk = payloadFincas.map(f => ({ ...f, empresa_id: null }));
+                  try {
+                    await this._postgrestUpsert('fincas', payloadSinFk, 'id', 10000);
+                    confirmarFincas();
+                    resultados.fincas = payloadSinFk.length;
+                    return;
+                  } catch (_) {}
+                }
+                console.warn('Supabase Sync fincas:', err.message);
+              })
+          );
+        }
       }
 
       if (tareasOla1.length > 0) {
@@ -1349,7 +1478,7 @@ class SupabaseSyncService {
       }
 
       // ======================================================================
-      // OLA 2: ENTIDADES OPERACIONALES (Estrictamente restringidas al tenant)
+      // OLA 2: ENTIDADES OPERACIONALES (Sólo registros modificados - Zero-Waste Egress)
       // ======================================================================
       const tareasOla2 = [];
 
@@ -1359,7 +1488,7 @@ class SupabaseSyncService {
           ? appState.usuarios
           : appState.usuarios.filter(u => u.empresaId === empresaIdActiva);
         if (usuariosFiltrados.length > 0) {
-          const payloadUsuarios = usuariosFiltrados.map(u => ({
+          const payloadUsuariosFull = usuariosFiltrados.map(u => ({
             id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
             empresa_id: u.empresaId === 'EMP-01' ? 'EMP-01' : null,
             usuario: u.usuario,
@@ -1371,31 +1500,44 @@ class SupabaseSyncService {
             telefono: u.telefono || null,
             activo: u.activo !== false
           }));
-          tareasOla2.push(
-            this._postgrestUpsert('usuarios', payloadUsuarios, 'usuario', 10000)
-              .then(() => { resultados.usuarios = payloadUsuarios.length; })
-              .catch(err => { console.warn('Supabase Sync usuarios:', err.message); })
-          );
+          const { pendientes: payloadUsuarios, confirmarSubida: confirmarUsr } =
+            this._filtrarRegistrosModificados('usuarios', payloadUsuariosFull, (r) => r.usuario, forzarCompleta);
+          if (payloadUsuarios.length > 0) {
+            tareasOla2.push(
+              this._postgrestUpsert('usuarios', payloadUsuarios, 'usuario', 10000)
+                .then(() => { confirmarUsr(); resultados.usuarios = payloadUsuarios.length; })
+                .catch(err => { console.warn('Supabase Sync usuarios:', err.message); })
+            );
+          }
         }
       }
 
-      // 3. Sincronizar Animales (Chunking en lotes de 50)
+      // 3. Sincronizar Animales (Sólo modificados o nuevos, en lotes de 50)
       if (Array.isArray(appState.animales) && appState.animales.length > 0) {
         const animalesFiltrados = (esSuperAdmin
           ? appState.animales
           : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId))
         ).filter(a => a && a.fincaId && todasFincasIdsLocal.has(a.fincaId));
         if (animalesFiltrados.length > 0) {
-          const payloadAnimales = animalesFiltrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
-          const BATCH_SIZE = 50;
-          const totalBatches = Math.ceil(payloadAnimales.length / BATCH_SIZE);
-          for (let b = 0; b < totalBatches; b++) {
-            const chunk = payloadAnimales.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-            tareasOla2.push(
-              this._postgrestUpsert('animales', chunk, 'finca_id,identificacion_tag', 15000)
-                .then(() => { resultados.animales += chunk.length; })
-                .catch(err => { console.warn(`Supabase Sync animales (bloque ${b + 1}/${totalBatches}):`, err.message); })
-            );
+          const payloadAnimalesFull = animalesFiltrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
+          const { pendientes: payloadAnimales, confirmarSubida: confirmarAnm } =
+            this._filtrarRegistrosModificados('animales', payloadAnimalesFull, (r) => `${r.finca_id}__${r.identificacion_tag}`, forzarCompleta);
+          if (payloadAnimales.length > 0) {
+            const BATCH_SIZE = 50;
+            const totalBatches = Math.ceil(payloadAnimales.length / BATCH_SIZE);
+            let exitosAnm = 0;
+            for (let b = 0; b < totalBatches; b++) {
+              const chunk = payloadAnimales.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+              tareasOla2.push(
+                this._postgrestUpsert('animales', chunk, 'finca_id,identificacion_tag', 15000)
+                  .then(() => {
+                    resultados.animales += chunk.length;
+                    exitosAnm++;
+                    if (exitosAnm === totalBatches) confirmarAnm();
+                  })
+                  .catch(err => { console.warn(`Supabase Sync animales (bloque ${b + 1}/${totalBatches}):`, err.message); })
+              );
+            }
           }
         }
       }
@@ -1407,21 +1549,25 @@ class SupabaseSyncService {
           : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId))
         ).filter(s => s && s.fincaId && todasFincasIdsLocal.has(s.fincaId));
         if (serviciosFiltrados.length > 0) {
-          const payloadServicios = serviciosFiltrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
-          tareasOla2.push(
-            this._postgrestUpsert('servicios_reproductivos', payloadServicios, 'id', 10000)
-              .then(() => { resultados.servicios = payloadServicios.length; })
-              .catch(err => { console.warn('Supabase Sync servicios:', err.message); })
-          );
+          const payloadServiciosFull = serviciosFiltrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
+          const { pendientes: payloadServicios, confirmarSubida: confirmarSrv } =
+            this._filtrarRegistrosModificados('servicios_reproductivos', payloadServiciosFull, (r) => r.id, forzarCompleta);
+          if (payloadServicios.length > 0) {
+            tareasOla2.push(
+              this._postgrestUpsert('servicios_reproductivos', payloadServicios, 'id', 10000)
+                .then(() => { confirmarSrv(); resultados.servicios = payloadServicios.length; })
+                .catch(err => { console.warn('Supabase Sync servicios:', err.message); })
+            );
+          }
         }
       }
 
       // 5. Costos Fijos por Finca
       if (appState.costosFijos && typeof appState.costosFijos === 'object') {
-        const payloadCostos = [];
+        const payloadCostosFull = [];
         for (const [fincaId, c] of Object.entries(appState.costosFijos)) {
           if (!fincasIdsValidas.has(fincaId) || !todasFincasIdsLocal.has(fincaId)) continue;
-          payloadCostos.push({
+          payloadCostosFull.push({
             finca_id: fincaId,
             nomina: Number(c.nomina || 0),
             insumos: Number(c.insumos || 0),
@@ -1431,10 +1577,12 @@ class SupabaseSyncService {
             otros: Number(c.otros || 0)
           });
         }
+        const { pendientes: payloadCostos, confirmarSubida: confirmarCostos } =
+          this._filtrarRegistrosModificados('costos_fijos_finca', payloadCostosFull, (r) => r.finca_id, forzarCompleta);
         if (payloadCostos.length > 0) {
           tareasOla2.push(
             this._postgrestUpsert('costos_fijos_finca', payloadCostos, 'finca_id', 10000)
-              .then(() => { resultados.costosFijos = payloadCostos.length; })
+              .then(() => { confirmarCostos(); resultados.costosFijos = payloadCostos.length; })
               .catch(err => { console.warn('Supabase Sync costos:', err.message); })
           );
         }
@@ -1447,7 +1595,7 @@ class SupabaseSyncService {
           : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId))
         ).filter(i => i && i.fincaId && todasFincasIdsLocal.has(i.fincaId));
         if (invFiltradas.length > 0) {
-          const payloadInv = invFiltradas.map(i => ({
+          const payloadInvFull = invFiltradas.map(i => ({
             id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
             finca_id: i.fincaId || fincaActiva,
             descripcion_activo: i.descripcionActivo || 'Inversión',
@@ -1456,11 +1604,15 @@ class SupabaseSyncService {
             cuota_mensual: Number(i.cuotaMensual || 0),
             estado: i.estado || 'Activa'
           }));
-          tareasOla2.push(
-            this._postgrestUpsert('inversiones_diferidas', payloadInv, 'id', 10000)
-              .then(() => { resultados.inversiones = payloadInv.length; })
-              .catch(err => { console.warn('Supabase Sync inversiones:', err.message); })
-          );
+          const { pendientes: payloadInv, confirmarSubida: confirmarInv } =
+            this._filtrarRegistrosModificados('inversiones_diferidas', payloadInvFull, (r) => r.id, forzarCompleta);
+          if (payloadInv.length > 0) {
+            tareasOla2.push(
+              this._postgrestUpsert('inversiones_diferidas', payloadInv, 'id', 10000)
+                .then(() => { confirmarInv(); resultados.inversiones = payloadInv.length; })
+                .catch(err => { console.warn('Supabase Sync inversiones:', err.message); })
+            );
+          }
         }
       }
 
@@ -1470,7 +1622,7 @@ class SupabaseSyncService {
           ? appState.traslados
           : appState.traslados.filter(t => t.empresaId === empresaIdActiva || fincasIdsValidas.has(t.fincaOrigenId) || fincasIdsValidas.has(t.fincaDestinoId));
         if (trasladosFiltrados.length > 0) {
-          const payloadTraslados = trasladosFiltrados.map(t => {
+          const payloadTrasladosFull = trasladosFiltrados.map(t => {
             const empRef = t.empresaId || empresaIdActiva || null;
             return {
               id: t.id || ('TRS-' + Date.now()),
@@ -1487,28 +1639,40 @@ class SupabaseSyncService {
               usuario_nombre: t.responsable || t.usuarioNombre || ''
             };
           });
-          tareasOla2.push(
-            this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
-              .then(() => { resultados.traslados = payloadTraslados.length; })
-              .catch(err => { console.warn('Supabase Sync traslados:', err.message); })
-          );
+          const { pendientes: payloadTraslados, confirmarSubida: confirmarTrs } =
+            this._filtrarRegistrosModificados('traslados_animales', payloadTrasladosFull, (r) => r.id, forzarCompleta);
+          if (payloadTraslados.length > 0) {
+            tareasOla2.push(
+              this._postgrestUpsert('traslados_animales', payloadTraslados, 'id', 10000)
+                .then(() => { confirmarTrs(); resultados.traslados = payloadTraslados.length; })
+                .catch(err => { console.warn('Supabase Sync traslados:', err.message); })
+            );
+          }
         }
       }
 
-      // 8. Operaciones Diarias
+      // 8. Operaciones Diarias (Excluyendo duplicados ACT-PES-* que ya residen en pesajes_animales)
       if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
+        const pesajesIdsSet = new Set((appState.pesajes || []).map(p => p && p.id).filter(Boolean));
         const opsFiltradas = (esSuperAdmin
           ? appState.operacionesDiarias
           : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
-        ).filter(o => o && (!o.fincaId || todasFincasIdsLocal.has(o.fincaId)));
+        ).filter(o => {
+          if (!o) return false;
+          const idStr = String(o.id || '');
+          if (idStr.startsWith('ACT-PES-') && (pesajesIdsSet.has(idStr.slice(4)) || o.modulo === 'pesajes' || o.accion === 'pesajes')) {
+            return false;
+          }
+          return !o.fincaId || o.fincaId === 'GLOBAL' || todasFincasIdsLocal.has(o.fincaId);
+        });
         if (opsFiltradas.length > 0) {
-          const payloadOps = opsFiltradas.map(o => {
+          const payloadOpsFull = opsFiltradas.map(o => {
             const empRef = o.empresaId || empresaIdActiva || null;
             return {
               id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
               empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
               fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
-              finca_id: o.fincaId || null,
+              finca_id: o.fincaId === 'GLOBAL' ? null : (o.fincaId || null),
               finca_nombre: o.fincaNombre || '',
               accion: o.accion || '',
               modulo: o.modulo || o.accion || '',
@@ -1516,15 +1680,24 @@ class SupabaseSyncService {
               usuario: o.responsable || o.usuario || 'Sistema'
             };
           });
-          const BATCH_SIZE = 50;
-          const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
-          for (let b = 0; b < totalBatches; b++) {
-            const chunk = payloadOps.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-            tareasOla2.push(
-              this._postgrestUpsert('operaciones_diarias', chunk, 'id', 12000)
-                .then(() => { resultados.operacionesDiarias += chunk.length; })
-                .catch(err => { console.warn(`Supabase Sync operaciones (bloque ${b + 1}/${totalBatches}):`, err.message); })
-            );
+          const { pendientes: payloadOps, confirmarSubida: confirmarOps } =
+            this._filtrarRegistrosModificados('operaciones_diarias', payloadOpsFull, (r) => r.id, forzarCompleta);
+          if (payloadOps.length > 0) {
+            const BATCH_SIZE = 50;
+            const totalBatches = Math.ceil(payloadOps.length / BATCH_SIZE);
+            let exitosOps = 0;
+            for (let b = 0; b < totalBatches; b++) {
+              const chunk = payloadOps.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+              tareasOla2.push(
+                this._postgrestUpsert('operaciones_diarias', chunk, 'id', 12000)
+                  .then(() => {
+                    resultados.operacionesDiarias += chunk.length;
+                    exitosOps++;
+                    if (exitosOps === totalBatches) confirmarOps();
+                  })
+                  .catch(err => { console.warn(`Supabase Sync operaciones (bloque ${b + 1}/${totalBatches}):`, err.message); })
+              );
+            }
           }
         }
       }
@@ -1536,7 +1709,7 @@ class SupabaseSyncService {
           : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId))
         ).filter(p => p && p.fincaId && todasFincasIdsLocal.has(p.fincaId));
         if (pesajesFiltrados.length > 0) {
-          const payloadPesajes = pesajesFiltrados.map(p => ({
+          const payloadPesajesFull = pesajesFiltrados.map(p => ({
             id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
             finca_id: p.fincaId || fincaActiva,
             animal_tag: p.tag || p.animalTag || '',
@@ -1545,15 +1718,24 @@ class SupabaseSyncService {
             gdp_calculada_g_dia: p.gdp ? Number(p.gdp) : null,
             notas: p.observaciones || p.responsable || 'Registro de Manga'
           }));
-          const BATCH_SIZE = 50;
-          const totalBatches = Math.ceil(payloadPesajes.length / BATCH_SIZE);
-          for (let b = 0; b < totalBatches; b++) {
-            const chunk = payloadPesajes.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-            tareasOla2.push(
-              this._postgrestUpsert('pesajes_animales', chunk, 'id', 12000)
-                .then(() => { resultados.pesajes += chunk.length; })
-                .catch(err => { console.warn(`Supabase Sync pesajes (bloque ${b + 1}/${totalBatches}):`, err.message); })
-            );
+          const { pendientes: payloadPesajes, confirmarSubida: confirmarPes } =
+            this._filtrarRegistrosModificados('pesajes_animales', payloadPesajesFull, (r) => r.id, forzarCompleta);
+          if (payloadPesajes.length > 0) {
+            const BATCH_SIZE = 50;
+            const totalBatches = Math.ceil(payloadPesajes.length / BATCH_SIZE);
+            let exitosPes = 0;
+            for (let b = 0; b < totalBatches; b++) {
+              const chunk = payloadPesajes.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+              tareasOla2.push(
+                this._postgrestUpsert('pesajes_animales', chunk, 'id', 12000)
+                  .then(() => {
+                    resultados.pesajes += chunk.length;
+                    exitosPes++;
+                    if (exitosPes === totalBatches) confirmarPes();
+                  })
+                  .catch(err => { console.warn(`Supabase Sync pesajes (bloque ${b + 1}/${totalBatches}):`, err.message); })
+              );
+            }
           }
         }
       }
@@ -1565,17 +1747,27 @@ class SupabaseSyncService {
           : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId))
         ).filter(n => n && n.fincaId && todasFincasIdsLocal.has(n.fincaId));
         if (nutricionFiltrada.length > 0) {
-          const payloadNutricion = nutricionFiltrada.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
-          tareasOla2.push(
-            this._postgrestUpsert('nutricion_animales', payloadNutricion, 'finca_id,animal_tag', 15000)
-              .then(() => { resultados.nutricion = payloadNutricion.length; })
-              .catch(err => { console.warn('Supabase Sync nutrición:', err.message); })
-          );
+          const payloadNutricionFull = nutricionFiltrada.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
+          const { pendientes: payloadNutricion, confirmarSubida: confirmarNut } =
+            this._filtrarRegistrosModificados('nutricion_animales', payloadNutricionFull, (r) => `${r.finca_id}__${r.animal_tag}`, forzarCompleta);
+          if (payloadNutricion.length > 0) {
+            tareasOla2.push(
+              this._postgrestUpsert('nutricion_animales', payloadNutricion, 'finca_id,animal_tag', 15000)
+                .then(() => { confirmarNut(); resultados.nutricion = payloadNutricion.length; })
+                .catch(err => { console.warn('Supabase Sync nutrición:', err.message); })
+            );
+          }
         }
       }
 
       if (tareasOla2.length > 0) {
         await Promise.allSettled(tareasOla2);
+      }
+
+      // Si hubo al menos un registro modificado y subido, invalidar la firma remota para refrescar el sello local
+      const totalSubidos = Object.values(resultados).reduce((acc, v) => acc + Number(v || 0), 0);
+      if (totalSubidos > 0) {
+        this._ultimaFirmaRemota = null;
       }
 
       // Registrar marca de tiempo de sincronización
@@ -1832,9 +2024,9 @@ class SupabaseSyncService {
         nombreAlias: (r.animales && r.animales[0]) ? r.animales[0].alias : ''
       }));
 
-      // Operaciones Diarias (excluyendo registros internos de sistema)
+      // Operaciones Diarias (excluyendo registros internos de sistema y copias redundantes ACT-PES-*)
       const operacionesDiarias = (operacionesRes || [])
-        .filter(r => r && r.id !== 'SYS_DIRECTORIO_EMPRESAS' && r.accion !== 'SYS_DIRECTORIO_EMPRESAS' && !(r.detalles && r.detalles._esSistemaDirectorio))
+        .filter(r => r && r.id !== 'SYS_DIRECTORIO_EMPRESAS' && r.accion !== 'SYS_DIRECTORIO_EMPRESAS' && !(r.detalles && r.detalles._esSistemaDirectorio) && !String(r.id || '').startsWith('ACT-PES-'))
         .map(r => {
         if (r.detalles && typeof r.detalles === 'object' && Object.keys(r.detalles).length > 0) {
           return {
@@ -1876,6 +2068,27 @@ class SupabaseSyncService {
       // Nutrición Animal Especial & IA
       const nutricion = (nutricionRes || []).map(r => this.mapearNutricionCloudALocal(r));
 
+      const datosDescargados = {
+        empresas,
+        fincas,
+        usuarios,
+        animales,
+        servicios,
+        costosFijos,
+        inversiones,
+        traslados,
+        operacionesDiarias,
+        pesajes,
+        nutricion,
+        empresasEliminadas: empresasEliminadasCloud,
+        fincasEliminadas: fincasEliminadasCloud,
+        _fincasPurgadas: fincasPurgadasCloud,
+        _animalesEliminados: animalesEliminadosCloud
+      };
+
+      // Registrar huellas en caché para evitar re-subir estos mismos registros sin cambios (Ahorro Egress/Ingress)
+      this._registrarHuellasDescargadas(datosDescargados);
+
       this.ultimoSync = new Date().toISOString();
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(this.storageSyncKey, this.ultimoSync);
@@ -1884,23 +2097,7 @@ class SupabaseSyncService {
 
       return {
         ok: true,
-        datos: {
-          empresas,
-          fincas,
-          usuarios,
-          animales,
-          servicios,
-          costosFijos,
-          inversiones,
-          traslados,
-          operacionesDiarias,
-          pesajes,
-          nutricion,
-          empresasEliminadas: empresasEliminadasCloud,
-          fincasEliminadas: fincasEliminadasCloud,
-          _fincasPurgadas: fincasPurgadasCloud,
-          _animalesEliminados: animalesEliminadosCloud
-        },
+        datos: datosDescargados,
         ultimoSync: this.ultimoSync
       };
     } catch (err) {
@@ -1909,6 +2106,65 @@ class SupabaseSyncService {
         ok: false,
         error: 'Error descargando datos de Supabase: ' + err.message
       };
+    }
+  }
+
+  /**
+   * Sonda ultraliviana de cambios remotos (~350 bytes en vez de ~2.65 MB).
+   * Consulta únicamente el conteo exacto y el último registro modificado de las tablas clave.
+   * Si la firma no cambió respecto a la última revisión, evita descargar las tablas completas en el heartbeat.
+   */
+  async verificarCambiosRemotosLiviano(timeoutMs = 6000, tenantContext = null) {
+    if (!this.estaConfigurado()) {
+      return { ok: false, hayCambios: false };
+    }
+
+    try {
+      const ctx = tenantContext || this.tenantContext || null;
+      const esSuperAdmin = !ctx || Boolean(ctx.esSuperAdmin);
+      const fincasIds = (ctx && Array.isArray(ctx.fincasIds)) ? ctx.fincasIds.filter(Boolean) : [];
+      const filtrarPorFinca = !esSuperAdmin && fincasIds.length > 0;
+      const fincasFilterStr = filtrarPorFinca
+        ? `finca_id=in.(${fincasIds.map(id => `"${String(id).replace(/"/g, '')}"`).join(',')})&`
+        : '';
+
+      const sondarTabla = async (query) => {
+        const res = await this._fetchConTimeout(`${this.config.url}/rest/v1/${query}`, {
+          method: 'GET',
+          headers: this.obtenerHeaders({
+            'Prefer': 'count=exact'
+          })
+        }, timeoutMs);
+        if (!res.ok) return `err:${res.status}`;
+        const range = (res.headers && typeof res.headers.get === 'function')
+          ? (res.headers.get('content-range') || '')
+          : '';
+        const rows = await res.json();
+        const top = Array.isArray(rows) && rows[0]
+          ? `${rows[0].id || ''}:${rows[0].actualizado_en || rows[0].creado_en || ''}`
+          : '0';
+        return `${range}|${top}`;
+      };
+
+      const [sigFincas, sigAnimales, sigPesajes, sigOps, sigDir] = await Promise.all([
+        sondarTabla('fincas?select=id,actualizado_en&order=actualizado_en.desc.nullslast&limit=1'),
+        sondarTabla(`animales?${fincasFilterStr}select=id,actualizado_en&order=actualizado_en.desc.nullslast&limit=1`),
+        sondarTabla(`pesajes_animales?${fincasFilterStr}select=id,creado_en&order=creado_en.desc.nullslast&limit=1`),
+        sondarTabla(`operaciones_diarias?${fincasFilterStr}id=not.like.ACT-PES-*&select=id,creado_en&order=creado_en.desc.nullslast&limit=1`),
+        sondarTabla('operaciones_diarias?id=eq.SYS_DIRECTORIO_EMPRESAS&select=id,creado_en&limit=1')
+      ]);
+
+      const firmaActual = [sigFincas, sigAnimales, sigPesajes, sigOps, sigDir].join('||');
+      if (this._ultimaFirmaRemota === null) {
+        this._ultimaFirmaRemota = firmaActual;
+        return { ok: true, hayCambios: false, firma: firmaActual, inicializada: true };
+      }
+
+      const hayCambios = firmaActual !== this._ultimaFirmaRemota;
+      this._ultimaFirmaRemota = firmaActual;
+      return { ok: true, hayCambios, firma: firmaActual };
+    } catch (err) {
+      return { ok: false, hayCambios: false, error: err.message };
     }
   }
 
@@ -26161,6 +26417,23 @@ class BoviTrackApp {
     fusionarColeccion('nominaTrabajadores', datos.nominaTrabajadores);
     fusionarColeccion('nominaPagos', datos.nominaPagos);
 
+    // Depurar copias redundantes ACT-PES-* de operacionesDiarias si ya existen en pesajes (Zero-Waste Egress & Storage)
+    if (Array.isArray(this.state.operacionesDiarias) && this.state.operacionesDiarias.length > 0 && Array.isArray(this.state.pesajes) && this.state.pesajes.length > 0) {
+      const pesIds = new Set(this.state.pesajes.map((p) => p && p.id).filter(Boolean));
+      const lenAntes = this.state.operacionesDiarias.length;
+      this.state.operacionesDiarias = this.state.operacionesDiarias.filter((op) => {
+        if (!op) return false;
+        const idOp = String(op.id || '');
+        if (idOp.startsWith('ACT-PES-') && (pesIds.has(idOp.slice(4)) || op.modulo === 'pesajes' || op.accion === 'pesajes')) {
+          return false;
+        }
+        return true;
+      });
+      if (this.state.operacionesDiarias.length !== lenAntes) {
+        huboCambios = true;
+      }
+    }
+
     // Sincronizar Clave Global de IA Gemini para todas las empresas y todas las fincas
     const globalGeminiConfig = (this.state.operacionesDiarias || []).find(
       (op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG' && typeof op.geminiApiKey === 'string'
@@ -26318,18 +26591,28 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
-      if (res.ok && res.datos) {
-        this._descargaCompletaRealizada = true;
-        const cambios = this.integrarDatosSupabase(res.datos);
-        if (cambios) {
-          this.actualizarBadgeConexion('sincronizado');
-        }
-      }
-
+      // 1. Si hay cambios locales pendientes, subirlos de forma diferencial (sólo registros modificados)
       if (this._syncPendiente) {
         this._syncPendiente = false;
         await this.supabase.subirDatosASupabase(this.state);
+      }
+
+      // 2. Sonda ultraliviana (< 350 bytes) antes de descargar todas las tablas (~2.65 MB)
+      let requiereDescargaCompleta = !this._descargaCompletaRealizada;
+      if (!requiereDescargaCompleta && typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+        const verif = await this.supabase.verificarCambiosRemotosLiviano(8000, tenantContext);
+        requiereDescargaCompleta = Boolean(verif && verif.ok && verif.hayCambios);
+      }
+
+      if (requiereDescargaCompleta) {
+        const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+        if (res.ok && res.datos) {
+          this._descargaCompletaRealizada = true;
+          const cambios = this.integrarDatosSupabase(res.datos);
+          if (cambios) {
+            this.actualizarBadgeConexion('sincronizado');
+          }
+        }
       }
     } catch (err) {
       console.warn('Error en heartbeat sync con Supabase:', err);
@@ -26350,8 +26633,8 @@ class BoviTrackApp {
 
     const ejecutarSyncConCooldown = () => {
       const ahora = Date.now();
-      // Cooldown de 5 segundos para prevenir tormentas de eventos simultáneos
-      if (ahora - (this._ultimoSyncTiempo || 0) < 5000) return;
+      // Cooldown de 30 segundos para prevenir tormentas de eventos simultáneos y proteger cuota Egress
+      if (ahora - (this._ultimoSyncTiempo || 0) < 30000) return;
       if (!this.online || this._syncEnCurso) return;
       this._ultimoSyncTiempo = ahora;
       this.sincronizarEnSegundoPlano();
@@ -26373,7 +26656,7 @@ class BoviTrackApp {
       }
     });
 
-    // 3. Heartbeat periódico cada 25 segundos (mantiene todos los dispositivos en línea permanentemente)
+    // 3. Heartbeat periódico cada 120 segundos con sonda ultraliviana (< 350 bytes por ciclo)
     if (this._heartbeatTimer) clearInterval(this._heartbeatTimer);
     this._heartbeatTimer = setInterval(() => {
       const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
@@ -26381,7 +26664,7 @@ class BoviTrackApp {
         this._ultimoSyncTiempo = Date.now();
         this.sincronizarEnSegundoPlano();
       }
-    }, 25000);
+    }, 120000);
   }
 
   async sincronizarManualConSupabase(silencioso = false) {

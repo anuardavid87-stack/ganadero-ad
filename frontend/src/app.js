@@ -988,6 +988,23 @@ class BoviTrackApp {
     fusionarColeccion('nominaTrabajadores', datos.nominaTrabajadores);
     fusionarColeccion('nominaPagos', datos.nominaPagos);
 
+    // Depurar copias redundantes ACT-PES-* de operacionesDiarias si ya existen en pesajes (Zero-Waste Egress & Storage)
+    if (Array.isArray(this.state.operacionesDiarias) && this.state.operacionesDiarias.length > 0 && Array.isArray(this.state.pesajes) && this.state.pesajes.length > 0) {
+      const pesIds = new Set(this.state.pesajes.map((p) => p && p.id).filter(Boolean));
+      const lenAntes = this.state.operacionesDiarias.length;
+      this.state.operacionesDiarias = this.state.operacionesDiarias.filter((op) => {
+        if (!op) return false;
+        const idOp = String(op.id || '');
+        if (idOp.startsWith('ACT-PES-') && (pesIds.has(idOp.slice(4)) || op.modulo === 'pesajes' || op.accion === 'pesajes')) {
+          return false;
+        }
+        return true;
+      });
+      if (this.state.operacionesDiarias.length !== lenAntes) {
+        huboCambios = true;
+      }
+    }
+
     // Sincronizar Clave Global de IA Gemini para todas las empresas y todas las fincas
     const globalGeminiConfig = (this.state.operacionesDiarias || []).find(
       (op) => op && op.id === 'SYS_GEMINI_GLOBAL_CONFIG' && typeof op.geminiApiKey === 'string'
@@ -1145,18 +1162,28 @@ class BoviTrackApp {
         this.supabase.setTenantContext(tenantContext);
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
-      if (res.ok && res.datos) {
-        this._descargaCompletaRealizada = true;
-        const cambios = this.integrarDatosSupabase(res.datos);
-        if (cambios) {
-          this.actualizarBadgeConexion('sincronizado');
-        }
-      }
-
+      // 1. Si hay cambios locales pendientes, subirlos de forma diferencial (sólo registros modificados)
       if (this._syncPendiente) {
         this._syncPendiente = false;
         await this.supabase.subirDatosASupabase(this.state);
+      }
+
+      // 2. Sonda ultraliviana (< 350 bytes) antes de descargar todas las tablas (~2.65 MB)
+      let requiereDescargaCompleta = !this._descargaCompletaRealizada;
+      if (!requiereDescargaCompleta && typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+        const verif = await this.supabase.verificarCambiosRemotosLiviano(8000, tenantContext);
+        requiereDescargaCompleta = Boolean(verif && verif.ok && verif.hayCambios);
+      }
+
+      if (requiereDescargaCompleta) {
+        const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+        if (res.ok && res.datos) {
+          this._descargaCompletaRealizada = true;
+          const cambios = this.integrarDatosSupabase(res.datos);
+          if (cambios) {
+            this.actualizarBadgeConexion('sincronizado');
+          }
+        }
       }
     } catch (err) {
       console.warn('Error en heartbeat sync con Supabase:', err);
@@ -1177,8 +1204,8 @@ class BoviTrackApp {
 
     const ejecutarSyncConCooldown = () => {
       const ahora = Date.now();
-      // Cooldown de 5 segundos para prevenir tormentas de eventos simultáneos
-      if (ahora - (this._ultimoSyncTiempo || 0) < 5000) return;
+      // Cooldown de 30 segundos para prevenir tormentas de eventos simultáneos y proteger cuota Egress
+      if (ahora - (this._ultimoSyncTiempo || 0) < 30000) return;
       if (!this.online || this._syncEnCurso) return;
       this._ultimoSyncTiempo = ahora;
       this.sincronizarEnSegundoPlano();
@@ -1200,7 +1227,7 @@ class BoviTrackApp {
       }
     });
 
-    // 3. Heartbeat periódico cada 25 segundos (mantiene todos los dispositivos en línea permanentemente)
+    // 3. Heartbeat periódico cada 120 segundos con sonda ultraliviana (< 350 bytes por ciclo)
     if (this._heartbeatTimer) clearInterval(this._heartbeatTimer);
     this._heartbeatTimer = setInterval(() => {
       const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
@@ -1208,7 +1235,7 @@ class BoviTrackApp {
         this._ultimoSyncTiempo = Date.now();
         this.sincronizarEnSegundoPlano();
       }
-    }, 25000);
+    }, 120000);
   }
 
   async sincronizarManualConSupabase(silencioso = false) {

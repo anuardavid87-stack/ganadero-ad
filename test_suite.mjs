@@ -7399,6 +7399,99 @@ console.log('\n--- 62. Pruebas de Resiliencia Móvil (QuotaExceededError y Condi
     pullPostLoginEjecutado === true,
     'Sincronización Post-Login en Sesión Limpia: Encola automáticamente _pullInicialPendiente cuando el usuario inicia sesión mientras el sync pre-login sigue en curso'
   );
+
+  // 62.3: Subida diferencial con _cacheHuellasCloud (0 peticiones cuando nada cambió, sólo 1 registro subido al editar 1 animal)
+  const syncDiff = new SupabaseSyncService();
+  let upsertCalls = [];
+  syncDiff._postgrestUpsert = async (tabla, registros) => {
+    upsertCalls.push({ tabla, count: registros.length, registros });
+    return true;
+  };
+
+  const estadoBaseDiff = {
+    usuarioActual: { id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin' },
+    empresaActivaId: 'EMP-01',
+    fincaActivaId: 'FIN-1',
+    empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES', activa: true }],
+    fincas: [{ id: 'FIN-1', nombre: 'Vesubio', empresaId: 'EMP-01', areaHa: 250 }],
+    usuarios: [{ id: 'USR-SUPER', usuario: 'anuardavid', nombre: 'Anuar', rol: 'superadmin', activo: true }],
+    animales: [
+      { id: 'ANM-1', fincaId: 'FIN-1', identificacionTag: '101', pesoActualKg: 400, estadoVida: 'activo' },
+      { id: 'ANM-2', fincaId: 'FIN-1', identificacionTag: '102', pesoActualKg: 420, estadoVida: 'activo' }
+    ],
+    pesajes: [{ id: 'PES-101', fincaId: 'FIN-1', tag: '101', pesoNuevo: 400, fecha: '2026-11-10' }],
+    operacionesDiarias: [
+      { id: 'ACT-PES-PES-101', fincaId: 'FIN-1', accion: 'pesajes', modulo: 'pesajes', fecha: '2026-11-10' },
+      { id: 'ACT-LECHE-1', fincaId: 'FIN-1', accion: 'leche', modulo: 'leche', fecha: '2026-11-10' }
+    ]
+  };
+
+  // Primera subida: sube los registros iniciales y excluye ACT-PES-PES-101 de operaciones_diarias
+  await syncDiff.subirDatosASupabase(estadoBaseDiff);
+  const opsSubidas1 = upsertCalls.find(c => c.tabla === 'operaciones_diarias' && c.registros[0]?.id !== 'SYS_DIRECTORIO_EMPRESAS');
+  const callsPrimeraSubida = upsertCalls.length;
+
+  // Segunda subida inmediata sin cambios: 0 peticiones HTTP
+  upsertCalls = [];
+  await syncDiff.subirDatosASupabase(estadoBaseDiff);
+  const callsSegundaSubidaSinCambios = upsertCalls.length;
+
+  // Tercera subida tras modificar únicamente el peso de ANM-1: sólo sube 1 animal
+  upsertCalls = [];
+  estadoBaseDiff.animales[0] = { ...estadoBaseDiff.animales[0], pesoActualKg: 435 };
+  await syncDiff.subirDatosASupabase(estadoBaseDiff);
+  const callsTerceraSubida = upsertCalls;
+
+  test(
+    callsPrimeraSubida > 0 &&
+    opsSubidas1 && opsSubidas1.count === 1 && opsSubidas1.registros[0].id === 'ACT-LECHE-1' &&
+    callsSegundaSubidaSinCambios === 0 &&
+    callsTerceraSubida.length === 1 &&
+    callsTerceraSubida[0].tabla === 'animales' &&
+    callsTerceraSubida[0].count === 1,
+    'Optimización Zero-Waste Egress (Subida Diferencial): Excluye duplicados ACT-PES-*, realiza 0 peticiones cuando no hay cambios y sube únicamente el registro modificado'
+  );
+
+  // 62.4: Heartbeat con sonda ultraliviana (verificarCambiosRemotosLiviano evita descargas completas innecesarias)
+  let descargasCompletasEjecutadas = 0;
+  let hayCambiosSimulado = false;
+  const mockAppHeartbeat = {
+    online: true,
+    _syncEnCurso: false,
+    _syncPendiente: false,
+    _descargaCompletaRealizada: true,
+    state: {
+      empresaActivaId: 'EMP-01',
+      usuarioActual: { id: 'USR-SUPER', usuario: 'anuardavid', rol: 'superadmin' }
+    },
+    getFincasEmpresa: () => [{ id: 'FIN-1', empresaId: 'EMP-01' }],
+    supabase: {
+      estaConfigurado: () => true,
+      setTenantContext: () => {},
+      verificarCambiosRemotosLiviano: async () => ({ ok: true, hayCambios: hayCambiosSimulado }),
+      descargarDatosDeSupabase: async () => {
+        descargasCompletasEjecutadas++;
+        return { ok: true, datos: {} };
+      }
+    },
+    integrarDatosSupabase: () => false,
+    actualizarBadgeConexion: () => {},
+    sincronizarEnSegundoPlano: BoviTrackApp.prototype.sincronizarEnSegundoPlano
+  };
+
+  // Ciclo 1: sin cambios remotos -> 0 descargas completas
+  await mockAppHeartbeat.sincronizarEnSegundoPlano();
+  const descargasSinCambios = descargasCompletasEjecutadas;
+
+  // Ciclo 2: con cambio remoto detectado por la sonda -> 1 descarga completa
+  hayCambiosSimulado = true;
+  await mockAppHeartbeat.sincronizarEnSegundoPlano();
+  const descargasConCambios = descargasCompletasEjecutadas;
+
+  test(
+    descargasSinCambios === 0 && descargasConCambios === 1,
+    'Optimización Zero-Waste Egress (Heartbeat Sonda Liviana): Omite descarga completa cuando no hay cambios remotos y descarga sólo cuando la sonda detecta novedades'
+  );
 }
 
 console.log(`\n=====================================================================`);

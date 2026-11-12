@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.6.0-mobile-sync-resilience';
+const CACHE_NAME = 'ganadero-ad-v4.6.1-zero-waste-egress';
 const CORE_FILES = [
   './',
   './index.html',
