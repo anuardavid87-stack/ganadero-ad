@@ -6239,6 +6239,7 @@ import {
   DEFAULT_SHARED_WHATSAPP_CHANNEL,
   calcularHmacSha256Hex,
   validarFirmaWebhookMeta,
+  verificarSaludSecretosWhatsApp,
   reiniciarEstadoWhatsAppMultitenantParaTests,
   listarCanalesWhatsApp,
   obtenerCanalActivoEmpresa,
@@ -6469,8 +6470,9 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     DEFAULT_SHARED_WHATSAPP_CHANNEL.display_phone_number === '+57 322 5694112' &&
     DEFAULT_SHARED_WHATSAPP_CHANNEL.waba_id === '118927644541032' &&
     DEFAULT_SHARED_WHATSAPP_CHANNEL.tipo === 'compartido' &&
-    DEFAULT_SHARED_WHATSAPP_CHANNEL.empresa_id === null,
-    'WhatsApp Cloud API v25.0: Constante GRAPH_API_VERSION = "v25.0" y canal COMPARTIDO por defecto (111443548633291 / +57 322 5694112 / WABA 118927644541032)'
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.empresa_id === null &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.template_lang === 'es',
+    'WhatsApp Cloud API v25.0: Constante GRAPH_API_VERSION = "v25.0", canal COMPARTIDO por defecto y template_lang = "es"'
   );
 
   // Regla de teléfono único activo en whatsapp_contacts (un teléfono solo puede estar activo en UNA empresa)
@@ -6522,25 +6524,61 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     'WhatsApp Cloud Webhook (GET): Valida hub.mode, hub.verify_token y retorna hub.challenge en texto plano'
   );
 
-  // Validación criptográfica X-Hub-Signature-256 (HMAC-SHA256)
+  // Validación criptográfica X-Hub-Signature-256 (HMAC-SHA256 con crypto.timingSafeEqual, 500 sin WHATSAPP_APP_SECRET y 401 sin header o firma inválida)
   const rawSample = JSON.stringify({ object: 'whatsapp_business_account', entry: [] });
   const firmaValida = 'sha256=' + calcularHmacSha256Hex(rawSample, envMockWA.WHATSAPP_APP_SECRET);
   const checkSigOk = validarFirmaWebhookMeta(rawSample, firmaValida, envMockWA.WHATSAPP_APP_SECRET);
+  const checkSigMissingHeader = validarFirmaWebhookMeta(rawSample, '', envMockWA.WHATSAPP_APP_SECRET);
+  const checkSigMissingSecret = validarFirmaWebhookMeta(rawSample, firmaValida, '');
   const checkSigBad = validarFirmaWebhookMeta(rawSample, 'sha256=0000000000000000000000000000000000000000000000000000000000000000', envMockWA.WHATSAPP_APP_SECRET);
+
+  const postSinAppSecret = await procesarWebhookPostWhatsApp({ entry: [] }, {
+    env: { WHATSAPP_SYSTEM_TOKEN: 'token', WHATSAPP_VERIFY_TOKEN: 'verify' },
+    rawBody: rawSample,
+    signatureHeader: firmaValida
+  });
+
+  const postSinHeaderFirma = await procesarWebhookPostWhatsApp({ entry: [] }, {
+    env: envMockWA,
+    rawBody: rawSample
+  });
 
   const postFirmaInvalida = await procesarWebhookPostWhatsApp({ entry: [] }, {
     env: envMockWA,
     rawBody: rawSample,
-    signatureHeader: 'sha256=firma_falsa',
-    validarFirma: true
+    signatureHeader: 'sha256=firma_falsa'
   });
 
   test(
     checkSigOk.ok === true &&
+    checkSigMissingSecret.ok === false &&
+    checkSigMissingSecret.status === 500 &&
+    checkSigMissingHeader.ok === false &&
+    checkSigMissingHeader.status === 401 &&
     checkSigBad.ok === false &&
     checkSigBad.status === 401 &&
+    postSinAppSecret.status === 500 &&
+    postSinHeaderFirma.status === 401 &&
     postFirmaInvalida.status === 401,
-    'WhatsApp Cloud Webhook (Seguridad X-Hub-Signature-256): Valida HMAC-SHA256 con WHATSAPP_APP_SECRET y rechaza firmas inválidas con HTTP 401'
+    'WhatsApp Cloud Webhook (Seguridad X-Hub-Signature-256): Retorna 500 si falta WHATSAPP_APP_SECRET y 401 si falta X-Hub-Signature-256 o no coincide (timingSafeEqual)'
+  );
+
+  // Endpoint GET /api/whatsapp/health (solo Super Admin)
+  const healthNoAdmin = verificarSaludSecretosWhatsApp(envMockWA, { rol: 'administrador' });
+  const healthFaltanVars = verificarSaludSecretosWhatsApp({}, { rol: 'superadmin' });
+  const healthOkVars = verificarSaludSecretosWhatsApp(envMockWA, { rol: 'superadmin' });
+
+  test(
+    healthNoAdmin.status === 403 &&
+    healthFaltanVars.status === 200 &&
+    healthFaltanVars.body.WHATSAPP_SYSTEM_TOKEN === false &&
+    healthFaltanVars.body.WHATSAPP_APP_SECRET === false &&
+    healthFaltanVars.body.WHATSAPP_VERIFY_TOKEN === false &&
+    healthOkVars.status === 200 &&
+    healthOkVars.body.WHATSAPP_SYSTEM_TOKEN === true &&
+    healthOkVars.body.WHATSAPP_APP_SECRET === true &&
+    healthOkVars.body.WHATSAPP_VERIFY_TOKEN === true,
+    'GET /api/whatsapp/health: Protegido solo para Super Admin (403 a otros roles) y retorna booleanos reales sin exponer valores de secretos'
   );
 
   // Whitelist verification
@@ -6621,6 +6659,14 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     };
   };
 
+  const firmarPayloadWebhookTest = (payloadObj) => {
+    const raw = JSON.stringify(payloadObj);
+    return {
+      rawBody: raw,
+      signatureHeader: 'sha256=' + calcularHmacSha256Hex(raw, envMockWA.WHATSAPP_APP_SECRET)
+    };
+  };
+
   // Petición POST desde número NO autorizado -> responde UNA SOLA VEZ el aviso de no autorizado y no ejecuta comando
   const payloadNoAutorizado = {
     entry: [{
@@ -6632,13 +6678,18 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
+  const sigNoAuth = firmarPayloadWebhookTest(payloadNoAutorizado);
   const resNoAuth1 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
     env: envMockWA,
+    rawBody: sigNoAuth.rawBody,
+    signatureHeader: sigNoAuth.signatureHeader,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
   const resNoAuth2 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
     env: envMockWA,
+    rawBody: sigNoAuth.rawBody,
+    signatureHeader: sigNoAuth.signatureHeader,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
@@ -6665,8 +6716,11 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
+  const sigInfo = firmarPayloadWebhookTest(payloadInfo);
   const resInfo = await procesarWebhookPostWhatsApp(payloadInfo, {
     env: envMockWA,
+    rawBody: sigInfo.rawBody,
+    signatureHeader: sigInfo.signatureHeader,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
@@ -6693,8 +6747,11 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
+  const sigPeso = firmarPayloadWebhookTest(payloadPeso);
   const resPeso = await procesarWebhookPostWhatsApp(payloadPeso, {
     env: envMockWA,
+    rawBody: sigPeso.rawBody,
+    signatureHeader: sigPeso.signatureHeader,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
@@ -6723,8 +6780,11 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
+  const sigFinca = firmarPayloadWebhookTest(payloadFinca);
   const resFinca = await procesarWebhookPostWhatsApp(payloadFinca, {
     env: envMockWA,
+    rawBody: sigFinca.rawBody,
+    signatureHeader: sigFinca.signatureHeader,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
@@ -6750,7 +6810,7 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     env: envMockWA,
     fetchImpl: mockFetchMeta
   });
-  const envioPlantillaFuera24h = await enviarWhatsApp('EMP-01', '573158889900', { tipo: 'template', template_name: 'notificacion_ganadero_ad', template_lang: 'es_CO' }, {
+  const envioPlantillaFuera24h = await enviarWhatsApp('EMP-01', '573158889900', { tipo: 'template', template_name: 'notificacion_ganadero_ad' }, {
     env: envMockWA,
     fetchImpl: mockFetchMeta
   });
@@ -6761,8 +6821,9 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     envioSinVentana24h.ok === false &&
     envioSinVentana24h.error === 'Fuera de la ventana de 24h: usa una plantilla aprobada' &&
     envioDentroVentana24h.ok === true &&
-    envioPlantillaFuera24h.ok === true,
-    'enviarWhatsApp (Regla 24h & Seguridad): Bloquea envío al propio número del canal, bloquea texto libre > 24h y permite plantillas aprobadas'
+    envioPlantillaFuera24h.ok === true &&
+    llamadasGraphAPI[llamadasGraphAPI.length - 1].body.template.language.code === 'es',
+    'enviarWhatsApp (Regla 24h, Seguridad & Idioma Plantilla): Bloquea envío al propio canal, bloquea texto libre > 24h y usa código de idioma "es" por defecto en plantillas'
   );
 
   // Procesamiento de value.statuses[] -> whatsapp_message_status con resolución de empresa_id por wamid
@@ -6786,7 +6847,13 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
-  await procesarWebhookPostWhatsApp(payloadStatusError, { env: envMockWA, fetchImpl: mockFetchMeta });
+  const sigStatus = firmarPayloadWebhookTest(payloadStatusError);
+  await procesarWebhookPostWhatsApp(payloadStatusError, {
+    env: envMockWA,
+    rawBody: sigStatus.rawBody,
+    signatureHeader: sigStatus.signatureHeader,
+    fetchImpl: mockFetchMeta
+  });
   const estadosEmp1 = listarEstadosMensajesWhatsApp({ empresaId: 'EMP-01', esSuperAdmin: false });
   const consumoGlobal = obtenerReporteConsumoWhatsApp({ esSuperAdmin: true, empresasCatalogo: [{ id: 'EMP-01', nombre: 'INVERSIONES' }] });
 
@@ -6800,7 +6867,7 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     'WhatsApp Statuses & Consumo: Registra value.statuses[] con error_code (131047) asociado a empresa_id por wamid y consolida consumo mensual'
   );
 
-  // 57.6: Verificación de UI Multitenant en ModuloAdmin (Super Admin vs Admin de Empresa) y página pública /privacidad
+  // 57.6: Verificación de UI Multitenant en ModuloAdmin (Super Admin vs Admin de Empresa, Estado de Secretos y página pública /privacidad)
   const adminWaSuper = new ModuloAdmin({
     containerId: 'admin-wa-test',
     getFincas: () => [fincaConfigOrdeno],
@@ -6816,7 +6883,20 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   adminWaSuper.container = new MockDomElement('admin-wa-test');
   adminWaSuper.seccion = 'whatsapp';
   adminWaSuper.render();
-  const htmlAdminWaSuper = adminWaSuper.container.innerHTML;
+  const htmlAdminWaSuperSinVars = adminWaSuper.container.innerHTML;
+
+  // Simular respuesta real de GET /api/whatsapp/health con todas las variables configuradas
+  await adminWaSuper.consultarHealthWhatsAppServidor(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      ok: true,
+      WHATSAPP_SYSTEM_TOKEN: true,
+      WHATSAPP_APP_SECRET: true,
+      WHATSAPP_VERIFY_TOKEN: true
+    })
+  }));
+  const htmlAdminWaSuperConVars = adminWaSuper.container.innerHTML;
 
   const adminWaEmpresa = new ModuloAdmin({
     containerId: 'admin-wa-emp-test',
@@ -6838,14 +6918,17 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   const htmlPrivacidad = fs.readFileSync('privacidad.html', 'utf8');
 
   test(
-    htmlAdminWaSuper.includes('Graph API v25.0') &&
-    htmlAdminWaSuper.includes('id="tabla-wa-canales"') &&
-    htmlAdminWaSuper.includes('id="form-wa-crear-canal"') &&
-    htmlAdminWaSuper.includes('id="tabla-wa-consumo-facturacion"') &&
-    htmlAdminWaSuper.includes('id="tabla-wa-ultimos-estados"') &&
-    htmlAdminWaSuper.includes('131047') &&
-    !htmlAdminWaSuper.includes('id="wa-phone-id"') &&
-    !htmlAdminWaSuper.includes('hello_world') &&
+    htmlAdminWaSuperSinVars.includes('Graph API v25.0') &&
+    htmlAdminWaSuperSinVars.includes('✗ falta configurar') &&
+    htmlAdminWaSuperConVars.includes('✓ configurado') &&
+    !htmlAdminWaSuperConVars.includes('✗ falta configurar') &&
+    htmlAdminWaSuperConVars.includes('id="tabla-wa-canales"') &&
+    htmlAdminWaSuperConVars.includes('id="form-wa-crear-canal"') &&
+    htmlAdminWaSuperConVars.includes('id="tabla-wa-consumo-facturacion"') &&
+    htmlAdminWaSuperConVars.includes('id="tabla-wa-ultimos-estados"') &&
+    htmlAdminWaSuperConVars.includes('131047') &&
+    !htmlAdminWaSuperConVars.includes('id="wa-phone-id"') &&
+    !htmlAdminWaSuperConVars.includes('hello_world') &&
     htmlAdminWaEmpresa.includes('https://wa.me/573225694112') &&
     htmlAdminWaEmpresa.includes('Abrir chat') &&
     htmlAdminWaEmpresa.includes('id="form-wa-contacto"') &&
@@ -6855,7 +6938,7 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     htmlPrivacidad.includes('Magangué, Bolívar, Colombia') &&
     htmlPrivacidad.includes('Ley 1581 de 2012') &&
     htmlPrivacidad.includes('Supabase'),
-    'ModuloAdmin & /privacidad: Renderiza vistas diferenciadas Super Admin vs Empresa (v25.0, sin hello_world) y página legal pública /privacidad'
+    'ModuloAdmin & /privacidad: Muestra estado real de secretos desde /api/whatsapp/health (✗ falta configurar / ✓ configurado), plantillas editables y /privacidad'
   );
 }
 

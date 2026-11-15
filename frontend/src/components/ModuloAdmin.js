@@ -115,6 +115,13 @@ export class ModuloAdmin {
     this.onRegistrarPesoWhatsAppLocal = onRegistrarPesoWhatsAppLocal || null;
     this.whatsappHistorialSimulador = [];
     this.whatsappFeedback = null;
+    this.whatsappServerHealth = {
+      WHATSAPP_SYSTEM_TOKEN: false,
+      WHATSAPP_APP_SECRET: false,
+      WHATSAPP_VERIFY_TOKEN: false,
+      consultado: false
+    };
+    this.whatsappHealthCargando = false;
 
     this.onSeleccionarEmpresa = onSeleccionarEmpresa;
     this.onSeleccionarFinca = onSeleccionarFinca;
@@ -4212,6 +4219,47 @@ END $$;
       });
     }
 
+    // Super Admin: Verificar estado real de secretos en el servidor vía GET /api/whatsapp/health
+    const btnVerificarHealthWA = this.container.querySelector('#btn-wa-verificar-health');
+    if (btnVerificarHealthWA) {
+      btnVerificarHealthWA.addEventListener('click', () => {
+        this.consultarHealthWhatsAppServidor({ forzar: true });
+      });
+    }
+
+    // Super Admin: Guardar nombre e idioma de plantilla (template_name / template_lang) en un canal existente
+    this.container.querySelectorAll('.btn-wa-guardar-plantilla-canal').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const chId = btn.getAttribute('data-id');
+        const phoneId = btn.getAttribute('data-phone-id');
+        const tipo = btn.getAttribute('data-tipo') || 'compartido';
+        const empId = btn.getAttribute('data-empresa-id') || null;
+        const tplNameInput = this.container.querySelector(`.input-wa-ch-tpl-name[data-id="${chId}"]`);
+        const tplLangInput = this.container.querySelector(`.input-wa-ch-tpl-lang[data-id="${chId}"]`);
+        const nuevoNombrePlantilla = (tplNameInput?.value || 'notificacion_ganadero_ad').trim();
+        const nuevoIdiomaPlantilla = (tplLangInput?.value || 'es').trim();
+
+        const res = guardarCanalWhatsApp({
+          id: chId,
+          phone_number_id: phoneId,
+          tipo,
+          empresa_id: tipo === 'dedicado' ? empId : null,
+          template_name: nuevoNombrePlantilla,
+          template_lang: nuevoIdiomaPlantilla
+        }, { esSuperAdmin: esSuperAdmin });
+
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Plantilla del canal actualizada: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
+          };
+        }
+        this.render();
+      });
+    });
+
     // Super Admin: Crear / Asignar Canal Dedicado a una Empresa
     const formCrearCanalWA = this.container.querySelector('#form-wa-crear-canal');
     if (formCrearCanalWA) {
@@ -4223,7 +4271,7 @@ END $$;
         const nombre = (this.container.querySelector('#wa-canal-nombre')?.value || '').trim();
         const empresaId = (this.container.querySelector('#wa-canal-empresa-id')?.value || '').trim();
         const templateName = (this.container.querySelector('#wa-canal-template-name')?.value || 'notificacion_ganadero_ad').trim();
-        const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es_CO').trim();
+        const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es').trim();
         const tokenOverride = (this.container.querySelector('#wa-canal-token-override')?.value || '').trim();
 
         const res = guardarCanalWhatsApp({
@@ -4244,7 +4292,7 @@ END $$;
         } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId}.`
+            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId} con plantilla "${res.channel.template_name}" (${res.channel.template_lang}).`
           };
         }
         this.render();
@@ -4514,9 +4562,80 @@ END $$;
     });
   }
 
+  async consultarHealthWhatsAppServidor(opciones = {}) {
+    const opts = typeof opciones === 'function'
+      ? { forzar: true, fetchImpl: opciones }
+      : (opciones || {});
+    const forzar = Boolean(opts.forzar);
+    const fetchImpl = opts.fetchImpl || globalThis.fetch;
+
+    if (this.whatsappHealthCargando && !forzar) return this.whatsappServerHealth;
+    if (typeof fetchImpl !== 'function') return this.whatsappServerHealth;
+
+    const rol = this.getRolActual ? this.getRolActual() : 'administrador';
+    if (rol !== 'superadmin') return this.whatsappServerHealth;
+
+    this.whatsappHealthCargando = true;
+    try {
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+        ? window.location.origin
+        : 'https://ganadero-ad.vercel.app';
+      const res = await fetchImpl(`${originUrl}/api/whatsapp/health`, {
+        method: 'GET',
+        headers: {
+          'x-ganadero-rol': 'superadmin',
+          Accept: 'application/json'
+        }
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        this.whatsappServerHealth = {
+          WHATSAPP_SYSTEM_TOKEN: Boolean(data?.WHATSAPP_SYSTEM_TOKEN === true),
+          WHATSAPP_APP_SECRET: Boolean(data?.WHATSAPP_APP_SECRET === true),
+          WHATSAPP_VERIFY_TOKEN: Boolean(data?.WHATSAPP_VERIFY_TOKEN === true),
+          consultado: true
+        };
+      } else {
+        this.whatsappServerHealth = {
+          WHATSAPP_SYSTEM_TOKEN: false,
+          WHATSAPP_APP_SECRET: false,
+          WHATSAPP_VERIFY_TOKEN: false,
+          consultado: true
+        };
+      }
+    } catch {
+      this.whatsappServerHealth = {
+        WHATSAPP_SYSTEM_TOKEN: false,
+        WHATSAPP_APP_SECRET: false,
+        WHATSAPP_VERIFY_TOKEN: false,
+        consultado: true
+      };
+    } finally {
+      this.whatsappHealthCargando = false;
+      if (this.seccion === 'whatsapp') {
+        this.render();
+      }
+    }
+    return this.whatsappServerHealth;
+  }
+
   renderSeccionWhatsApp(fincaActiva, empresas = [], empresaActiva = null, fincas = [], esSuperAdmin = false) {
     const rol = this.getRolActual ? this.getRolActual() : 'administrador';
     const isSuper = Boolean(esSuperAdmin || rol === 'superadmin');
+
+    if (isSuper && !this.whatsappServerHealth?.consultado && !this.whatsappHealthCargando && typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      this.consultarHealthWhatsAppServidor();
+    }
+    const health = this.whatsappServerHealth || {
+      WHATSAPP_SYSTEM_TOKEN: false,
+      WHATSAPP_APP_SECRET: false,
+      WHATSAPP_VERIFY_TOKEN: false,
+      consultado: false
+    };
+    const renderBadgeSecreto = (existe) => existe
+      ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[10px]">✓ configurado</span>`
+      : `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-bold text-[10px]">✗ falta configurar</span>`;
+
     const todasEmpresas = Array.isArray(empresas) && empresas.length > 0
       ? empresas
       : (this.getEmpresas ? this.getEmpresas() : [{ id: 'EMP-01', nombre: 'INVERSIONES' }]);
@@ -4621,19 +4740,24 @@ END $$;
               </p>
             </div>
 
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
-              <div class="font-black text-slate-800 uppercase text-[11px] mb-1">🔒 Secretos en Servidor (Nunca en Frontend)</div>
-              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+            <div id="panel-wa-secretos-servidor" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <div class="font-black text-slate-800 uppercase text-[11px]">🔒 Secretos en Servidor (/api/whatsapp/health)</div>
+                <button type="button" id="btn-wa-verificar-health" class="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[10px] cursor-pointer transition">
+                  🔄 Verificar
+                </button>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="WHATSAPP_SYSTEM_TOKEN">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_SYSTEM_TOKEN</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_SYSTEM_TOKEN)}
               </div>
-              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="WHATSAPP_APP_SECRET">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_APP_SECRET</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_APP_SECRET)}
               </div>
-              <div class="flex justify-between items-center py-1">
+              <div class="flex justify-between items-center py-1" data-secret="WHATSAPP_VERIFY_TOKEN">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_VERIFY_TOKEN)}
               </div>
             </div>
           </div>
@@ -4646,7 +4770,7 @@ END $$;
                   <span>📡</span> 1. Canales de WhatsApp Registrados (<code>whatsapp_channels</code>)
                 </h5>
                 <p class="text-xs text-slate-600">
-                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa.
+                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa. El código de idioma de plantilla (por defecto <code>"es"</code>) es configurable y debe coincidir exactamente con Meta.
                 </p>
               </div>
             </div>
@@ -4660,7 +4784,7 @@ END $$;
                     <th class="p-2.5">Phone Number ID</th>
                     <th class="p-2.5">WABA ID</th>
                     <th class="p-2.5">Empresa Asignada</th>
-                    <th class="p-2.5">Plantilla (24h)</th>
+                    <th class="p-2.5">Plantilla e Idioma Meta (24h)</th>
                     <th class="p-2.5">Token Servidor</th>
                     <th class="p-2.5 text-center">Estado</th>
                   </tr>
@@ -4680,8 +4804,20 @@ END $$;
                       <td class="p-2.5 font-bold text-slate-700">
                         ${ch.tipo === 'compartido' ? '🌐 Todas (Compartido)' : (mapaNombresEmpresas.get(String(ch.empresa_id)) || ch.empresa_id)}
                       </td>
-                      <td class="p-2.5 font-mono text-[11px] text-slate-700">${ch.template_name || 'notificacion_ganadero_ad'} (${ch.template_lang || 'es_CO'})</td>
-                      <td class="p-2.5 text-[11px] font-bold text-emerald-800">${ch.token_estado || 'configurado ✓'}</td>
+                      <td class="p-2.5">
+                        <div class="flex items-center gap-1">
+                          <input type="text" class="input-wa-ch-tpl-name px-2 py-1 text-[11px] font-mono rounded border border-slate-300 w-36" data-id="${ch.id}" value="${ch.template_name || 'notificacion_ganadero_ad'}" title="Nombre de la plantilla en Meta">
+                          <input type="text" class="input-wa-ch-tpl-lang px-2 py-1 text-[11px] font-mono font-bold rounded border border-slate-300 w-16 text-center" data-id="${ch.id}" value="${ch.template_lang || 'es'}" title="Código de idioma exacto en Meta (por defecto es)">
+                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma">
+                            💾
+                          </button>
+                        </div>
+                      </td>
+                      <td class="p-2.5 text-[11px] font-bold">
+                        ${ch.tiene_token_override
+                          ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px]">✓ Override configurado</span>'
+                          : renderBadgeSecreto(health.WHATSAPP_SYSTEM_TOKEN)}
+                      </td>
                       <td class="p-2.5 text-center">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${ch.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
                           ${ch.activo !== false ? 'Activo' : 'Inactivo'}
@@ -4724,8 +4860,8 @@ END $$;
                   <input type="text" id="wa-canal-template-name" value="notificacion_ganadero_ad" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
                 </div>
                 <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla:</label>
-                  <input type="text" id="wa-canal-template-lang" value="es_CO" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla Meta (ej. es, es_CO):</label>
+                  <input type="text" id="wa-canal-template-lang" value="es" placeholder="es" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300">
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Token Override (Opcional):</label>

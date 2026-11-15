@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-15T04:14:54.180Z
+ * Generado automáticamente: 2026-11-15T04:39:29.574Z
  */
 (function() {
   "use strict";
@@ -5622,7 +5622,7 @@ const DEFAULT_SHARED_WHATSAPP_CHANNEL = Object.freeze({
     empresa_id: null,
     access_token_override: null,
     template_name: 'notificacion_ganadero_ad',
-    template_lang: 'es_CO',
+    template_lang: 'es',
     activo: true,
     created_at: '2026-01-01T00:00:00.000Z'
 });
@@ -5753,6 +5753,17 @@ function sha256Bytes(msgBytes) {
 }
 
 function calcularHmacSha256Hex(rawBody, secret) {
+    // Usar crypto nativo de Node cuando esté disponible para soportar Buffer crudo o string
+    const nodeCrypto = typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:crypto')
+        : null;
+    if (nodeCrypto && typeof nodeCrypto.createHmac === 'function') {
+        const bodyInput = (typeof Buffer !== 'undefined' && Buffer.isBuffer(rawBody))
+            ? rawBody
+            : String(rawBody ?? '');
+        return nodeCrypto.createHmac('sha256', String(secret ?? '')).update(bodyInput).digest('hex');
+    }
+
     let keyBytes = utf8ToBytes(secret);
     if (keyBytes.length > 64) keyBytes = sha256Bytes(keyBytes);
     while (keyBytes.length < 64) keyBytes.push(0);
@@ -5767,31 +5778,105 @@ function calcularHmacSha256Hex(rawBody, secret) {
 }
 
 /**
- * Valida la firma X-Hub-Signature-256 enviada por Meta con WHATSAPP_APP_SECRET.
- * Si no es válida, retorna { ok: false, status: 401 }.
+ * Valida la firma X-Hub-Signature-256 enviada por Meta con WHATSAPP_APP_SECRET
+ * sobre el body CRUDO (sin parsear):
+ * - Si falta WHATSAPP_APP_SECRET -> retorna { ok: false, status: 500 } y registra console.error.
+ * - Si falta el header X-Hub-Signature-256 o la firma HMAC-SHA256 no coincide -> retorna { ok: false, status: 401 }.
+ * - Usa crypto.timingSafeEqual para comparar de forma segura contra ataques de tiempo.
  */
-function validarFirmaWebhookMeta(rawBody, signatureHeader, appSecret) {
+function validarFirmaWebhookMeta(rawBody, signatureHeader, appSecret, cryptoOverride = null) {
     if (!appSecret || !String(appSecret).trim()) {
-        return { ok: false, status: 401, error: 'WHATSAPP_APP_SECRET no configurado en el servidor.' };
+        console.error('[WhatsApp Webhook Security] ERROR 500: Falta configurar WHATSAPP_APP_SECRET en las variables de entorno del servidor.');
+        return {
+            ok: false,
+            status: 500,
+            error: 'Error de configuración en el servidor: falta WHATSAPP_APP_SECRET.'
+        };
     }
-    const header = String(signatureHeader || '').trim();
-    if (!header.startsWith('sha256=')) {
-        return { ok: false, status: 401, error: 'Cabecera X-Hub-Signature-256 ausente o mal formada.' };
-    }
-    const firmaRecibida = header.slice('sha256='.length).toLowerCase();
-    const firmaEsperada = calcularHmacSha256Hex(rawBody, String(appSecret).trim()).toLowerCase();
 
-    if (firmaRecibida.length !== firmaEsperada.length) {
+    const header = String(signatureHeader || '').trim();
+    if (!header || !header.startsWith('sha256=')) {
+        return {
+            ok: false,
+            status: 401,
+            error: 'Cabecera X-Hub-Signature-256 ausente o mal formada.'
+        };
+    }
+
+    if (rawBody === undefined || rawBody === null) {
+        return {
+            ok: false,
+            status: 401,
+            error: 'Body crudo ausente para verificación HMAC-SHA256.'
+        };
+    }
+
+    const firmaRecibidaHex = header.slice('sha256='.length).toLowerCase();
+    const firmaEsperadaHex = calcularHmacSha256Hex(rawBody, String(appSecret).trim()).toLowerCase();
+
+    const nodeCrypto = cryptoOverride || (
+        typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function'
+            ? process.getBuiltinModule('node:crypto')
+            : null
+    );
+
+    if (nodeCrypto && typeof nodeCrypto.timingSafeEqual === 'function' && typeof Buffer !== 'undefined') {
+        const bufRecibida = Buffer.from(firmaRecibidaHex, 'utf8');
+        const bufEsperada = Buffer.from(firmaEsperadaHex, 'utf8');
+        if (bufRecibida.length !== bufEsperada.length || !nodeCrypto.timingSafeEqual(bufRecibida, bufEsperada)) {
+            return {
+                ok: false,
+                status: 401,
+                error: 'Firma X-Hub-Signature-256 inválida.'
+            };
+        }
+        return { ok: true, status: 200 };
+    }
+
+    if (firmaRecibidaHex.length !== firmaEsperadaHex.length) {
         return { ok: false, status: 401, error: 'Firma X-Hub-Signature-256 inválida.' };
     }
     let diff = 0;
-    for (let i = 0; i < firmaEsperada.length; i++) {
-        diff |= firmaRecibida.charCodeAt(i) ^ firmaEsperada.charCodeAt(i);
+    for (let i = 0; i < firmaEsperadaHex.length; i++) {
+        diff |= firmaRecibidaHex.charCodeAt(i) ^ firmaEsperadaHex.charCodeAt(i);
     }
     if (diff !== 0) {
         return { ok: false, status: 401, error: 'Firma X-Hub-Signature-256 no coincide con el payload.' };
     }
     return { ok: true, status: 200 };
+}
+
+/**
+ * Evalúa la existencia real de las variables de entorno en el servidor para
+ * el endpoint GET /api/whatsapp/health (exclusivo para Super Admin).
+ * Devuelve true/false para WHATSAPP_SYSTEM_TOKEN, WHATSAPP_APP_SECRET y WHATSAPP_VERIFY_TOKEN
+ * sin exponer jamás los valores.
+ */
+function verificarSaludSecretosWhatsApp(env = {}, { rol = '' } = {}) {
+    const rolLimpio = String(rol || '').trim().toLowerCase();
+    if (rolLimpio !== 'superadmin') {
+        return {
+            status: 403,
+            body: {
+                ok: false,
+                error: 'Forbidden: El endpoint /api/whatsapp/health es exclusivo para Super Admin.'
+            }
+        };
+    }
+
+    const tieneSystemToken = Boolean(env.WHATSAPP_SYSTEM_TOKEN && String(env.WHATSAPP_SYSTEM_TOKEN).trim().length > 0);
+    const tieneAppSecret = Boolean(env.WHATSAPP_APP_SECRET && String(env.WHATSAPP_APP_SECRET).trim().length > 0);
+    const tieneVerifyToken = Boolean(env.WHATSAPP_VERIFY_TOKEN && String(env.WHATSAPP_VERIFY_TOKEN).trim().length > 0);
+
+    return {
+        status: 200,
+        body: {
+            ok: true,
+            WHATSAPP_SYSTEM_TOKEN: tieneSystemToken,
+            WHATSAPP_APP_SECRET: tieneAppSecret,
+            WHATSAPP_VERIFY_TOKEN: tieneVerifyToken
+        }
+    };
 }
 
 // ============================================================================
@@ -5962,8 +6047,8 @@ function guardarCanalWhatsApp(datos = {}, { esSuperAdmin = true } = {}) {
         tipo,
         empresa_id: empresaId,
         access_token_override: tokenOverride || null,
-        template_name: String(datos.template_name || 'notificacion_ganadero_ad').trim(),
-        template_lang: String(datos.template_lang || 'es_CO').trim(),
+        template_name: String(datos.template_name || (existenteIdx >= 0 ? state.channels[existenteIdx].template_name : '') || 'notificacion_ganadero_ad').trim(),
+        template_lang: String(datos.template_lang || (existenteIdx >= 0 ? state.channels[existenteIdx].template_lang : '') || 'es').trim(),
         activo: datos.activo !== undefined ? Boolean(datos.activo) : true,
         created_at: existenteIdx >= 0 ? state.channels[existenteIdx].created_at : new Date().toISOString()
     };
@@ -6687,7 +6772,7 @@ async function enviarMensajeWhatsApp(telefonoDestino, textoMensaje, env = {}, fe
               type: 'template',
               template: textoMensaje.template || {
                   name: opciones.templateName || 'notificacion_ganadero_ad',
-                  language: { code: opciones.templateLang || 'es_CO' }
+                  language: { code: opciones.templateLang || 'es' }
               }
           }
         : {
@@ -6784,7 +6869,7 @@ async function enviarWhatsApp(empresaId, telefonoDestino, mensajeOPlantilla, opc
                 {
                     tipo: 'template',
                     template_name: canal.template_name || 'notificacion_ganadero_ad',
-                    template_lang: canal.template_lang || 'es_CO'
+                    template_lang: canal.template_lang || 'es'
                 },
                 { ...opciones, tipo: 'template', esPlantilla: true }
             );
@@ -6801,7 +6886,7 @@ async function enviarWhatsApp(empresaId, telefonoDestino, mensajeOPlantilla, opc
     const fetchImpl = opciones.fetchImpl || globalThis.fetch;
 
     const templateName = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_name) || canal.template_name || 'notificacion_ganadero_ad';
-    const templateLang = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_lang) || canal.template_lang || 'es_CO';
+    const templateLang = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_lang) || canal.template_lang || 'es';
 
     const payloadEnvio = esPlantilla
         ? {
@@ -7047,13 +7132,17 @@ async function procesarWebhookPostWhatsApp(payload = {}, opciones = {}) {
     const env = opciones.env || (typeof process !== 'undefined' && process.env ? process.env : {});
     const fetchImpl = opciones.fetchImpl || globalThis.fetch;
 
-    // 1. Validación criptográfica X-Hub-Signature-256 si viene cabecera o se exige validación
-    if (opciones.validarFirma === true || (opciones.signatureHeader !== undefined && env.WHATSAPP_APP_SECRET)) {
-        const rawBody = opciones.rawBody !== undefined ? opciones.rawBody : JSON.stringify(payload);
+    // 1. Validación criptográfica obligatoria de X-Hub-Signature-256 sobre el body CRUDO:
+    //    - Si falta WHATSAPP_APP_SECRET -> 500 y console.error
+    //    - Si falta el header X-Hub-Signature-256 o la firma HMAC-SHA256 no coincide -> 401
+    if (opciones.omitirValidacionFirma !== true) {
+        const rawBody = opciones.rawBody !== undefined
+            ? opciones.rawBody
+            : (typeof payload === 'string' ? payload : JSON.stringify(payload ?? {}));
         const verifFirma = validarFirmaWebhookMeta(rawBody, opciones.signatureHeader, env.WHATSAPP_APP_SECRET);
         if (!verifFirma.ok) {
             return {
-                status: 401,
+                status: verifFirma.status || 401,
                 body: { error: verifFirma.error }
             };
         }
@@ -12959,6 +13048,13 @@ class ModuloAdmin {
     this.onRegistrarPesoWhatsAppLocal = onRegistrarPesoWhatsAppLocal || null;
     this.whatsappHistorialSimulador = [];
     this.whatsappFeedback = null;
+    this.whatsappServerHealth = {
+      WHATSAPP_SYSTEM_TOKEN: false,
+      WHATSAPP_APP_SECRET: false,
+      WHATSAPP_VERIFY_TOKEN: false,
+      consultado: false
+    };
+    this.whatsappHealthCargando = false;
 
     this.onSeleccionarEmpresa = onSeleccionarEmpresa;
     this.onSeleccionarFinca = onSeleccionarFinca;
@@ -17056,6 +17152,47 @@ END $$;
       });
     }
 
+    // Super Admin: Verificar estado real de secretos en el servidor vía GET /api/whatsapp/health
+    const btnVerificarHealthWA = this.container.querySelector('#btn-wa-verificar-health');
+    if (btnVerificarHealthWA) {
+      btnVerificarHealthWA.addEventListener('click', () => {
+        this.consultarHealthWhatsAppServidor({ forzar: true });
+      });
+    }
+
+    // Super Admin: Guardar nombre e idioma de plantilla (template_name / template_lang) en un canal existente
+    this.container.querySelectorAll('.btn-wa-guardar-plantilla-canal').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const chId = btn.getAttribute('data-id');
+        const phoneId = btn.getAttribute('data-phone-id');
+        const tipo = btn.getAttribute('data-tipo') || 'compartido';
+        const empId = btn.getAttribute('data-empresa-id') || null;
+        const tplNameInput = this.container.querySelector(`.input-wa-ch-tpl-name[data-id="${chId}"]`);
+        const tplLangInput = this.container.querySelector(`.input-wa-ch-tpl-lang[data-id="${chId}"]`);
+        const nuevoNombrePlantilla = (tplNameInput?.value || 'notificacion_ganadero_ad').trim();
+        const nuevoIdiomaPlantilla = (tplLangInput?.value || 'es').trim();
+
+        const res = guardarCanalWhatsApp({
+          id: chId,
+          phone_number_id: phoneId,
+          tipo,
+          empresa_id: tipo === 'dedicado' ? empId : null,
+          template_name: nuevoNombrePlantilla,
+          template_lang: nuevoIdiomaPlantilla
+        }, { esSuperAdmin: esSuperAdmin });
+
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Plantilla del canal actualizada: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
+          };
+        }
+        this.render();
+      });
+    });
+
     // Super Admin: Crear / Asignar Canal Dedicado a una Empresa
     const formCrearCanalWA = this.container.querySelector('#form-wa-crear-canal');
     if (formCrearCanalWA) {
@@ -17067,7 +17204,7 @@ END $$;
         const nombre = (this.container.querySelector('#wa-canal-nombre')?.value || '').trim();
         const empresaId = (this.container.querySelector('#wa-canal-empresa-id')?.value || '').trim();
         const templateName = (this.container.querySelector('#wa-canal-template-name')?.value || 'notificacion_ganadero_ad').trim();
-        const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es_CO').trim();
+        const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es').trim();
         const tokenOverride = (this.container.querySelector('#wa-canal-token-override')?.value || '').trim();
 
         const res = guardarCanalWhatsApp({
@@ -17088,7 +17225,7 @@ END $$;
         } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId}.`
+            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId} con plantilla "${res.channel.template_name}" (${res.channel.template_lang}).`
           };
         }
         this.render();
@@ -17358,9 +17495,80 @@ END $$;
     });
   }
 
+  async consultarHealthWhatsAppServidor(opciones = {}) {
+    const opts = typeof opciones === 'function'
+      ? { forzar: true, fetchImpl: opciones }
+      : (opciones || {});
+    const forzar = Boolean(opts.forzar);
+    const fetchImpl = opts.fetchImpl || globalThis.fetch;
+
+    if (this.whatsappHealthCargando && !forzar) return this.whatsappServerHealth;
+    if (typeof fetchImpl !== 'function') return this.whatsappServerHealth;
+
+    const rol = this.getRolActual ? this.getRolActual() : 'administrador';
+    if (rol !== 'superadmin') return this.whatsappServerHealth;
+
+    this.whatsappHealthCargando = true;
+    try {
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+        ? window.location.origin
+        : 'https://ganadero-ad.vercel.app';
+      const res = await fetchImpl(`${originUrl}/api/whatsapp/health`, {
+        method: 'GET',
+        headers: {
+          'x-ganadero-rol': 'superadmin',
+          Accept: 'application/json'
+        }
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        this.whatsappServerHealth = {
+          WHATSAPP_SYSTEM_TOKEN: Boolean(data?.WHATSAPP_SYSTEM_TOKEN === true),
+          WHATSAPP_APP_SECRET: Boolean(data?.WHATSAPP_APP_SECRET === true),
+          WHATSAPP_VERIFY_TOKEN: Boolean(data?.WHATSAPP_VERIFY_TOKEN === true),
+          consultado: true
+        };
+      } else {
+        this.whatsappServerHealth = {
+          WHATSAPP_SYSTEM_TOKEN: false,
+          WHATSAPP_APP_SECRET: false,
+          WHATSAPP_VERIFY_TOKEN: false,
+          consultado: true
+        };
+      }
+    } catch {
+      this.whatsappServerHealth = {
+        WHATSAPP_SYSTEM_TOKEN: false,
+        WHATSAPP_APP_SECRET: false,
+        WHATSAPP_VERIFY_TOKEN: false,
+        consultado: true
+      };
+    } finally {
+      this.whatsappHealthCargando = false;
+      if (this.seccion === 'whatsapp') {
+        this.render();
+      }
+    }
+    return this.whatsappServerHealth;
+  }
+
   renderSeccionWhatsApp(fincaActiva, empresas = [], empresaActiva = null, fincas = [], esSuperAdmin = false) {
     const rol = this.getRolActual ? this.getRolActual() : 'administrador';
     const isSuper = Boolean(esSuperAdmin || rol === 'superadmin');
+
+    if (isSuper && !this.whatsappServerHealth?.consultado && !this.whatsappHealthCargando && typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      this.consultarHealthWhatsAppServidor();
+    }
+    const health = this.whatsappServerHealth || {
+      WHATSAPP_SYSTEM_TOKEN: false,
+      WHATSAPP_APP_SECRET: false,
+      WHATSAPP_VERIFY_TOKEN: false,
+      consultado: false
+    };
+    const renderBadgeSecreto = (existe) => existe
+      ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[10px]">✓ configurado</span>`
+      : `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-bold text-[10px]">✗ falta configurar</span>`;
+
     const todasEmpresas = Array.isArray(empresas) && empresas.length > 0
       ? empresas
       : (this.getEmpresas ? this.getEmpresas() : [{ id: 'EMP-01', nombre: 'INVERSIONES' }]);
@@ -17465,19 +17673,24 @@ END $$;
               </p>
             </div>
 
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
-              <div class="font-black text-slate-800 uppercase text-[11px] mb-1">🔒 Secretos en Servidor (Nunca en Frontend)</div>
-              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+            <div id="panel-wa-secretos-servidor" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <div class="font-black text-slate-800 uppercase text-[11px]">🔒 Secretos en Servidor (/api/whatsapp/health)</div>
+                <button type="button" id="btn-wa-verificar-health" class="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[10px] cursor-pointer transition">
+                  🔄 Verificar
+                </button>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="WHATSAPP_SYSTEM_TOKEN">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_SYSTEM_TOKEN</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_SYSTEM_TOKEN)}
               </div>
-              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="WHATSAPP_APP_SECRET">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_APP_SECRET</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_APP_SECRET)}
               </div>
-              <div class="flex justify-between items-center py-1">
+              <div class="flex justify-between items-center py-1" data-secret="WHATSAPP_VERIFY_TOKEN">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
-                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
+                ${renderBadgeSecreto(health.WHATSAPP_VERIFY_TOKEN)}
               </div>
             </div>
           </div>
@@ -17490,7 +17703,7 @@ END $$;
                   <span>📡</span> 1. Canales de WhatsApp Registrados (<code>whatsapp_channels</code>)
                 </h5>
                 <p class="text-xs text-slate-600">
-                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa.
+                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa. El código de idioma de plantilla (por defecto <code>"es"</code>) es configurable y debe coincidir exactamente con Meta.
                 </p>
               </div>
             </div>
@@ -17504,7 +17717,7 @@ END $$;
                     <th class="p-2.5">Phone Number ID</th>
                     <th class="p-2.5">WABA ID</th>
                     <th class="p-2.5">Empresa Asignada</th>
-                    <th class="p-2.5">Plantilla (24h)</th>
+                    <th class="p-2.5">Plantilla e Idioma Meta (24h)</th>
                     <th class="p-2.5">Token Servidor</th>
                     <th class="p-2.5 text-center">Estado</th>
                   </tr>
@@ -17524,8 +17737,20 @@ END $$;
                       <td class="p-2.5 font-bold text-slate-700">
                         ${ch.tipo === 'compartido' ? '🌐 Todas (Compartido)' : (mapaNombresEmpresas.get(String(ch.empresa_id)) || ch.empresa_id)}
                       </td>
-                      <td class="p-2.5 font-mono text-[11px] text-slate-700">${ch.template_name || 'notificacion_ganadero_ad'} (${ch.template_lang || 'es_CO'})</td>
-                      <td class="p-2.5 text-[11px] font-bold text-emerald-800">${ch.token_estado || 'configurado ✓'}</td>
+                      <td class="p-2.5">
+                        <div class="flex items-center gap-1">
+                          <input type="text" class="input-wa-ch-tpl-name px-2 py-1 text-[11px] font-mono rounded border border-slate-300 w-36" data-id="${ch.id}" value="${ch.template_name || 'notificacion_ganadero_ad'}" title="Nombre de la plantilla en Meta">
+                          <input type="text" class="input-wa-ch-tpl-lang px-2 py-1 text-[11px] font-mono font-bold rounded border border-slate-300 w-16 text-center" data-id="${ch.id}" value="${ch.template_lang || 'es'}" title="Código de idioma exacto en Meta (por defecto es)">
+                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma">
+                            💾
+                          </button>
+                        </div>
+                      </td>
+                      <td class="p-2.5 text-[11px] font-bold">
+                        ${ch.tiene_token_override
+                          ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px]">✓ Override configurado</span>'
+                          : renderBadgeSecreto(health.WHATSAPP_SYSTEM_TOKEN)}
+                      </td>
                       <td class="p-2.5 text-center">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${ch.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
                           ${ch.activo !== false ? 'Activo' : 'Inactivo'}
@@ -17568,8 +17793,8 @@ END $$;
                   <input type="text" id="wa-canal-template-name" value="notificacion_ganadero_ad" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
                 </div>
                 <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla:</label>
-                  <input type="text" id="wa-canal-template-lang" value="es_CO" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla Meta (ej. es, es_CO):</label>
+                  <input type="text" id="wa-canal-template-lang" value="es" placeholder="es" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300">
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Token Override (Opcional):</label>

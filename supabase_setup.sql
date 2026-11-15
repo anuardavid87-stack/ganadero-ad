@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_channels (
     empresa_id text REFERENCES public.empresas(id) ON DELETE SET NULL,
     access_token_override text,
     template_name text DEFAULT 'notificacion_ganadero_ad',
-    template_lang text DEFAULT 'es_CO',
+    template_lang text DEFAULT 'es',
     activo boolean DEFAULT true,
     created_at timestamptz DEFAULT now()
 );
@@ -463,7 +463,7 @@ INSERT INTO public.whatsapp_channels (
 )
 VALUES (
     'CH-SHARED-DEFAULT', '111443548633291', '118927644541032', '+57 322 5694112',
-    'Canal Compartido Ganadero AD', 'compartido', NULL, NULL, 'notificacion_ganadero_ad', 'es_CO', true
+    'Canal Compartido Ganadero AD', 'compartido', NULL, NULL, 'notificacion_ganadero_ad', 'es', true
 )
 ON CONFLICT (phone_number_id) DO NOTHING;
 

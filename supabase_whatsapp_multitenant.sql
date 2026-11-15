@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_channels (
     empresa_id text REFERENCES public.empresas(id) ON DELETE SET NULL,
     access_token_override text, -- Cifrado, opcional; si es NULL se usa WHATSAPP_SYSTEM_TOKEN en servidor
     template_name text DEFAULT 'notificacion_ganadero_ad',
-    template_lang text DEFAULT 'es_CO',
+    template_lang text DEFAULT 'es',
     activo boolean DEFAULT true,
     created_at timestamptz DEFAULT now(),
     CONSTRAINT chk_whatsapp_channels_tipo_empresa CHECK (
@@ -39,7 +39,7 @@ VALUES (
     NULL,
     NULL,
     'notificacion_ganadero_ad',
-    'es_CO',
+    'es',
     true
 )
 ON CONFLICT (phone_number_id) DO UPDATE SET

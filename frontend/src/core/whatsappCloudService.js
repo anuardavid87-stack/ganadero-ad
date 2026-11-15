@@ -16,7 +16,7 @@ export const DEFAULT_SHARED_WHATSAPP_CHANNEL = Object.freeze({
     empresa_id: null,
     access_token_override: null,
     template_name: 'notificacion_ganadero_ad',
-    template_lang: 'es_CO',
+    template_lang: 'es',
     activo: true,
     created_at: '2026-01-01T00:00:00.000Z'
 });
@@ -147,6 +147,17 @@ function sha256Bytes(msgBytes) {
 }
 
 export function calcularHmacSha256Hex(rawBody, secret) {
+    // Usar crypto nativo de Node cuando esté disponible para soportar Buffer crudo o string
+    const nodeCrypto = typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:crypto')
+        : null;
+    if (nodeCrypto && typeof nodeCrypto.createHmac === 'function') {
+        const bodyInput = (typeof Buffer !== 'undefined' && Buffer.isBuffer(rawBody))
+            ? rawBody
+            : String(rawBody ?? '');
+        return nodeCrypto.createHmac('sha256', String(secret ?? '')).update(bodyInput).digest('hex');
+    }
+
     let keyBytes = utf8ToBytes(secret);
     if (keyBytes.length > 64) keyBytes = sha256Bytes(keyBytes);
     while (keyBytes.length < 64) keyBytes.push(0);
@@ -161,31 +172,105 @@ export function calcularHmacSha256Hex(rawBody, secret) {
 }
 
 /**
- * Valida la firma X-Hub-Signature-256 enviada por Meta con WHATSAPP_APP_SECRET.
- * Si no es válida, retorna { ok: false, status: 401 }.
+ * Valida la firma X-Hub-Signature-256 enviada por Meta con WHATSAPP_APP_SECRET
+ * sobre el body CRUDO (sin parsear):
+ * - Si falta WHATSAPP_APP_SECRET -> retorna { ok: false, status: 500 } y registra console.error.
+ * - Si falta el header X-Hub-Signature-256 o la firma HMAC-SHA256 no coincide -> retorna { ok: false, status: 401 }.
+ * - Usa crypto.timingSafeEqual para comparar de forma segura contra ataques de tiempo.
  */
-export function validarFirmaWebhookMeta(rawBody, signatureHeader, appSecret) {
+export function validarFirmaWebhookMeta(rawBody, signatureHeader, appSecret, cryptoOverride = null) {
     if (!appSecret || !String(appSecret).trim()) {
-        return { ok: false, status: 401, error: 'WHATSAPP_APP_SECRET no configurado en el servidor.' };
+        console.error('[WhatsApp Webhook Security] ERROR 500: Falta configurar WHATSAPP_APP_SECRET en las variables de entorno del servidor.');
+        return {
+            ok: false,
+            status: 500,
+            error: 'Error de configuración en el servidor: falta WHATSAPP_APP_SECRET.'
+        };
     }
-    const header = String(signatureHeader || '').trim();
-    if (!header.startsWith('sha256=')) {
-        return { ok: false, status: 401, error: 'Cabecera X-Hub-Signature-256 ausente o mal formada.' };
-    }
-    const firmaRecibida = header.slice('sha256='.length).toLowerCase();
-    const firmaEsperada = calcularHmacSha256Hex(rawBody, String(appSecret).trim()).toLowerCase();
 
-    if (firmaRecibida.length !== firmaEsperada.length) {
+    const header = String(signatureHeader || '').trim();
+    if (!header || !header.startsWith('sha256=')) {
+        return {
+            ok: false,
+            status: 401,
+            error: 'Cabecera X-Hub-Signature-256 ausente o mal formada.'
+        };
+    }
+
+    if (rawBody === undefined || rawBody === null) {
+        return {
+            ok: false,
+            status: 401,
+            error: 'Body crudo ausente para verificación HMAC-SHA256.'
+        };
+    }
+
+    const firmaRecibidaHex = header.slice('sha256='.length).toLowerCase();
+    const firmaEsperadaHex = calcularHmacSha256Hex(rawBody, String(appSecret).trim()).toLowerCase();
+
+    const nodeCrypto = cryptoOverride || (
+        typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function'
+            ? process.getBuiltinModule('node:crypto')
+            : null
+    );
+
+    if (nodeCrypto && typeof nodeCrypto.timingSafeEqual === 'function' && typeof Buffer !== 'undefined') {
+        const bufRecibida = Buffer.from(firmaRecibidaHex, 'utf8');
+        const bufEsperada = Buffer.from(firmaEsperadaHex, 'utf8');
+        if (bufRecibida.length !== bufEsperada.length || !nodeCrypto.timingSafeEqual(bufRecibida, bufEsperada)) {
+            return {
+                ok: false,
+                status: 401,
+                error: 'Firma X-Hub-Signature-256 inválida.'
+            };
+        }
+        return { ok: true, status: 200 };
+    }
+
+    if (firmaRecibidaHex.length !== firmaEsperadaHex.length) {
         return { ok: false, status: 401, error: 'Firma X-Hub-Signature-256 inválida.' };
     }
     let diff = 0;
-    for (let i = 0; i < firmaEsperada.length; i++) {
-        diff |= firmaRecibida.charCodeAt(i) ^ firmaEsperada.charCodeAt(i);
+    for (let i = 0; i < firmaEsperadaHex.length; i++) {
+        diff |= firmaRecibidaHex.charCodeAt(i) ^ firmaEsperadaHex.charCodeAt(i);
     }
     if (diff !== 0) {
         return { ok: false, status: 401, error: 'Firma X-Hub-Signature-256 no coincide con el payload.' };
     }
     return { ok: true, status: 200 };
+}
+
+/**
+ * Evalúa la existencia real de las variables de entorno en el servidor para
+ * el endpoint GET /api/whatsapp/health (exclusivo para Super Admin).
+ * Devuelve true/false para WHATSAPP_SYSTEM_TOKEN, WHATSAPP_APP_SECRET y WHATSAPP_VERIFY_TOKEN
+ * sin exponer jamás los valores.
+ */
+export function verificarSaludSecretosWhatsApp(env = {}, { rol = '' } = {}) {
+    const rolLimpio = String(rol || '').trim().toLowerCase();
+    if (rolLimpio !== 'superadmin') {
+        return {
+            status: 403,
+            body: {
+                ok: false,
+                error: 'Forbidden: El endpoint /api/whatsapp/health es exclusivo para Super Admin.'
+            }
+        };
+    }
+
+    const tieneSystemToken = Boolean(env.WHATSAPP_SYSTEM_TOKEN && String(env.WHATSAPP_SYSTEM_TOKEN).trim().length > 0);
+    const tieneAppSecret = Boolean(env.WHATSAPP_APP_SECRET && String(env.WHATSAPP_APP_SECRET).trim().length > 0);
+    const tieneVerifyToken = Boolean(env.WHATSAPP_VERIFY_TOKEN && String(env.WHATSAPP_VERIFY_TOKEN).trim().length > 0);
+
+    return {
+        status: 200,
+        body: {
+            ok: true,
+            WHATSAPP_SYSTEM_TOKEN: tieneSystemToken,
+            WHATSAPP_APP_SECRET: tieneAppSecret,
+            WHATSAPP_VERIFY_TOKEN: tieneVerifyToken
+        }
+    };
 }
 
 // ============================================================================
@@ -356,8 +441,8 @@ export function guardarCanalWhatsApp(datos = {}, { esSuperAdmin = true } = {}) {
         tipo,
         empresa_id: empresaId,
         access_token_override: tokenOverride || null,
-        template_name: String(datos.template_name || 'notificacion_ganadero_ad').trim(),
-        template_lang: String(datos.template_lang || 'es_CO').trim(),
+        template_name: String(datos.template_name || (existenteIdx >= 0 ? state.channels[existenteIdx].template_name : '') || 'notificacion_ganadero_ad').trim(),
+        template_lang: String(datos.template_lang || (existenteIdx >= 0 ? state.channels[existenteIdx].template_lang : '') || 'es').trim(),
         activo: datos.activo !== undefined ? Boolean(datos.activo) : true,
         created_at: existenteIdx >= 0 ? state.channels[existenteIdx].created_at : new Date().toISOString()
     };
@@ -1081,7 +1166,7 @@ export async function enviarMensajeWhatsApp(telefonoDestino, textoMensaje, env =
               type: 'template',
               template: textoMensaje.template || {
                   name: opciones.templateName || 'notificacion_ganadero_ad',
-                  language: { code: opciones.templateLang || 'es_CO' }
+                  language: { code: opciones.templateLang || 'es' }
               }
           }
         : {
@@ -1178,7 +1263,7 @@ export async function enviarWhatsApp(empresaId, telefonoDestino, mensajeOPlantil
                 {
                     tipo: 'template',
                     template_name: canal.template_name || 'notificacion_ganadero_ad',
-                    template_lang: canal.template_lang || 'es_CO'
+                    template_lang: canal.template_lang || 'es'
                 },
                 { ...opciones, tipo: 'template', esPlantilla: true }
             );
@@ -1195,7 +1280,7 @@ export async function enviarWhatsApp(empresaId, telefonoDestino, mensajeOPlantil
     const fetchImpl = opciones.fetchImpl || globalThis.fetch;
 
     const templateName = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_name) || canal.template_name || 'notificacion_ganadero_ad';
-    const templateLang = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_lang) || canal.template_lang || 'es_CO';
+    const templateLang = (typeof mensajeOPlantilla === 'object' && mensajeOPlantilla?.template_lang) || canal.template_lang || 'es';
 
     const payloadEnvio = esPlantilla
         ? {
@@ -1441,13 +1526,17 @@ export async function procesarWebhookPostWhatsApp(payload = {}, opciones = {}) {
     const env = opciones.env || (typeof process !== 'undefined' && process.env ? process.env : {});
     const fetchImpl = opciones.fetchImpl || globalThis.fetch;
 
-    // 1. Validación criptográfica X-Hub-Signature-256 si viene cabecera o se exige validación
-    if (opciones.validarFirma === true || (opciones.signatureHeader !== undefined && env.WHATSAPP_APP_SECRET)) {
-        const rawBody = opciones.rawBody !== undefined ? opciones.rawBody : JSON.stringify(payload);
+    // 1. Validación criptográfica obligatoria de X-Hub-Signature-256 sobre el body CRUDO:
+    //    - Si falta WHATSAPP_APP_SECRET -> 500 y console.error
+    //    - Si falta el header X-Hub-Signature-256 o la firma HMAC-SHA256 no coincide -> 401
+    if (opciones.omitirValidacionFirma !== true) {
+        const rawBody = opciones.rawBody !== undefined
+            ? opciones.rawBody
+            : (typeof payload === 'string' ? payload : JSON.stringify(payload ?? {}));
         const verifFirma = validarFirmaWebhookMeta(rawBody, opciones.signatureHeader, env.WHATSAPP_APP_SECRET);
         if (!verifFirma.ok) {
             return {
-                status: 401,
+                status: verifFirma.status || 401,
                 body: { error: verifFirma.error }
             };
         }
