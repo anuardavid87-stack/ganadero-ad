@@ -1103,6 +1103,8 @@ class BoviTrackApp {
       const tenantContext = {
         empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
         esSuperAdmin,
+        rol: this.state.usuarioActual.rol || null,
+        usuario: this.state.usuarioActual.usuario || null,
         fincasIds: fincasPermitidas,
         token: this._tokenSesion || null
       };
@@ -1155,6 +1157,8 @@ class BoviTrackApp {
       const tenantContext = {
         empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
         esSuperAdmin,
+        rol: this.state.usuarioActual.rol || null,
+        usuario: this.state.usuarioActual.usuario || null,
         fincasIds: fincasPermitidas,
         token: this._tokenSesion || null
       };
@@ -1428,6 +1432,8 @@ class BoviTrackApp {
           this.supabase.setTenantContext({
             empresaId: this.state.empresaActivaId,
             esSuperAdmin: user.rol === 'superadmin',
+            rol: user.rol || null,
+            usuario: user.usuario || null,
             fincasIds: this.getFincasEmpresa().map((f) => f.id),
             token: this._tokenSesion
           });
@@ -1729,6 +1735,8 @@ class BoviTrackApp {
       this.supabase.setTenantContext({
         empresaId: this.state.empresaActivaId,
         esSuperAdmin: user.rol === 'superadmin',
+        rol: user.rol || null,
+        usuario: user.usuario || null,
         fincasIds: this.getFincasEmpresa().map((f) => f.id),
         token: this._tokenSesion
       });
@@ -2252,18 +2260,28 @@ class BoviTrackApp {
       },
       onExportarBackupExcel: async () => await this.exportarCopiaSeguridadCompleta('xlsx'),
       onExportarBackupJSON: async () => await this.exportarCopiaSeguridadCompleta('json'),
-      onRegistrarPesoWhatsAppLocal: ({ tag, pesoKg, fecha }) => {
-        this.guardarOperacionGrid({
-          modulo: 'pesajes',
-          silencioso: true,
-          registros: [{
-            tag: String(tag || '').trim().toUpperCase(),
-            pesoNuevo: Number(pesoKg),
-            fecha: fecha || new Date().toISOString().split('T')[0],
-            condicionCorporal: '3.5',
-            observaciones: 'Pesaje registrado vía WhatsApp Cloud API'
-          }]
-        });
+      onRegistrarPesoWhatsAppLocal: ({ tag, pesoKg, fecha, fincaId }) => {
+        const fincaPrevia = this.state.fincaActivaId;
+        if (fincaId && fincaId !== fincaPrevia) {
+          this.state.fincaActivaId = fincaId;
+        }
+        try {
+          this.guardarOperacionGrid({
+            modulo: 'pesajes',
+            silencioso: true,
+            registros: [{
+              tag: String(tag || '').trim().toUpperCase(),
+              pesoNuevo: Number(pesoKg),
+              fecha: fecha || new Date().toISOString().split('T')[0],
+              condicionCorporal: '3.5',
+              observaciones: 'Pesaje registrado vía WhatsApp Cloud API'
+            }]
+          });
+        } finally {
+          if (fincaId && fincaPrevia && this.state.fincaActivaId !== fincaPrevia) {
+            this.state.fincaActivaId = fincaPrevia;
+          }
+        }
       }
     });
 

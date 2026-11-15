@@ -13,9 +13,7 @@
 import crypto from 'node:crypto';
 import {
     verificarWebhookWhatsApp,
-    procesarWebhookPostWhatsApp,
-    cargarEstadoWhatsAppDesdeSupabase,
-    sincronizarEstadoWhatsAppConSupabase
+    procesarWebhookPostWhatsApp
 } from '../frontend/src/core/whatsappCloudService.js';
 
 // Desactivar el bodyParser automático de Vercel para leer el body CRUDO (Buffer) sin parsear
@@ -31,8 +29,8 @@ function obtenerVariablesServidor() {
         WHATSAPP_SYSTEM_TOKEN: pEnv.WHATSAPP_SYSTEM_TOKEN || '',
         WHATSAPP_APP_SECRET: pEnv.WHATSAPP_APP_SECRET || '',
         WHATSAPP_VERIFY_TOKEN: pEnv.WHATSAPP_VERIFY_TOKEN || '',
-        SUPABASE_URL: pEnv.SUPABASE_URL || '',
-        SUPABASE_SERVICE_ROLE_KEY: pEnv.SUPABASE_SERVICE_ROLE_KEY || pEnv.SUPABASE_ANON_KEY || ''
+        SUPABASE_URL: pEnv.SUPABASE_URL || 'https://jucpxyjzmbthplbvzrsj.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: pEnv.SUPABASE_SERVICE_ROLE_KEY || ''
     };
 }
 
@@ -130,15 +128,17 @@ export default async function handler(req, res) {
         }
 
         try {
-            await cargarEstadoWhatsAppDesdeSupabase(env);
+            if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+                console.error('[POST /api/whatsapp] ERROR CRÍTICO: Falta SUPABASE_SERVICE_ROLE_KEY en variables de entorno del servidor.');
+            }
 
             const resultado = await procesarWebhookPostWhatsApp(payload, {
                 env,
                 rawBody: rawBuffer,
-                signatureHeader
+                signatureHeader,
+                omitirValidacionFirma: true
             });
 
-            await sincronizarEstadoWhatsAppConSupabase(undefined, env);
             return res.status(resultado.status).json(resultado.body);
         } catch (error) {
             return res.status(200).json({

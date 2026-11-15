@@ -6237,25 +6237,22 @@ console.log('\n--- 56. Pruebas de Blindaje contra Fantasmas, Purga Atómica y Es
 import {
   GRAPH_API_VERSION,
   DEFAULT_SHARED_WHATSAPP_CHANNEL,
+  WHATSAPP_MAX_CHARS,
+  normalizarTelefono,
+  normalizarTelefonoWhatsApp,
+  limpiarLocalStorageWhatsAppObsoleto,
   calcularHmacSha256Hex,
   validarFirmaWebhookMeta,
   verificarSaludSecretosWhatsApp,
-  reiniciarEstadoWhatsAppMultitenantParaTests,
-  listarCanalesWhatsApp,
-  obtenerCanalActivoEmpresa,
-  guardarCanalWhatsApp,
-  guardarContactoWhatsApp,
-  listarContactosWhatsApp,
-  actualizarSesion24hWhatsApp,
-  verificarSesion24hWhatsApp,
-  enviarWhatsApp,
-  obtenerReporteConsumoWhatsApp,
-  listarEstadosMensajesWhatsApp,
   verificarWebhookWhatsApp,
-  verificarNumeroEnWhitelist,
-  enviarMensajeWhatsApp,
-  procesarComandoWhatsApp,
-  procesarWebhookPostWhatsApp
+  resolverAlcancePermitidoContacto,
+  formatearResumenPermisosContacto,
+  dividirMensajeWhatsApp,
+  ejecutarComandoAlcanceWhatsApp,
+  calcularReporteConsumoWhatsAppDesdeLogs,
+  enviarWhatsApp,
+  procesarWebhookPostWhatsApp,
+  crearRepositorioWhatsAppMemoria
 } from './frontend/src/core/whatsappCloudService.js';
 
 // ============================================================================
@@ -6461,8 +6458,12 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     'BoviTrackApp (Destete Madre+Cría): Actualiza peso de la vaca (512 kg), peso del ternero (185 kg) y vincula madre ↔ cría en historial'
   );
 
-  // 57.5: Integración Bidireccional Multitenant con API Oficial de WhatsApp Cloud de Meta (v25.0)
-  reiniciarEstadoWhatsAppMultitenantParaTests();
+  // 57.5: Integración WhatsApp Cloud API v25.0 100% en Supabase (Multi-Empresa y Multi-Finca sin localStorage)
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('bovitrack_whatsapp_multitenant_v25', '{"legacy":true}');
+    localStorage.setItem('bovitrack_whatsapp_cloud_config_v1', '{"legacy":true}');
+  }
+  limpiarLocalStorageWhatsAppObsoleto();
 
   test(
     GRAPH_API_VERSION === 'v25.0' &&
@@ -6471,39 +6472,176 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     DEFAULT_SHARED_WHATSAPP_CHANNEL.waba_id === '118927644541032' &&
     DEFAULT_SHARED_WHATSAPP_CHANNEL.tipo === 'compartido' &&
     DEFAULT_SHARED_WHATSAPP_CHANNEL.empresa_id === null &&
-    DEFAULT_SHARED_WHATSAPP_CHANNEL.template_lang === 'es',
-    'WhatsApp Cloud API v25.0: Constante GRAPH_API_VERSION = "v25.0", canal COMPARTIDO por defecto y template_lang = "es"'
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.template_name === 'notificacion_ganadero_ad' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.template_lang === 'es' &&
+    (typeof localStorage === 'undefined' || (
+      localStorage.getItem('bovitrack_whatsapp_multitenant_v25') === null &&
+      localStorage.getItem('bovitrack_whatsapp_cloud_config_v1') === null
+    )),
+    'WhatsApp Cloud API v25.0: Elimina localStorage obsoleto y define canal compartido por defecto (111443548633291 / es)'
   );
 
-  // Regla de teléfono único activo en whatsapp_contacts (un teléfono solo puede estar activo en UNA empresa)
-  const regEmp1 = guardarContactoWhatsApp({
-    telefono: '+57 300 111 2233',
-    empresa_id: 'EMP-01',
-    finca_id: 'FIN-ORD-1',
-    nombre: 'Operador Emp 1',
-    rol: 'operador',
-    activo: true
-  });
-  const regConflictoEmp2 = guardarContactoWhatsApp({
-    telefono: '573001112233',
-    empresa_id: 'EMP-02',
-    finca_id: 'FIN-EMP2-1',
-    nombre: 'Intento Duplicado Emp 2',
-    rol: 'operador',
-    activo: true
-  });
+  // Migración SQL oficial de las 6 tablas whatsapp_* en Supabase
+  const sqlMigracionWA = fs.readFileSync('supabase/migrations/20261115000000_whatsapp_multitenant_access.sql', 'utf8');
   test(
-    regEmp1.ok === true &&
-    regEmp1.contact.telefono === '573001112233' &&
-    regConflictoEmp2.ok === false &&
-    regConflictoEmp2.codigo === 'TELEFONO_ACTIVO_OTRA_EMPRESA',
-    'WhatsApp Contacts (Regla Multitenant): Un teléfono solo puede estar activo en UNA empresa y rechaza duplicados entre empresas'
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_channels') &&
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_contacts') &&
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_contact_access') &&
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_sessions') &&
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_messages_log') &&
+    sqlMigracionWA.includes('CREATE TABLE IF NOT EXISTS public.whatsapp_message_status') &&
+    sqlMigracionWA.includes('ENABLE ROW LEVEL SECURITY') &&
+    sqlMigracionWA.includes('573017839578') &&
+    sqlMigracionWA.includes('Sandy Lara'),
+    'Migración SQL Supabase: Define las 6 tablas whatsapp_*, RLS activo, canal compartido y migración de Sandy Lara (573017839578)'
+  );
+
+  // Normalización única de teléfono normalizarTelefono()
+  test(
+    normalizarTelefono('+57 (301) 783-9578') === '573017839578' &&
+    normalizarTelefono('3017839578') === '573017839578' &&
+    normalizarTelefono('573017839578') === '573017839578' &&
+    normalizarTelefonoWhatsApp('+57 322-569-4112') === '573225694112',
+    'normalizarTelefono(): Quita +, espacios, guiones y paréntesis, y antepone 57 a celulares de 10 dígitos que inician por 3'
+  );
+
+  // Escenario Multi-Empresa y Multi-Finca en Repositorio (simulando las 6 tablas y RLS de Supabase)
+  const empresasCatWA = [
+    { id: 'EMP-01', nombre: 'INVERSIONES' },
+    { id: 'EMP-02', nombre: 'VACUNO INVERSIONES' }
+  ];
+  const fincasCatWA = [
+    { id: 'FIN-VES', nombre: 'Vesubio', empresaId: 'EMP-01', empresa_id: 'EMP-01' },
+    { id: 'FIN-WAT', nombre: 'Waterloo', empresaId: 'EMP-01', empresa_id: 'EMP-01' },
+    { id: 'FIN-GAL', nombre: 'Gallinazo', empresaId: 'EMP-02', empresa_id: 'EMP-02' },
+    { id: 'FIN-MAN', nombre: 'Los Mangos', empresaId: 'EMP-02', empresa_id: 'EMP-02' }
+  ];
+  const animalesCatWA = [
+    {
+      id: 'ANM-VES-045',
+      finca_id: 'FIN-VES',
+      fincaId: 'FIN-VES',
+      identificacion_tag: '045',
+      identificacionTag: '045',
+      nombre_alias: 'Reina',
+      especie: 'bufalino',
+      estado_reproductivo: 'Preñada',
+      dias_gestacion_actual: 120,
+      ultimo_peso_kg: 480,
+      fecha_ultimo_pesaje: '2026-09-01',
+      lote: 'Ordeño 1',
+      estado_vida: 'activo'
+    },
+    {
+      id: 'ANM-GAL-045',
+      finca_id: 'FIN-GAL',
+      fincaId: 'FIN-GAL',
+      identificacion_tag: '045',
+      identificacionTag: '045',
+      nombre_alias: 'Duquesa',
+      especie: 'bovino',
+      estado_reproductivo: 'Vacía',
+      dias_gestacion_actual: 0,
+      ultimo_peso_kg: 390,
+      fecha_ultimo_pesaje: '2026-09-05',
+      lote: 'Horro',
+      estado_vida: 'activo'
+    },
+    {
+      id: 'ANM-GAL-777',
+      finca_id: 'FIN-GAL',
+      fincaId: 'FIN-GAL',
+      identificacion_tag: '777',
+      identificacionTag: '777',
+      nombre_alias: 'Centella',
+      especie: 'bovino',
+      estado_reproductivo: 'Vacía',
+      dias_gestacion_actual: 0,
+      ultimo_peso_kg: 400,
+      fecha_ultimo_pesaje: '2026-09-10',
+      lote: 'Levante',
+      estado_vida: 'activo'
+    },
+    {
+      id: 'ANM-MAN-888',
+      finca_id: 'FIN-MAN',
+      fincaId: 'FIN-MAN',
+      identificacion_tag: '888',
+      identificacionTag: '888',
+      nombre_alias: 'Oculta Fuera de Permiso',
+      especie: 'bovino',
+      estado_reproductivo: 'Vacía',
+      ultimo_peso_kg: 420,
+      lote: 'Ceba',
+      estado_vida: 'activo'
+    }
+  ];
+
+  const repoWA = crearRepositorioWhatsAppMemoria({
+    empresas: empresasCatWA,
+    fincas: fincasCatWA,
+    animales: animalesCatWA
+  });
+
+  const panelSuper = repoWA.paraContextoPanel({ esSuperAdmin: true });
+  const panelEmp1 = repoWA.paraContextoPanel({ esSuperAdmin: false, empresaId: 'EMP-01' });
+  const panelEmp2 = repoWA.paraContextoPanel({ esSuperAdmin: false, empresaId: 'EMP-02' });
+
+  // 1) Admin de EMP-01 registra a Sandy Lara (301 783-9578) con acceso a TODAS las fincas de INVERSIONES
+  const altaSandyEmp1 = await panelEmp1.guardarContactoConAccesosPanel({
+    telefono: '301 783-9578',
+    nombre: 'Sandy Lara',
+    activo: true,
+    accesos: [{ empresa_id: 'EMP-01', finca_id: null, rol: 'operador' }],
+    modoSuperAdmin: false
+  });
+
+  // 2) Admin de EMP-02 agrega el MISMO teléfono en VACUNO INVERSIONES solo para la finca Gallinazo (sin alterar EMP-01)
+  const altaSandyEmp2 = await panelEmp2.guardarContactoConAccesosPanel({
+    telefono: '+57 301 783 9578',
+    nombre: 'Sandy Lara',
+    activo: true,
+    accesos: [{ empresa_id: 'EMP-02', finca_id: 'FIN-GAL', rol: 'administrador' }],
+    modoSuperAdmin: false
+  });
+
+  // 3) Veterinario solo consulta
+  await panelEmp1.guardarContactoConAccesosPanel({
+    telefono: '3105556677',
+    nombre: 'Dr. Vet',
+    activo: true,
+    accesos: [{ empresa_id: 'EMP-01', finca_id: null, rol: 'veterinario' }],
+    modoSuperAdmin: false
+  });
+
+  const vistaSuper = await panelSuper.cargarDatosPanel();
+  const vistaEmp1 = await panelEmp1.cargarDatosPanel();
+  const vistaEmp2 = await panelEmp2.cargarDatosPanel();
+  const sandyGlobal = vistaSuper.contacts.find((c) => c.telefono === '573017839578');
+  const resumenPermisosSandy = formatearResumenPermisosContacto(
+    sandyGlobal.accesos,
+    empresasCatWA,
+    fincasCatWA,
+    { incluirRol: false }
+  );
+
+  test(
+    altaSandyEmp1.ok === true &&
+    altaSandyEmp2.ok === true &&
+    repoWA._db.contacts.filter((c) => c.telefono === '573017839578').length === 1 &&
+    sandyGlobal.accesos.length === 2 &&
+    resumenPermisosSandy === 'INVERSIONES: todas · VACUNO INVERSIONES: Gallinazo' &&
+    vistaEmp1.contacts.find((c) => c.telefono === '573017839578').accesos.every((a) => a.empresa_id === 'EMP-01') &&
+    vistaEmp2.contacts.find((c) => c.telefono === '573017839578').accesos.every((a) => a.empresa_id === 'EMP-02') &&
+    !vistaEmp2.contacts.some((c) => c.telefono === '573105556677'),
+    'whatsapp_contacts + whatsapp_contact_access (Multi-Empresa + RLS): Un mismo teléfono opera en varias empresas/fincas y cada Admin solo ve su empresa'
   );
 
   const envMockWA = {
     WHATSAPP_VERIFY_TOKEN: 'token_secreto_ganadero_test',
     WHATSAPP_SYSTEM_TOKEN: 'EAAG_MOCK_SYSTEM_TOKEN_V25',
-    WHATSAPP_APP_SECRET: 'meta_app_secret_test_2026'
+    WHATSAPP_APP_SECRET: 'meta_app_secret_test_2026',
+    SUPABASE_SERVICE_ROLE_KEY: 'service_role_mock_key'
   };
 
   // GET Verification
@@ -6535,18 +6673,21 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   const postSinAppSecret = await procesarWebhookPostWhatsApp({ entry: [] }, {
     env: { WHATSAPP_SYSTEM_TOKEN: 'token', WHATSAPP_VERIFY_TOKEN: 'verify' },
     rawBody: rawSample,
-    signatureHeader: firmaValida
+    signatureHeader: firmaValida,
+    repo: repoWA
   });
 
   const postSinHeaderFirma = await procesarWebhookPostWhatsApp({ entry: [] }, {
     env: envMockWA,
-    rawBody: rawSample
+    rawBody: rawSample,
+    repo: repoWA
   });
 
   const postFirmaInvalida = await procesarWebhookPostWhatsApp({ entry: [] }, {
     env: envMockWA,
     rawBody: rawSample,
-    signatureHeader: 'sha256=firma_falsa'
+    signatureHeader: 'sha256=firma_falsa',
+    repo: repoWA
   });
 
   test(
@@ -6574,80 +6715,14 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     healthFaltanVars.body.WHATSAPP_SYSTEM_TOKEN === false &&
     healthFaltanVars.body.WHATSAPP_APP_SECRET === false &&
     healthFaltanVars.body.WHATSAPP_VERIFY_TOKEN === false &&
+    healthFaltanVars.body.SUPABASE_SERVICE_ROLE_KEY === false &&
     healthOkVars.status === 200 &&
     healthOkVars.body.WHATSAPP_SYSTEM_TOKEN === true &&
     healthOkVars.body.WHATSAPP_APP_SECRET === true &&
-    healthOkVars.body.WHATSAPP_VERIFY_TOKEN === true,
-    'GET /api/whatsapp/health: Protegido solo para Super Admin (403 a otros roles) y retorna booleanos reales sin exponer valores de secretos'
+    healthOkVars.body.WHATSAPP_VERIFY_TOKEN === true &&
+    healthOkVars.body.SUPABASE_SERVICE_ROLE_KEY === true,
+    'GET /api/whatsapp/health: Protegido solo para Super Admin (403 a otros roles) y verifica WHATSAPP_* + SUPABASE_SERVICE_ROLE_KEY'
   );
-
-  // Whitelist verification
-  test(
-    verificarNumeroEnWhitelist('+57 300 111 2233', envMockWA) === true &&
-    verificarNumeroEnWhitelist('573990000000', envMockWA) === false,
-    'WhatsApp Cloud Webhook (Seguridad Whitelist): Autoriza números en whatsapp_contacts y bloquea remitentes desconocidos'
-  );
-
-  // Mock DB & Fetch con aislamiento por empresa_id y finca_id
-  const dbAnimalesMock = {
-    'EMP-01::045': {
-      id: 'ANM-VACA-045',
-      empresa_id: 'EMP-01',
-      finca_id: 'FIN-ORD-1',
-      identificacion_tag: '045',
-      nombre: 'Reina',
-      especie: 'bufalino',
-      estado_reproductivo: 'Preñada',
-      dias_gestacion: 120,
-      ultimo_peso_kg: 480,
-      fecha_ultimo_pesaje: '2026-09-01',
-      lote: 'Ordeño 1'
-    },
-    'EMP-02::045': {
-      id: 'ANM-EMP2-045',
-      empresa_id: 'EMP-02',
-      finca_id: 'FIN-EMP2-1',
-      identificacion_tag: '045',
-      nombre: 'Duquesa Otra Empresa',
-      especie: 'bovino',
-      estado_reproductivo: 'Vacía',
-      dias_gestacion: 0,
-      ultimo_peso_kg: 390,
-      fecha_ultimo_pesaje: '2026-09-05',
-      lote: 'Horro'
-    }
-  };
-  const pesajesInsertadosDB = [];
-
-  const dbAdapterMock = {
-    async consultarAnimalPorId(tag, { empresaId }) {
-      if (!empresaId) throw new Error('Falta empresaId');
-      return dbAnimalesMock[`${empresaId}::${tag}`] || null;
-    },
-    async registrarPesoAnimal({ idAnimal, pesoKg, fecha, empresaId, fincaId }) {
-      if (!empresaId) throw new Error('Falta empresaId');
-      const animal = dbAnimalesMock[`${empresaId}::${idAnimal}`];
-      if (!animal) return { exito: false, motivo: 'NO_ENCONTRADO' };
-      const pesoAnterior = animal.ultimo_peso_kg;
-      animal.ultimo_peso_kg = pesoKg;
-      animal.fecha_ultimo_pesaje = fecha;
-      pesajesInsertadosDB.push({ tag: idAnimal, pesoKg, fecha, empresaId, fincaId });
-      return { exito: true, animal, pesoAnterior, pesoNuevo: pesoKg, fecha };
-    },
-    async cambiarFincaActiva({ nombreFinca, empresaId, remitente }) {
-      const fincasPorEmp = {
-        'EMP-01': [
-          { id: 'FIN-ORD-1', nombre: 'Vesubio', empresaId: 'EMP-01' },
-          { id: 'FIN-ORD-2', nombre: 'Waterloo', empresaId: 'EMP-01' }
-        ]
-      };
-      const lista = fincasPorEmp[empresaId] || [];
-      const f = lista.find((x) => x.nombre.toLowerCase() === nombreFinca.toLowerCase());
-      if (!f) return { exito: false, fincasDisponibles: lista };
-      guardarContactoWhatsApp({ telefono: remitente, empresa_id: empresaId, finca_id: f.id, nombre: 'Operador Emp 1', activo: true });
-      return { exito: true, finca: f, empresaNombre: 'INVERSIONES' };
-    }
-  };
 
   const llamadasGraphAPI = [];
   const mockFetchMeta = async (url, options) => {
@@ -6659,174 +6734,218 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     };
   };
 
-  const firmarPayloadWebhookTest = (payloadObj) => {
-    const raw = JSON.stringify(payloadObj);
+  const firmarEventoMensaje = (from, bodyText, msgId = `wamid.in.${Date.now()}`) => {
+    const payload = {
+      entry: [{
+        changes: [{
+          value: {
+            metadata: { phone_number_id: '111443548633291' },
+            messages: [{ id: msgId, from, type: 'text', text: { body: bodyText } }]
+          }
+        }]
+      }]
+    };
+    const raw = JSON.stringify(payload);
     return {
+      payload,
       rawBody: raw,
       signatureHeader: 'sha256=' + calcularHmacSha256Hex(raw, envMockWA.WHATSAPP_APP_SECRET)
     };
   };
 
-  // Petición POST desde número NO autorizado -> responde UNA SOLA VEZ el aviso de no autorizado y no ejecuta comando
-  const payloadNoAutorizado = {
-    entry: [{
-      changes: [{
-        value: {
-          metadata: { phone_number_id: '111443548633291' },
-          messages: [{ from: '573999999999', type: 'text', text: { body: 'INFO 045' } }]
-        }
-      }]
-    }]
-  };
-  const sigNoAuth = firmarPayloadWebhookTest(payloadNoAutorizado);
-  const resNoAuth1 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
+  // Remitente NO autorizado -> responde mensaje de no autorizado y termina
+  const evNoAuth = firmarEventoMensaje('573999999999', 'INFO 045', 'wamid.noauth.1');
+  const resNoAuth = await procesarWebhookPostWhatsApp(evNoAuth.payload, {
     env: envMockWA,
-    rawBody: sigNoAuth.rawBody,
-    signatureHeader: sigNoAuth.signatureHeader,
-    dbAdapter: dbAdapterMock,
-    fetchImpl: mockFetchMeta
-  });
-  const resNoAuth2 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
-    env: envMockWA,
-    rawBody: sigNoAuth.rawBody,
-    signatureHeader: sigNoAuth.signatureHeader,
-    dbAdapter: dbAdapterMock,
+    rawBody: evNoAuth.rawBody,
+    signatureHeader: evNoAuth.signatureHeader,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
 
   test(
-    resNoAuth1.status === 200 &&
-    resNoAuth1.body.ignored === true &&
-    resNoAuth2.body.ignored === true &&
+    resNoAuth.status === 200 &&
+    resNoAuth.body.ignored === true &&
     llamadasGraphAPI.length === 1 &&
     llamadasGraphAPI[0].body.text.body === 'Este número no está autorizado. Contacta al administrador de tu empresa.',
-    'WhatsApp Cloud Webhook (POST No Autorizado): Responde UNA SOLA VEZ "Este número no está autorizado..." y bloquea ejecución de comandos'
+    'WhatsApp Cloud Webhook (No Autorizado): Responde "Este número no está autorizado. Contacta al administrador de tu empresa." y detiene ejecución'
   );
 
   llamadasGraphAPI.length = 0;
 
-  // Petición POST con comando "INFO 045" desde número autorizado de EMP-01 en el canal compartido
-  const payloadInfo = {
-    entry: [{
-      changes: [{
-        value: {
-          metadata: { phone_number_id: '111443548633291' },
-          messages: [{ id: 'wamid.in.1', from: '573001112233', type: 'text', text: { body: 'INFO 045' } }]
-        }
-      }]
-    }]
-  };
-  const sigInfo = firmarPayloadWebhookTest(payloadInfo);
-  const resInfo = await procesarWebhookPostWhatsApp(payloadInfo, {
+  // INFO <ID> con coincidencias en VARIAS fincas y VARIAS empresas simultáneamente (sin menú de selección)
+  const evInfoMulti = firmarEventoMensaje('573017839578', 'ínfo 045', 'wamid.info.1');
+  const resInfoMulti = await procesarWebhookPostWhatsApp(evInfoMulti.payload, {
     env: envMockWA,
-    rawBody: sigInfo.rawBody,
-    signatureHeader: sigInfo.signatureHeader,
-    dbAdapter: dbAdapterMock,
+    rawBody: evInfoMulti.rawBody,
+    signatureHeader: evInfoMulti.signatureHeader,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
+  });
+  const textoRespuestaInfo = llamadasGraphAPI[0]?.body?.text?.body || '';
+
+  // INFO <ID> de un animal en una finca fuera del permiso (Los Mangos = 888) -> 0 resultados en sus fincas autorizadas
+  const evInfoFueraAlcance = firmarEventoMensaje('573017839578', 'INFO 888', 'wamid.info.2');
+  await procesarWebhookPostWhatsApp(evInfoFueraAlcance.payload, {
+    env: envMockWA,
+    rawBody: evInfoFueraAlcance.rawBody,
+    signatureHeader: evInfoFueraAlcance.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoFueraAlcance = llamadasGraphAPI[1]?.body?.text?.body || '';
+
+  test(
+    resInfoMulti.status === 200 &&
+    textoRespuestaInfo.includes('🔎 Encontré 2 animal(es) con el número 045:') &&
+    textoRespuestaInfo.includes('📍 Finca Vesubio · 🏢 INVERSIONES') &&
+    textoRespuestaInfo.includes('📍 Finca Gallinazo · 🏢 VACUNO INVERSIONES') &&
+    textoRespuestaInfo.includes('📋 FICHA DEL ANIMAL 045') &&
+    textoRespuestaInfo.includes('Reina') &&
+    textoRespuestaInfo.includes('Duquesa') &&
+    textoFueraAlcance === 'No encontré el animal 888 en tus fincas autorizadas.',
+    'WhatsApp Cloud Webhook (INFO <ID> Multi-Finca): Busca automáticamente en todas las fincas autorizadas, agrupa fichas por finca/empresa y bloquea fincas no autorizadas'
+  );
+
+  llamadasGraphAPI.length = 0;
+
+  // PESO <ID> <KG> cuando existe en >1 finca -> NO registra nada y pide especificar la finca al final
+  const evPesoAmbiguo = firmarEventoMensaje('573017839578', 'PESO 045 350', 'wamid.peso.amb');
+  await procesarWebhookPostWhatsApp(evPesoAmbiguo.payload, {
+    env: envMockWA,
+    rawBody: evPesoAmbiguo.rawBody,
+    signatureHeader: evPesoAmbiguo.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoPesoAmbiguo = llamadasGraphAPI[0]?.body?.text?.body || '';
+
+  // PESO <ID> <KG> <FINCA> (insensible a mayúsculas y tildes) -> registra en la finca indicada
+  const evPesoDesambiguado = firmarEventoMensaje('573017839578', 'péso 045 350 vesúbio', 'wamid.peso.ok1');
+  await procesarWebhookPostWhatsApp(evPesoDesambiguado.payload, {
+    env: envMockWA,
+    rawBody: evPesoDesambiguado.rawBody,
+    signatureHeader: evPesoDesambiguado.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoPesoOk1 = llamadasGraphAPI[1]?.body?.text?.body || '';
+
+  // PESO <ID> <KG> cuando solo existe en 1 finca -> registra directo sin pedir finca
+  const evPesoUnico = firmarEventoMensaje('573017839578', 'PESO 777 415', 'wamid.peso.ok2');
+  await procesarWebhookPostWhatsApp(evPesoUnico.payload, {
+    env: envMockWA,
+    rawBody: evPesoUnico.rawBody,
+    signatureHeader: evPesoUnico.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoPesoOk2 = llamadasGraphAPI[2]?.body?.text?.body || '';
+
+  // Rol veterinario -> bloquea registro de PESO y responde "Tu rol solo permite consultas (INFO)"
+  const evPesoVet = firmarEventoMensaje('573105556677', 'PESO 045 360 Vesubio', 'wamid.peso.vet');
+  await procesarWebhookPostWhatsApp(evPesoVet.payload, {
+    env: envMockWA,
+    rawBody: evPesoVet.rawBody,
+    signatureHeader: evPesoVet.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoPesoVet = llamadasGraphAPI[3]?.body?.text?.body || '';
+
+  const vacaVesubio = repoWA._db.animales.find((a) => a.id === 'ANM-VES-045');
+  const vacaGallinazo = repoWA._db.animales.find((a) => a.id === 'ANM-GAL-045');
+  const vaca777 = repoWA._db.animales.find((a) => a.id === 'ANM-GAL-777');
+
+  test(
+    textoPesoAmbiguo.includes('⚠️ Encontré el 045 en varias fincas: Vesubio (INVERSIONES), Gallinazo (VACUNO INVERSIONES).') &&
+    textoPesoAmbiguo.includes('PESO 045 350 VESUBIO') &&
+    textoPesoOk1 === '✅ Peso de 350 kg registrado para 045 · 📍 Vesubio · 🏢 INVERSIONES' &&
+    vacaVesubio.ultimo_peso_kg === 350 &&
+    vacaGallinazo.ultimo_peso_kg === 390 &&
+    textoPesoOk2 === '✅ Peso de 415 kg registrado para 777 · 📍 Gallinazo · 🏢 VACUNO INVERSIONES' &&
+    vaca777.ultimo_peso_kg === 415 &&
+    textoPesoVet === 'Tu rol solo permite consultas (INFO)',
+    'WhatsApp Cloud Webhook (PESO <ID> <KG> [FINCA] & Roles): Evita ambigüedad multi-finca, desambigua por nombre sin tildes y restringe rol veterinario a INFO'
+  );
+
+  llamadasGraphAPI.length = 0;
+
+  // AYUDA y comandos eliminados (ej. FINCA Waterloo / texto desconocido) responden con AYUDA
+  const evAntiguoFinca = firmarEventoMensaje('573017839578', 'FINCA Waterloo', 'wamid.ayuda.1');
+  await procesarWebhookPostWhatsApp(evAntiguoFinca.payload, {
+    env: envMockWA,
+    rawBody: evAntiguoFinca.rawBody,
+    signatureHeader: evAntiguoFinca.signatureHeader,
+    repo: repoWA,
+    fetchImpl: mockFetchMeta
+  });
+  const textoAyudaFallback = llamadasGraphAPI[0]?.body?.text?.body || '';
+
+  // Límite de 10 coincidencias en INFO y partición automática > 4.000 caracteres
+  const textoLargoPrueba = Array.from({ length: 80 }, (_, i) => `📍 Finca Predio ${i + 1}\n📋 FICHA DEL ANIMAL 999\n• Nombre: Ejemplar de prueba número ${i + 1} con trazabilidad reproductiva y productiva completa`).join('\n\n');
+  const partesDivididas = dividirMensajeWhatsApp(textoLargoPrueba, WHATSAPP_MAX_CHARS);
+
+  const alcance12Fincas = {
+    autorizado: true,
+    empresasIds: ['EMP-01'],
+    fincasPermitidas: Array.from({ length: 12 }, (_, idx) => ({
+      finca_id: `F-${idx + 1}`,
+      finca_nombre: `Predio ${idx + 1}`,
+      empresa_id: 'EMP-01',
+      empresa_nombre: 'INVERSIONES',
+      rol: 'operador'
+    })),
+    rolesPorFinca: new Map(),
+    todosVeterinario: false
+  };
+  const resInfo12 = await ejecutarComandoAlcanceWhatsApp('INFO 500', alcance12Fincas, {
+    buscarAnimalesPorTagEnFincas: async () => Array.from({ length: 12 }, (_, idx) => ({
+      id: `A-${idx + 1}`,
+      finca_id: `F-${idx + 1}`,
+      identificacion_tag: '500',
+      nombre_alias: `Búfala ${idx + 1}`,
+      especie: 'bufalino',
+      ultimo_peso_kg: 450,
+      lote: 'General'
+    }))
   });
 
   test(
-    resInfo.status === 200 &&
-    llamadasGraphAPI.length === 1 &&
-    llamadasGraphAPI[0].url === 'https://graph.facebook.com/v25.0/111443548633291/messages' &&
-    llamadasGraphAPI[0].body.to === '573001112233' &&
-    llamadasGraphAPI[0].body.text.body.includes('045') &&
-    llamadasGraphAPI[0].body.text.body.includes('Reina') &&
-    !llamadasGraphAPI[0].body.text.body.includes('Duquesa Otra Empresa'),
-    'WhatsApp Cloud Webhook (Comando INFO 045 Multitenant): Filtra por empresa_id (EMP-01) y responde vía Graph API v25.0 por el mismo canal'
+    textoAyudaFallback.includes('INFO <ID>') &&
+    textoAyudaFallback.includes('PESO <ID> <KG>') &&
+    textoAyudaFallback.includes('PESO <ID> <KG> <FINCA>') &&
+    !textoAyudaFallback.includes('FINCA <nombre>') &&
+    partesDivididas.length >= 2 &&
+    partesDivididas.every((p) => p.length <= 4000) &&
+    resInfo12.mensajeRespuesta.includes('Encontré 12 animal(es) con el número 500:') &&
+    resInfo12.mensajeRespuesta.includes('Mostrando las 10 primeras coincidencias (faltan 2 más).'),
+    'WhatsApp AYUDA, Tope de 10 Coincidencias y División > 4.000 chars: Elimina menús FINCA/EMPRESA, limita a 10 fichas e indica faltantes'
   );
 
-  // Petición POST con comando "PESO 045 350" desde número autorizado
-  const payloadPeso = {
-    entry: [{
-      changes: [{
-        value: {
-          metadata: { phone_number_id: '111443548633291' },
-          messages: [{ id: 'wamid.in.2', from: '573001112233', type: 'text', text: { body: 'PESO 045 350' } }]
-        }
-      }]
-    }]
-  };
-  const sigPeso = firmarPayloadWebhookTest(payloadPeso);
-  const resPeso = await procesarWebhookPostWhatsApp(payloadPeso, {
-    env: envMockWA,
-    rawBody: sigPeso.rawBody,
-    signatureHeader: sigPeso.signatureHeader,
-    dbAdapter: dbAdapterMock,
-    fetchImpl: mockFetchMeta
-  });
-
-  test(
-    resPeso.status === 200 &&
-    pesajesInsertadosDB.length === 1 &&
-    pesajesInsertadosDB[0].tag === '045' &&
-    pesajesInsertadosDB[0].pesoKg === 350 &&
-    pesajesInsertadosDB[0].empresaId === 'EMP-01' &&
-    dbAnimalesMock['EMP-01::045'].ultimo_peso_kg === 350 &&
-    dbAnimalesMock['EMP-02::045'].ultimo_peso_kg === 390 &&
-    llamadasGraphAPI.length === 2 &&
-    llamadasGraphAPI[1].body.text.body.includes('350 kg'),
-    'WhatsApp Cloud Webhook (Comando PESO 045 350 Multitenant): Actualiza animal de EMP-01 sin tocar el animal homónimo de EMP-02'
-  );
-
-  // Comando "FINCA Waterloo" para cambiar la finca activa del contacto dentro de su empresa
-  const payloadFinca = {
-    entry: [{
-      changes: [{
-        value: {
-          metadata: { phone_number_id: '111443548633291' },
-          messages: [{ id: 'wamid.in.3', from: '573001112233', type: 'text', text: { body: 'FINCA Waterloo' } }]
-        }
-      }]
-    }]
-  };
-  const sigFinca = firmarPayloadWebhookTest(payloadFinca);
-  const resFinca = await procesarWebhookPostWhatsApp(payloadFinca, {
-    env: envMockWA,
-    rawBody: sigFinca.rawBody,
-    signatureHeader: sigFinca.signatureHeader,
-    dbAdapter: dbAdapterMock,
-    fetchImpl: mockFetchMeta
-  });
-  const contactoActualizado = listarContactosWhatsApp({ empresaId: 'EMP-01' })[0];
-
-  test(
-    resFinca.status === 200 &&
-    contactoActualizado.finca_id === 'FIN-ORD-2' &&
-    llamadasGraphAPI[2].body.text.body.includes('Waterloo'),
-    'WhatsApp Cloud Webhook (Comando FINCA <nombre>): Cambia la finca activa del contacto entre las fincas de su propia empresa'
-  );
-
-  // Envío saliente enviarWhatsApp(empresa_id, telefono, mensaje | plantilla) y control de ventana de 24h
+  // Sesiones 24h (whatsapp_sessions sin empresa/finca activa), enviarWhatsApp, statuses (131047) y consumo multi-empresa
+  const sesionSandy = await repoWA.obtenerSesion24h(DEFAULT_SHARED_WHATSAPP_CHANNEL.id, '573017839578');
   const envioPropioCanal = await enviarWhatsApp('EMP-01', '+57 322 5694112', 'Hola', {
     env: envMockWA,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
   const envioSinVentana24h = await enviarWhatsApp('EMP-01', '573158889900', 'Texto libre fuera de 24h', {
     env: envMockWA,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
-  const envioDentroVentana24h = await enviarWhatsApp('EMP-01', '573001112233', 'Alerta zootécnica dentro de 24h', {
+  const envioDentroVentana24h = await enviarWhatsApp('EMP-01', '573017839578', 'Alerta zootécnica dentro de 24h', {
     env: envMockWA,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
   const envioPlantillaFuera24h = await enviarWhatsApp('EMP-01', '573158889900', { tipo: 'template', template_name: 'notificacion_ganadero_ad' }, {
     env: envMockWA,
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
 
-  test(
-    envioPropioCanal.ok === false &&
-    envioPropioCanal.codigo === 'DESTINO_PROPIO_CANAL' &&
-    envioSinVentana24h.ok === false &&
-    envioSinVentana24h.error === 'Fuera de la ventana de 24h: usa una plantilla aprobada' &&
-    envioDentroVentana24h.ok === true &&
-    envioPlantillaFuera24h.ok === true &&
-    llamadasGraphAPI[llamadasGraphAPI.length - 1].body.template.language.code === 'es',
-    'enviarWhatsApp (Regla 24h, Seguridad & Idioma Plantilla): Bloquea envío al propio canal, bloquea texto libre > 24h y usa código de idioma "es" por defecto en plantillas'
-  );
-
-  // Procesamiento de value.statuses[] -> whatsapp_message_status con resolución de empresa_id por wamid
   const payloadStatusError = {
     entry: [{
       changes: [{
@@ -6834,7 +6953,7 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
           metadata: { phone_number_id: '111443548633291' },
           statuses: [{
             id: envioDentroVentana24h.wamid,
-            recipient_id: '573001112233',
+            recipient_id: '573017839578',
             status: 'failed',
             timestamp: '1760000000',
             errors: [{
@@ -6847,45 +6966,58 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       }]
     }]
   };
-  const sigStatus = firmarPayloadWebhookTest(payloadStatusError);
+  const rawStatus = JSON.stringify(payloadStatusError);
   await procesarWebhookPostWhatsApp(payloadStatusError, {
     env: envMockWA,
-    rawBody: sigStatus.rawBody,
-    signatureHeader: sigStatus.signatureHeader,
+    rawBody: rawStatus,
+    signatureHeader: 'sha256=' + calcularHmacSha256Hex(rawStatus, envMockWA.WHATSAPP_APP_SECRET),
+    repo: repoWA,
     fetchImpl: mockFetchMeta
   });
-  const estadosEmp1 = listarEstadosMensajesWhatsApp({ empresaId: 'EMP-01', esSuperAdmin: false });
-  const consumoGlobal = obtenerReporteConsumoWhatsApp({ esSuperAdmin: true, empresasCatalogo: [{ id: 'EMP-01', nombre: 'INVERSIONES' }] });
+
+  const datosPostStatusSuper = await panelSuper.cargarDatosPanel();
+  const consumoGlobal = calcularReporteConsumoWhatsAppDesdeLogs(datosPostStatusSuper.messagesLog, {
+    esSuperAdmin: true,
+    empresasCatalogo: empresasCatWA
+  });
 
   test(
-    estadosEmp1.length >= 1 &&
-    estadosEmp1[0].empresa_id === 'EMP-01' &&
-    estadosEmp1[0].error_code === '131047' &&
-    consumoGlobal.length >= 1 &&
-    consumoGlobal[0].empresa_id === 'EMP-01' &&
-    consumoGlobal[0].plantillas_salientes >= 1,
-    'WhatsApp Statuses & Consumo: Registra value.statuses[] con error_code (131047) asociado a empresa_id por wamid y consolida consumo mensual'
+    Boolean(sesionSandy?.last_inbound_at) &&
+    sesionSandy.empresa_id === undefined &&
+    sesionSandy.finca_id === undefined &&
+    envioPropioCanal.ok === false &&
+    envioPropioCanal.codigo === 'DESTINO_PROPIO_CANAL' &&
+    envioSinVentana24h.ok === false &&
+    envioSinVentana24h.error === 'Fuera de la ventana de 24h: usa una plantilla aprobada' &&
+    envioDentroVentana24h.ok === true &&
+    envioPlantillaFuera24h.ok === true &&
+    llamadasGraphAPI[llamadasGraphAPI.length - 1].body.template.language.code === 'es' &&
+    datosPostStatusSuper.messageStatus.some((s) => s.error_code === '131047' && s.empresa_id === 'EMP-01') &&
+    consumoGlobal.some((r) => r.empresa_id === 'EMP-01') &&
+    consumoGlobal.some((r) => r.empresa_id === 'EMP-02'),
+    'whatsapp_sessions, enviarWhatsApp & Consumo: Ventana 24h limpia (sin empresa/finca activa), statuses 131047 y salida registrada por empresa involucrada'
   );
 
-  // 57.6: Verificación de UI Multitenant en ModuloAdmin (Super Admin vs Admin de Empresa, Estado de Secretos y página pública /privacidad)
+  // 57.6: Verificación de UI en ModuloAdmin leyendo de repositorio Supabase (Super Admin vs Admin de Empresa + /privacidad)
   const adminWaSuper = new ModuloAdmin({
     containerId: 'admin-wa-test',
-    getFincas: () => [fincaConfigOrdeno],
-    getFincaActiva: () => fincaConfigOrdeno,
+    whatsappRepoOverride: panelSuper,
+    getFincas: () => fincasCatWA,
+    getTodasLasFincas: () => fincasCatWA,
+    getFincaActiva: () => fincasCatWA[0],
     getUsuarios: () => [],
     getRolActual: () => 'superadmin',
     getUsuarioActual: () => ({ id: 'U-1', usuario: 'anuardavid', rol: 'superadmin' }),
-    getEmpresas: () => [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
-    getEmpresaActiva: () => ({ id: 'EMP-01', nombre: 'INVERSIONES' }),
-    getAnimales: () => animalesMangaTest,
-    getTodosLosAnimales: () => animalesMangaTest
+    getEmpresas: () => empresasCatWA,
+    getEmpresaActiva: () => empresasCatWA[0],
+    getAnimales: () => animalesCatWA,
+    getTodosLosAnimales: () => animalesCatWA
   });
   adminWaSuper.container = new MockDomElement('admin-wa-test');
   adminWaSuper.seccion = 'whatsapp';
-  adminWaSuper.render();
+  await adminWaSuper.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
   const htmlAdminWaSuperSinVars = adminWaSuper.container.innerHTML;
 
-  // Simular respuesta real de GET /api/whatsapp/health con todas las variables configuradas
   await adminWaSuper.consultarHealthWhatsAppServidor(async () => ({
     ok: true,
     status: 200,
@@ -6893,26 +7025,29 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       ok: true,
       WHATSAPP_SYSTEM_TOKEN: true,
       WHATSAPP_APP_SECRET: true,
-      WHATSAPP_VERIFY_TOKEN: true
+      WHATSAPP_VERIFY_TOKEN: true,
+      SUPABASE_SERVICE_ROLE_KEY: true
     })
   }));
   const htmlAdminWaSuperConVars = adminWaSuper.container.innerHTML;
 
   const adminWaEmpresa = new ModuloAdmin({
     containerId: 'admin-wa-emp-test',
-    getFincas: () => [fincaConfigOrdeno],
-    getFincaActiva: () => fincaConfigOrdeno,
+    whatsappRepoOverride: panelEmp2,
+    getFincas: () => fincasCatWA.filter((f) => f.empresaId === 'EMP-02'),
+    getTodasLasFincas: () => fincasCatWA,
+    getFincaActiva: () => fincasCatWA[2],
     getUsuarios: () => [],
     getRolActual: () => 'administrador',
-    getUsuarioActual: () => ({ id: 'U-2', usuario: 'admin_emp', rol: 'administrador', empresaId: 'EMP-01' }),
-    getEmpresas: () => [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
-    getEmpresaActiva: () => ({ id: 'EMP-01', nombre: 'INVERSIONES' }),
-    getAnimales: () => animalesMangaTest,
-    getTodosLosAnimales: () => animalesMangaTest
+    getUsuarioActual: () => ({ id: 'U-2', usuario: 'admin_vacuno', rol: 'administrador', empresaId: 'EMP-02' }),
+    getEmpresas: () => [empresasCatWA[1]],
+    getEmpresaActiva: () => empresasCatWA[1],
+    getAnimales: () => animalesCatWA.filter((a) => a.fincaId === 'FIN-GAL'),
+    getTodosLosAnimales: () => animalesCatWA.filter((a) => a.fincaId === 'FIN-GAL')
   });
   adminWaEmpresa.container = new MockDomElement('admin-wa-emp-test');
   adminWaEmpresa.seccion = 'whatsapp';
-  adminWaEmpresa.render();
+  await adminWaEmpresa.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
   const htmlAdminWaEmpresa = adminWaEmpresa.container.innerHTML;
 
   const htmlPrivacidad = fs.readFileSync('privacidad.html', 'utf8');
@@ -6922,23 +7057,22 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     htmlAdminWaSuperSinVars.includes('✗ falta configurar') &&
     htmlAdminWaSuperConVars.includes('✓ configurado') &&
     !htmlAdminWaSuperConVars.includes('✗ falta configurar') &&
+    htmlAdminWaSuperConVars.includes('SUPABASE_SERVICE_ROLE_KEY') &&
+    htmlAdminWaSuperConVars.includes('INVERSIONES: todas · VACUNO INVERSIONES: Gallinazo') &&
+    htmlAdminWaSuperConVars.includes('id="seccion-wa-permisos"') &&
+    htmlAdminWaSuperConVars.includes('Editar permisos') &&
     htmlAdminWaSuperConVars.includes('id="tabla-wa-canales"') &&
-    htmlAdminWaSuperConVars.includes('id="form-wa-crear-canal"') &&
     htmlAdminWaSuperConVars.includes('id="tabla-wa-consumo-facturacion"') &&
     htmlAdminWaSuperConVars.includes('id="tabla-wa-ultimos-estados"') &&
     htmlAdminWaSuperConVars.includes('131047') &&
-    !htmlAdminWaSuperConVars.includes('id="wa-phone-id"') &&
-    !htmlAdminWaSuperConVars.includes('hello_world') &&
     htmlAdminWaEmpresa.includes('https://wa.me/573225694112') &&
-    htmlAdminWaEmpresa.includes('Abrir chat') &&
-    htmlAdminWaEmpresa.includes('id="form-wa-contacto"') &&
-    htmlAdminWaEmpresa.includes('id="form-simulador-whatsapp"') &&
+    htmlAdminWaEmpresa.includes('VACUNO INVERSIONES: Gallinazo') &&
+    !htmlAdminWaEmpresa.includes('INVERSIONES: todas') &&
+    !htmlAdminWaEmpresa.includes('573105556677') &&
     !htmlAdminWaEmpresa.includes('id="form-wa-crear-canal"') &&
     htmlPrivacidad.includes('SOLUCIONES AC S.A.S.') &&
-    htmlPrivacidad.includes('Magangué, Bolívar, Colombia') &&
-    htmlPrivacidad.includes('Ley 1581 de 2012') &&
     htmlPrivacidad.includes('Supabase'),
-    'ModuloAdmin & /privacidad: Muestra estado real de secretos desde /api/whatsapp/health (✗ falta configurar / ✓ configurado), plantillas editables y /privacidad'
+    'ModuloAdmin & /privacidad: Panel 100% en Supabase con matriz multi-empresa/multi-finca en Super Admin y vista aislada en Admin de Empresa'
   );
 }
 

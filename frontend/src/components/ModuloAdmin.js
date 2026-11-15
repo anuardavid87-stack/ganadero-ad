@@ -20,20 +20,14 @@ import {
 import {
   GRAPH_API_VERSION,
   DEFAULT_SHARED_WHATSAPP_CHANNEL,
+  normalizarTelefono,
   normalizarTelefonoWhatsApp,
-  listarCanalesWhatsApp,
-  obtenerCanalActivoEmpresa,
-  guardarCanalWhatsApp,
-  listarContactosWhatsApp,
-  guardarContactoWhatsApp,
-  cambiarEstadoContactoWhatsApp,
-  eliminarContactoWhatsApp,
-  listarLogsMensajesWhatsApp,
-  listarEstadosMensajesWhatsApp,
-  obtenerReporteConsumoWhatsApp,
-  registrarLogMensajeWhatsApp,
-  actualizarSesion24hWhatsApp,
-  procesarComandoWhatsApp
+  crearRepositorioWhatsAppSupabase,
+  resolverAlcancePermitidoContacto,
+  formatearResumenPermisosContacto,
+  ejecutarComandoAlcanceWhatsApp,
+  calcularReporteConsumoWhatsAppDesdeLogs,
+  obtenerTextoAyudaWhatsApp
 } from '../core/whatsappCloudService.js';
 import { formatearFecha } from '../core/zootecnia.js';
 
@@ -86,6 +80,7 @@ export class ModuloAdmin {
     onExportarBackupExcel,
     onExportarBackupJSON,
     onRegistrarPesoWhatsAppLocal,
+    whatsappRepoOverride,
     getPesajes,
     getOperaciones
   }) {
@@ -113,12 +108,35 @@ export class ModuloAdmin {
     this.onExportarBackupExcel = onExportarBackupExcel;
     this.onExportarBackupJSON = onExportarBackupJSON;
     this.onRegistrarPesoWhatsAppLocal = onRegistrarPesoWhatsAppLocal || null;
+    this.whatsappRepoOverride = whatsappRepoOverride || null;
     this.whatsappHistorialSimulador = [];
     this.whatsappFeedback = null;
+    this.whatsappDatos = {
+      cargados: false,
+      cargando: false,
+      faltaMigracionSql: false,
+      error: null,
+      channels: [],
+      contacts: [],
+      contactAccess: [],
+      messagesLog: [],
+      messageStatus: [],
+      contextoClave: ''
+    };
+    this.whatsappContactoEditando = null;
+    this.whatsappFilasPermisosForm = null;
+    this.whatsappFormDraft = {
+      telefono: '',
+      nombre: '',
+      empTodasFincas: true,
+      empFincasIds: [],
+      empRol: 'operador'
+    };
     this.whatsappServerHealth = {
       WHATSAPP_SYSTEM_TOKEN: false,
       WHATSAPP_APP_SECRET: false,
       WHATSAPP_VERIFY_TOKEN: false,
+      SUPABASE_SERVICE_ROLE_KEY: false,
       consultado: false
     };
     this.whatsappHealthCargando = false;
@@ -4227,11 +4245,21 @@ END $$;
       });
     }
 
+    // Recargar datos de WhatsApp desde Supabase (o reintentar tras ejecutar migración SQL)
+    this.container.querySelectorAll('#btn-wa-recargar-supabase, #btn-wa-reintentar-migracion').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
+      });
+    });
+
     // Super Admin: Guardar nombre e idioma de plantilla (template_name / template_lang) en un canal existente
     this.container.querySelectorAll('.btn-wa-guardar-plantilla-canal').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const chId = btn.getAttribute('data-id');
         const phoneId = btn.getAttribute('data-phone-id');
+        const wabaId = btn.getAttribute('data-waba-id') || '118927644541032';
+        const displayPhone = btn.getAttribute('data-display-phone') || '+57 322 5694112';
+        const nombreCanal = btn.getAttribute('data-nombre') || 'Canal WhatsApp';
         const tipo = btn.getAttribute('data-tipo') || 'compartido';
         const empId = btn.getAttribute('data-empresa-id') || null;
         const tplNameInput = this.container.querySelector(`.input-wa-ch-tpl-name[data-id="${chId}"]`);
@@ -4239,31 +4267,36 @@ END $$;
         const nuevoNombrePlantilla = (tplNameInput?.value || 'notificacion_ganadero_ad').trim();
         const nuevoIdiomaPlantilla = (tplLangInput?.value || 'es').trim();
 
-        const res = guardarCanalWhatsApp({
+        const repo = this.obtenerRepoWhatsAppPanel();
+        const res = await repo.guardarCanalPanel({
           id: chId,
           phone_number_id: phoneId,
+          waba_id: wabaId,
+          display_phone_number: displayPhone,
+          nombre: nombreCanal,
           tipo,
           empresa_id: tipo === 'dedicado' ? empId : null,
           template_name: nuevoNombrePlantilla,
           template_lang: nuevoIdiomaPlantilla
-        }, { esSuperAdmin: esSuperAdmin });
+        });
 
         if (!res.ok) {
           this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+          this.render();
         } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Plantilla del canal actualizada: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
+            mensaje: `✅ Plantilla del canal actualizada en Supabase: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
           };
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
         }
-        this.render();
       });
     });
 
-    // Super Admin: Crear / Asignar Canal Dedicado a una Empresa
+    // Super Admin: Crear / Asignar Canal Dedicado a una Empresa en Supabase
     const formCrearCanalWA = this.container.querySelector('#form-wa-crear-canal');
     if (formCrearCanalWA) {
-      formCrearCanalWA.addEventListener('submit', (e) => {
+      formCrearCanalWA.addEventListener('submit', async (e) => {
         e.preventDefault();
         const phoneNumberId = (this.container.querySelector('#wa-canal-phone-id')?.value || '').trim();
         const wabaId = (this.container.querySelector('#wa-canal-waba-id')?.value || '').trim();
@@ -4274,7 +4307,8 @@ END $$;
         const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es').trim();
         const tokenOverride = (this.container.querySelector('#wa-canal-token-override')?.value || '').trim();
 
-        const res = guardarCanalWhatsApp({
+        const repo = this.obtenerRepoWhatsAppPanel();
+        const res = await repo.guardarCanalPanel({
           phone_number_id: phoneNumberId,
           waba_id: wabaId,
           display_phone_number: displayPhone,
@@ -4285,169 +4319,359 @@ END $$;
           template_lang: templateLang,
           access_token_override: tokenOverride || null,
           activo: true
-        }, { esSuperAdmin: esSuperAdmin });
+        });
 
         if (!res.ok) {
           this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+          this.render();
         } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId} con plantilla "${res.channel.template_name}" (${res.channel.template_lang}).`
+            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) guardado en Supabase para ${empresaId}.`
           };
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
+        }
+      });
+    }
+
+    // Super Admin: Controles dinámicos de filas de PERMISOS (Empresa + Fincas + Rol)
+    const btnAgregarFilaPermiso = this.container.querySelector('#btn-wa-agregar-fila-permiso');
+    if (btnAgregarFilaPermiso) {
+      btnAgregarFilaPermiso.addEventListener('click', () => {
+        this.sincronizarDraftFormularioWhatsApp(esSuperAdmin);
+        const todasEmp = Array.isArray(empresas) && empresas.length > 0 ? empresas : (this.getEmpresas ? this.getEmpresas() : []);
+        const usadas = new Set((this.whatsappFilasPermisosForm || []).map((f) => String(f.empresa_id)));
+        const siguienteEmp = todasEmp.find((e) => !usadas.has(String(e.id))) || todasEmp[0] || empresaActiva || { id: 'EMP-01' };
+        if (!Array.isArray(this.whatsappFilasPermisosForm)) this.whatsappFilasPermisosForm = [];
+        this.whatsappFilasPermisosForm.push({
+          empresa_id: siguienteEmp.id,
+          todasFincas: true,
+          fincasIds: [],
+          rol: 'operador'
+        });
+        this.render();
+      });
+    }
+
+    this.container.querySelectorAll('.btn-wa-quitar-fila-permiso').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.sincronizarDraftFormularioWhatsApp(esSuperAdmin);
+        const idx = Number(btn.getAttribute('data-idx'));
+        if (Array.isArray(this.whatsappFilasPermisosForm) && this.whatsappFilasPermisosForm.length > 1) {
+          this.whatsappFilasPermisosForm.splice(idx, 1);
+          this.render();
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.wa-perm-empresa').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        this.sincronizarDraftFormularioWhatsApp(esSuperAdmin);
+        const idx = Number(sel.getAttribute('data-idx'));
+        if (this.whatsappFilasPermisosForm && this.whatsappFilasPermisosForm[idx]) {
+          this.whatsappFilasPermisosForm[idx].empresa_id = sel.value;
+          this.whatsappFilasPermisosForm[idx].todasFincas = true;
+          this.whatsappFilasPermisosForm[idx].fincasIds = [];
+          this.render();
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.wa-perm-rol').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        const idx = Number(sel.getAttribute('data-idx'));
+        if (this.whatsappFilasPermisosForm && this.whatsappFilasPermisosForm[idx]) {
+          this.whatsappFilasPermisosForm[idx].rol = sel.value;
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.wa-perm-todas-fincas').forEach((chk) => {
+      chk.addEventListener('change', () => {
+        this.sincronizarDraftFormularioWhatsApp(esSuperAdmin);
+        const idx = Number(chk.getAttribute('data-idx'));
+        if (this.whatsappFilasPermisosForm && this.whatsappFilasPermisosForm[idx]) {
+          this.whatsappFilasPermisosForm[idx].todasFincas = chk.checked;
+          if (chk.checked) {
+            this.whatsappFilasPermisosForm[idx].fincasIds = [];
+          }
+          this.render();
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.wa-perm-finca-chk').forEach((chk) => {
+      chk.addEventListener('change', () => {
+        this.sincronizarDraftFormularioWhatsApp(esSuperAdmin);
+        const idx = Number(chk.getAttribute('data-idx'));
+        const fincaId = chk.value;
+        const fila = this.whatsappFilasPermisosForm && this.whatsappFilasPermisosForm[idx];
+        if (!fila) return;
+        const seleccionadas = new Set(Array.isArray(fila.fincasIds) ? fila.fincasIds : []);
+        if (chk.checked) {
+          fila.todasFincas = false;
+          seleccionadas.add(fincaId);
+        } else {
+          seleccionadas.delete(fincaId);
+          if (seleccionadas.size === 0) {
+            fila.todasFincas = true;
+          }
+        }
+        fila.fincasIds = Array.from(seleccionadas);
+        this.render();
+      });
+    });
+
+    // Admin de Empresa: Checkboxes de "Todas las fincas" vs fincas específicas de su empresa
+    const chkEmpTodas = this.container.querySelector('#wa-emp-todas-fincas');
+    if (chkEmpTodas) {
+      chkEmpTodas.addEventListener('change', () => {
+        this.sincronizarDraftFormularioWhatsApp(false);
+        this.whatsappFormDraft.empTodasFincas = chkEmpTodas.checked;
+        if (chkEmpTodas.checked) {
+          this.whatsappFormDraft.empFincasIds = [];
         }
         this.render();
       });
     }
 
-    // Agregar contacto a la Lista Blanca (whatsapp_contacts) con validación de teléfono único activo
+    this.container.querySelectorAll('.wa-emp-finca-chk').forEach((chk) => {
+      chk.addEventListener('change', () => {
+        this.sincronizarDraftFormularioWhatsApp(false);
+        const setIds = new Set(this.whatsappFormDraft.empFincasIds || []);
+        if (chk.checked) {
+          this.whatsappFormDraft.empTodasFincas = false;
+          setIds.add(chk.value);
+        } else {
+          setIds.delete(chk.value);
+          if (setIds.size === 0) {
+            this.whatsappFormDraft.empTodasFincas = true;
+          }
+        }
+        this.whatsappFormDraft.empFincasIds = Array.from(setIds);
+        this.render();
+      });
+    });
+
+    const btnCancelarEdicionWA = this.container.querySelector('#btn-wa-cancelar-edicion');
+    if (btnCancelarEdicionWA) {
+      btnCancelarEdicionWA.addEventListener('click', () => {
+        this.resetearFormularioContactoWhatsApp(empresaActiva?.id || empresas[0]?.id || 'EMP-01');
+        this.render();
+      });
+    }
+
+    // Crear / Editar contacto y permisos en Supabase (whatsapp_contacts + whatsapp_contact_access)
     const formContactoWA = this.container.querySelector('#form-wa-contacto');
     if (formContactoWA) {
-      formContactoWA.addEventListener('submit', (e) => {
+      formContactoWA.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const telefono = (this.container.querySelector('#wa-contacto-telefono')?.value || '').trim();
+        const telefonoRaw = (this.container.querySelector('#wa-contacto-telefono')?.value || '').trim();
+        const telNorm = normalizarTelefono(telefonoRaw);
         const nombre = (this.container.querySelector('#wa-contacto-nombre')?.value || '').trim();
-        const rolContacto = (this.container.querySelector('#wa-contacto-rol')?.value || 'operador').trim();
-        const empresaSelect = this.container.querySelector('#wa-contacto-empresa-id');
-        const empresaId = empresaSelect
-          ? empresaSelect.value
-          : (empresaActiva?.id || empresas[0]?.id || 'EMP-01');
-        const fincaId = (this.container.querySelector('#wa-contacto-finca-id')?.value || '').trim() || null;
+        const empIdActual = empresaActiva?.id || empresas[0]?.id || 'EMP-01';
 
-        const res = guardarContactoWhatsApp({
-          telefono,
+        const accesosConstruidos = [];
+        if (esSuperAdmin) {
+          this.sincronizarDraftFormularioWhatsApp(true);
+          const filas = Array.isArray(this.whatsappFilasPermisosForm) ? this.whatsappFilasPermisosForm : [];
+          for (const fila of filas) {
+            if (!fila || !fila.empresa_id) continue;
+            const rolFila = fila.rol || 'operador';
+            if (fila.todasFincas || !Array.isArray(fila.fincasIds) || fila.fincasIds.length === 0) {
+              accesosConstruidos.push({
+                empresa_id: fila.empresa_id,
+                finca_id: null,
+                rol: rolFila,
+                activo: true
+              });
+            } else {
+              for (const fid of fila.fincasIds) {
+                accesosConstruidos.push({
+                  empresa_id: fila.empresa_id,
+                  finca_id: fid,
+                  rol: rolFila,
+                  activo: true
+                });
+              }
+            }
+          }
+        } else {
+          const rolEmp = (this.container.querySelector('#wa-contacto-rol')?.value || 'operador').trim();
+          const chkTodas = this.container.querySelector('#wa-emp-todas-fincas');
+          const chksFincas = Array.from(this.container.querySelectorAll('.wa-emp-finca-chk:checked')).map((c) => c.value);
+          const usarTodas = (chkTodas && chkTodas.checked) || chksFincas.length === 0;
+          if (usarTodas) {
+            accesosConstruidos.push({
+              empresa_id: empIdActual,
+              finca_id: null,
+              rol: rolEmp,
+              activo: true
+            });
+          } else {
+            for (const fid of chksFincas) {
+              accesosConstruidos.push({
+                empresa_id: empIdActual,
+                finca_id: fid,
+                rol: rolEmp,
+                activo: true
+              });
+            }
+          }
+        }
+
+        const repo = this.obtenerRepoWhatsAppPanel();
+        const res = await repo.guardarContactoConAccesosPanel({
+          contactId: this.whatsappContactoEditando?.id || null,
+          telefono: telNorm,
           nombre: nombre || 'Operador Autorizado',
-          rol: rolContacto,
-          empresa_id: empresaId,
-          finca_id: fincaId,
-          activo: true
+          activo: true,
+          accesos: accesosConstruidos,
+          modoSuperAdmin: Boolean(esSuperAdmin)
         });
 
         if (!res.ok) {
           this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
-        } else {
-          this.whatsappFeedback = {
-            tipo: 'ok',
-            mensaje: `✅ Contacto +${res.contact.telefono} (${res.contact.nombre}) autorizado en la empresa ${empresaId}.`
-          };
+          this.render();
+          return;
         }
-        this.render();
+
+        this.whatsappFeedback = {
+          tipo: 'ok',
+          mensaje: `✅ Permisos guardados en Supabase para +${telNorm} (${nombre || 'Operador'}).`
+        };
+        this.resetearFormularioContactoWhatsApp(empIdActual);
+        await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
       });
     }
 
-    // Activar / Desactivar contacto en whatsapp_contacts
-    this.container.querySelectorAll('.btn-wa-toggle-contacto').forEach((btn) => {
+    // Editar permisos de un contacto existente
+    this.container.querySelectorAll('.btn-wa-editar-contacto').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
-        const nuevoActivo = btn.getAttribute('data-activo') === 'true';
-        const res = cambiarEstadoContactoWhatsApp(id, nuevoActivo, {
-          empresaId: empresaActiva?.id,
-          esSuperAdmin
-        });
-        if (!res.ok) {
-          this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
-        } else {
-          this.whatsappFeedback = {
-            tipo: 'ok',
-            mensaje: `✅ Estado del contacto +${res.contact.telefono} actualizado a ${res.contact.activo ? 'ACTIVO' : 'INACTIVO'}.`
-          };
-        }
+        const contacto = (this.whatsappDatos?.contacts || []).find((c) => String(c.id) === String(id));
+        if (!contacto) return;
+        this.iniciarEdicionContactoWhatsApp(contacto, esSuperAdmin, empresaActiva?.id || empresas[0]?.id || 'EMP-01');
         this.render();
       });
     });
 
-    // Cambiar finca por defecto de un contacto
-    this.container.querySelectorAll('.select-wa-finca-contacto').forEach((sel) => {
-      sel.addEventListener('change', () => {
-        const id = sel.getAttribute('data-id');
-        const tel = sel.getAttribute('data-telefono');
-        const empId = sel.getAttribute('data-empresa');
-        const nombre = sel.getAttribute('data-nombre');
-        const rolC = sel.getAttribute('data-rol');
-        const activo = sel.getAttribute('data-activo') === 'true';
-        const fincaId = sel.value || null;
-        const res = guardarContactoWhatsApp({
-          id,
-          telefono: tel,
-          empresa_id: empId,
-          finca_id: fincaId,
-          nombre,
-          rol: rolC,
-          activo
-        });
-        if (res.ok) {
-          this.whatsappFeedback = {
-            tipo: 'ok',
-            mensaje: `✅ Finca por defecto actualizada para +${res.contact.telefono}.`
-          };
-          this.render();
-        }
-      });
-    });
-
-    // Eliminar contacto de whatsapp_contacts
-    this.container.querySelectorAll('.btn-wa-eliminar-contacto').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    // Activar / Desactivar contacto o permisos de la empresa en Supabase
+    this.container.querySelectorAll('.btn-wa-toggle-contacto').forEach((btn) => {
+      btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-id');
-        const res = eliminarContactoWhatsApp(id, {
-          empresaId: empresaActiva?.id,
-          esSuperAdmin
+        const tel = btn.getAttribute('data-telefono') || '';
+        const nuevoActivo = btn.getAttribute('data-activo') === 'true';
+        const repo = this.obtenerRepoWhatsAppPanel();
+        const res = await repo.cambiarEstadoContactoPanel({
+          contactId: id,
+          activo: nuevoActivo,
+          empresaId: empresaActiva?.id || null,
+          esSuperAdmin: Boolean(esSuperAdmin)
         });
-        if (res.ok) {
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
+          this.render();
+        } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `🗑️ Contacto +${res.deleted?.telefono || ''} eliminado de la lista blanca.`
+            mensaje: `✅ Estado de +${tel} actualizado a ${nuevoActivo ? 'ACTIVO' : 'INACTIVO'} en Supabase.`
           };
-          this.render();
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
         }
       });
     });
 
-    // Simulador Multitenant de comandos WhatsApp ("INFO <ID>" / "PESO <ID> <KG>" / "FINCA <nombre>")
-    // Opera estrictamente sobre los datos de la empresa activa
+    // Eliminar contacto (Super Admin) o revocar permisos de la empresa (Admin de Empresa) en Supabase
+    this.container.querySelectorAll('.btn-wa-eliminar-contacto').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const tel = btn.getAttribute('data-telefono') || '';
+        const repo = this.obtenerRepoWhatsAppPanel();
+        const res = await repo.eliminarContactoPanel({
+          contactId: id,
+          empresaId: empresaActiva?.id || null,
+          esSuperAdmin: Boolean(esSuperAdmin)
+        });
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
+          this.render();
+        } else {
+          if (this.whatsappContactoEditando?.id === id) {
+            this.resetearFormularioContactoWhatsApp(empresaActiva?.id || empresas[0]?.id || 'EMP-01');
+          }
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: esSuperAdmin
+              ? `🗑️ Contacto +${tel} eliminado de Supabase.`
+              : `🗑️ Permisos de +${tel} eliminados de ${empresaActiva?.nombre || 'la empresa'}.`
+          };
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
+        }
+      });
+    });
+
+    // Simulador de comandos WhatsApp: usa exactamente la lógica del webhook (búsqueda automática en todas las fincas permitidas)
     const formSimuladorWA = this.container.querySelector('#form-simulador-whatsapp');
     if (formSimuladorWA) {
       formSimuladorWA.addEventListener('submit', async (e) => {
         e.preventDefault();
         const remitenteRaw = (this.container.querySelector('#wa-sim-remitente')?.value || '').trim();
-        const remitente = normalizarTelefonoWhatsApp(remitenteRaw);
+        const remitente = normalizarTelefono(remitenteRaw);
         const textoComando = (this.container.querySelector('#wa-sim-mensaje')?.value || '').trim();
         if (!textoComando) return;
 
         const empIdSim = empresaActiva?.id || empresas[0]?.id || 'EMP-01';
-        const canalEmpresa = obtenerCanalActivoEmpresa(empIdSim);
-        const numeroBotNorm = normalizarTelefonoWhatsApp(canalEmpresa.display_phone_number);
+        const canalesCargados = this.whatsappDatos?.channels || [];
+        const canalDedicado = canalesCargados.find(
+          (c) => c.tipo === 'dedicado' && c.activo !== false && String(c.empresa_id) === String(empIdSim)
+        );
+        const canalCompartido = canalesCargados.find((c) => c.tipo === 'compartido' && c.activo !== false) || DEFAULT_SHARED_WHATSAPP_CHANNEL;
+        const canalEmpresa = canalDedicado || canalCompartido;
+        const numeroBotNorm = normalizarTelefono(canalEmpresa.display_phone_number);
 
-        // Prohibido usar el propio número del bot como remitente
         if (remitente === numeroBotNorm || remitente === String(canalEmpresa.phone_number_id)) {
           this.whatsappFeedback = {
             tipo: 'error',
-            mensaje: '⛔ El teléfono remitente no puede ser el propio número del bot (+57 322 5694112). Usa un teléfono de contacto de tu empresa.'
+            mensaje: '⛔ El teléfono remitente no puede ser el propio número del canal (+57 322 5694112).'
           };
           this.render();
           return;
         }
 
-        // Buscar contacto activo en la empresa actual
-        const contactosEmpresa = listarContactosWhatsApp({ empresaId: empIdSim, esSuperAdmin: false });
-        let contactoSim = contactosEmpresa.find(
-          (c) => c.activo !== false && normalizarTelefonoWhatsApp(c.telefono) === remitente
-        );
-
-        // Si el usuario aún no ha creado contactos en su empresa y está probando en su panel,
-        // validar si el número está en otra empresa o autorizarlo para la prueba si no choca
-        if (!contactoSim && contactosEmpresa.length === 0 && remitente) {
-          const autoReg = guardarContactoWhatsApp({
-            telefono: remitente,
-            empresa_id: empIdSim,
-            finca_id: fincaActiva?.id || null,
-            nombre: 'Administrador Empresa',
-            rol: 'administrador',
-            activo: true
-          });
-          if (autoReg.ok) contactoSim = autoReg.contact;
+        const repo = this.obtenerRepoWhatsAppPanel();
+        let datosContacto = null;
+        if (typeof repo.obtenerContactoConAccesosPorTelefono === 'function') {
+          datosContacto = await repo.obtenerContactoConAccesosPorTelefono(remitente);
+        }
+        if (!datosContacto) {
+          const localMatch = (this.whatsappDatos?.contacts || []).find(
+            (c) => c.activo !== false && normalizarTelefono(c.telefono) === remitente
+          );
+          if (localMatch) {
+            datosContacto = {
+              contacto: localMatch,
+              accesos: (localMatch.accesos || []).filter((a) => a.activo !== false)
+            };
+          }
         }
 
-        if (!contactoSim) {
+        const todasEmpresasSim = Array.isArray(empresas) && empresas.length > 0
+          ? empresas
+          : (this.getEmpresas ? this.getEmpresas() : []);
+        const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : fincas;
+
+        const alcance = datosContacto
+          ? resolverAlcancePermitidoContacto({
+              contacto: datosContacto.contacto,
+              accesos: datosContacto.accesos,
+              canal: canalEmpresa,
+              empresas: todasEmpresasSim,
+              fincas: todasLasFincasGlobal
+            })
+          : { autorizado: false, fincasPermitidas: [], empresasIds: [] };
+
+        if (!datosContacto || !alcance.autorizado) {
           this.whatsappHistorialSimulador.unshift({
             hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             remitente: remitente || remitenteRaw,
@@ -4459,84 +4683,75 @@ END $$;
           return;
         }
 
-        const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : fincas;
-        const fincasDeEstaEmpresa = todasLasFincasGlobal.filter((f) => f && f.empresaId === empIdSim);
-        const idsFincasEmpresa = new Set(fincasDeEstaEmpresa.map((f) => f.id));
-        const fincaFiltroId = contactoSim.finca_id && idsFincasEmpresa.has(contactoSim.finca_id)
-          ? contactoSim.finca_id
-          : (fincaActiva && idsFincasEmpresa.has(fincaActiva.id) ? fincaActiva.id : null);
+        const todosAnimalesMemoria = this.getTodosLosAnimales
+          ? this.getTodosLosAnimales()
+          : (this.getAnimales ? this.getAnimales() : []);
 
-        const todosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : (this.getAnimales ? this.getAnimales() : []);
-        const poolEmpresa = todosAnimales.filter((a) => {
-          if (!a || !idsFincasEmpresa.has(a.fincaId)) return false;
-          if (fincaFiltroId && a.fincaId !== fincaFiltroId) return false;
-          return true;
-        });
-
-        const dbLocalAdapter = {
-          consultarAnimalPorId: async (idAnimal) => {
+        const dbSimAdapter = {
+          buscarAnimalesPorTagEnFincas: async (idAnimal, fincasIds = []) => {
+            const setFincas = new Set((fincasIds || []).map(String));
             const buscado = String(idAnimal || '').trim().toUpperCase();
-            return poolEmpresa.find(
-              (a) => String(a.identificacionTag || a.numero || '').trim().toUpperCase() === buscado
-            ) || null;
+            const locales = (todosAnimalesMemoria || []).filter((a) => {
+              if (!a) return false;
+              const fid = String(a.fincaId || a.finca_id || '');
+              const activo = (a.estadoVida || a.estado_vida || 'activo') === 'activo';
+              const tag = String(a.identificacionTag || a.identificacion_tag || a.numero || '').trim().toUpperCase();
+              return setFincas.has(fid) && activo && tag === buscado;
+            });
+            if (locales.length > 0 && !this.whatsappRepoOverride) {
+              return locales;
+            }
+            if (typeof repo.buscarAnimalesPorTagEnFincas === 'function') {
+              const remotos = await repo.buscarAnimalesPorTagEnFincas(idAnimal, fincasIds);
+              if (remotos.length > 0) return remotos;
+            }
+            return locales;
           },
-          registrarPesoAnimal: async ({ idAnimal, pesoKg, fecha }) => {
-            const buscado = String(idAnimal || '').trim().toUpperCase();
-            const animal = poolEmpresa.find(
-              (a) => String(a.identificacionTag || a.numero || '').trim().toUpperCase() === buscado
-            );
-            if (!animal) return { exito: false, motivo: 'NO_ENCONTRADO' };
-            const pesoAnterior = Number(animal.ultimoPesoKg ?? animal.pesoActualKg ?? animal.peso ?? 0);
+          registrarPesoAnimalEnFinca: async ({ animal, idAnimal, pesoKg, fecha }) => {
+            const tagReal = String(animal.identificacionTag || animal.identificacion_tag || idAnimal).trim().toUpperCase();
+            const fincaTarget = String(animal.fincaId || animal.finca_id || '');
             const fechaHoy = fecha || new Date().toISOString().split('T')[0];
+
+            if (this.whatsappRepoOverride && typeof repo.registrarPesoAnimalEnFinca === 'function') {
+              const resRemoto = await repo.registrarPesoAnimalEnFinca({
+                animal,
+                idAnimal: tagReal,
+                pesoKg,
+                fecha: fechaHoy,
+                remitente
+              });
+              if (this.onRegistrarPesoWhatsAppLocal && resRemoto.exito) {
+                this.onRegistrarPesoWhatsAppLocal({ tag: tagReal, pesoKg, fecha: fechaHoy, fincaId: fincaTarget });
+              }
+              return resRemoto;
+            }
+
             if (this.onRegistrarPesoWhatsAppLocal) {
-              this.onRegistrarPesoWhatsAppLocal({ tag: buscado, pesoKg, fecha: fechaHoy });
+              this.onRegistrarPesoWhatsAppLocal({ tag: tagReal, pesoKg, fecha: fechaHoy, fincaId: fincaTarget });
+            }
+            if (typeof repo.registrarPesoAnimalEnFinca === 'function' && animal.id) {
+              try {
+                await repo.registrarPesoAnimalEnFinca({
+                  animal,
+                  idAnimal: tagReal,
+                  pesoKg,
+                  fecha: fechaHoy,
+                  remitente
+                });
+              } catch {
+                // El pesaje ya quedó registrado localmente para sincronización
+              }
             }
             return {
               exito: true,
-              animal: { ...animal, identificacion_tag: animal.identificacionTag || animal.numero },
-              pesoAnterior,
+              animal,
               pesoNuevo: pesoKg,
               fecha: fechaHoy
             };
-          },
-          cambiarFincaActiva: async ({ nombreFinca }) => {
-            const q = String(nombreFinca || '').trim().toLowerCase();
-            const encontrada = fincasDeEstaEmpresa.find(
-              (f) => String(f.nombre || '').toLowerCase().includes(q) || String(f.codigo || '').toLowerCase() === q
-            );
-            if (!encontrada) {
-              return { exito: false, fincasDisponibles: fincasDeEstaEmpresa, empresaNombre: empresaActiva?.nombre || empIdSim };
-            }
-            guardarContactoWhatsApp({ ...contactoSim, finca_id: encontrada.id });
-            if (this.onSeleccionarFinca) this.onSeleccionarFinca(encontrada.id);
-            return { exito: true, finca: encontrada, empresaNombre: empresaActiva?.nombre || empIdSim };
           }
         };
 
-        actualizarSesion24hWhatsApp(canalEmpresa.id, remitente, empIdSim);
-        registrarLogMensajeWhatsApp({
-          empresa_id: empIdSim,
-          channel_id: canalEmpresa.id,
-          telefono: remitente,
-          direccion: 'in',
-          tipo: 'text',
-          contenido_resumen: textoComando
-        });
-
-        const resCmd = await procesarComandoWhatsApp(textoComando, dbLocalAdapter, {
-          remitente,
-          empresaId: empIdSim,
-          fincaId: fincaFiltroId
-        });
-
-        registrarLogMensajeWhatsApp({
-          empresa_id: empIdSim,
-          channel_id: canalEmpresa.id,
-          telefono: remitente,
-          direccion: 'out',
-          tipo: 'text',
-          contenido_resumen: resCmd.mensajeRespuesta
-        });
+        const resCmd = await ejecutarComandoAlcanceWhatsApp(textoComando, alcance, dbSimAdapter, { remitente });
 
         this.whatsappHistorialSimulador.unshift({
           hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -4549,7 +4764,7 @@ END $$;
       });
     }
 
-    // Botones rápidos de ejemplo en el simulador ("INFO ..." / "PESO ..." / "FINCA ...")
+    // Botones rápidos de ejemplo en el simulador ("INFO ..." / "PESO ..." / "AYUDA")
     this.container.querySelectorAll('.btn-wa-ejemplo-cmd').forEach((btn) => {
       btn.addEventListener('click', () => {
         const cmd = btn.getAttribute('data-cmd') || '';
@@ -4560,6 +4775,167 @@ END $$;
         }
       });
     });
+  }
+
+  obtenerEmpresaIdDeFinca(finca) {
+    if (!finca) return null;
+    if (finca.empresaId) return String(finca.empresaId);
+    if (finca.empresa_id) return String(finca.empresa_id);
+    const rawUbic = String(finca.ubicacion || '');
+    const m = rawUbic.match(/^\[TENANT:([^\]]+)\]/);
+    return m ? m[1].trim() : null;
+  }
+
+  obtenerRepoWhatsAppPanel() {
+    if (this.whatsappRepoOverride) {
+      return this.whatsappRepoOverride;
+    }
+    const uActual = this.getUsuarioActual ? this.getUsuarioActual() : null;
+    const rol = this.getRolActual ? this.getRolActual() : (uActual?.rol || 'administrador');
+    const empActiva = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
+    const srv = this.getSupabaseService ? this.getSupabaseService() : null;
+    return crearRepositorioWhatsAppSupabase({
+      contextoPanel: {
+        rol,
+        usuario: uActual?.usuario || '',
+        empresaId: empActiva?.id || uActual?.empresaId || '',
+        sessionToken: srv?.tenantContext?.token || '',
+        supabaseUrl: srv?.config?.url || '',
+        anonKey: srv?.config?.anonKey || ''
+      }
+    });
+  }
+
+  async cargarDatosWhatsAppDesdeSupabase({ forzar = false } = {}) {
+    const rol = this.getRolActual ? this.getRolActual() : 'administrador';
+    const empActiva = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
+    const contextoClave = `${rol}::${empActiva?.id || ''}`;
+
+    if (this.whatsappDatos?.cargando && !forzar) return this.whatsappDatos;
+    if (this.whatsappDatos?.cargados && !forzar && this.whatsappDatos.contextoClave === contextoClave) {
+      return this.whatsappDatos;
+    }
+
+    this.whatsappDatos = {
+      ...(this.whatsappDatos || {}),
+      cargando: true,
+      contextoClave
+    };
+
+    try {
+      const repo = this.obtenerRepoWhatsAppPanel();
+      const res = await repo.cargarDatosPanel();
+      this.whatsappDatos = {
+        cargados: true,
+        cargando: false,
+        faltaMigracionSql: Boolean(res.faltaMigracionSql),
+        error: res.ok ? null : (res.error || null),
+        channels: Array.isArray(res.channels) && res.channels.length > 0 ? res.channels : [{ ...DEFAULT_SHARED_WHATSAPP_CHANNEL }],
+        contacts: Array.isArray(res.contacts) ? res.contacts : [],
+        contactAccess: Array.isArray(res.contactAccess) ? res.contactAccess : [],
+        messagesLog: Array.isArray(res.messagesLog) ? res.messagesLog : [],
+        messageStatus: Array.isArray(res.messageStatus) ? res.messageStatus : [],
+        contextoClave
+      };
+    } catch (err) {
+      this.whatsappDatos = {
+        ...(this.whatsappDatos || {}),
+        cargados: true,
+        cargando: false,
+        error: err?.message || 'Error consultando tablas whatsapp_* en Supabase.',
+        contextoClave
+      };
+    }
+
+    if (this.seccion === 'whatsapp') {
+      this.render();
+    }
+    return this.whatsappDatos;
+  }
+
+  sincronizarDraftFormularioWhatsApp(esSuperAdmin = false) {
+    if (!this.container) return;
+    const telInput = this.container.querySelector('#wa-contacto-telefono');
+    const nomInput = this.container.querySelector('#wa-contacto-nombre');
+    if (telInput) this.whatsappFormDraft.telefono = telInput.value;
+    if (nomInput) this.whatsappFormDraft.nombre = nomInput.value;
+
+    if (!esSuperAdmin) {
+      const rolSel = this.container.querySelector('#wa-contacto-rol');
+      if (rolSel) this.whatsappFormDraft.empRol = rolSel.value;
+    } else if (Array.isArray(this.whatsappFilasPermisosForm)) {
+      this.container.querySelectorAll('.wa-perm-rol').forEach((sel) => {
+        const idx = Number(sel.getAttribute('data-idx'));
+        if (this.whatsappFilasPermisosForm[idx]) {
+          this.whatsappFilasPermisosForm[idx].rol = sel.value;
+        }
+      });
+    }
+  }
+
+  iniciarEdicionContactoWhatsApp(contacto, esSuperAdmin = false, empresaIdActual = 'EMP-01') {
+    this.whatsappContactoEditando = { ...contacto };
+    this.whatsappFormDraft = {
+      telefono: contacto.telefono || '',
+      nombre: contacto.nombre || '',
+      empTodasFincas: true,
+      empFincasIds: [],
+      empRol: 'operador'
+    };
+
+    const accesos = Array.isArray(contacto.accesos) ? contacto.accesos : [];
+    if (esSuperAdmin) {
+      const mapaPorEmp = new Map();
+      for (const acc of accesos) {
+        const empId = String(acc.empresa_id || '');
+        if (!empId) continue;
+        if (!mapaPorEmp.has(empId)) {
+          mapaPorEmp.set(empId, {
+            empresa_id: empId,
+            todasFincas: false,
+            fincasIds: [],
+            rol: acc.rol || 'operador'
+          });
+        }
+        const fila = mapaPorEmp.get(empId);
+        if (!acc.finca_id) {
+          fila.todasFincas = true;
+          fila.fincasIds = [];
+        } else if (!fila.todasFincas && !fila.fincasIds.includes(String(acc.finca_id))) {
+          fila.fincasIds.push(String(acc.finca_id));
+        }
+      }
+      this.whatsappFilasPermisosForm = mapaPorEmp.size > 0
+        ? Array.from(mapaPorEmp.values())
+        : [{ empresa_id: empresaIdActual, todasFincas: true, fincasIds: [], rol: 'operador' }];
+    } else {
+      const accEmp = accesos.filter((a) => String(a.empresa_id) === String(empresaIdActual));
+      const tieneTodas = accEmp.length === 0 || accEmp.some((a) => !a.finca_id);
+      this.whatsappFormDraft.empTodasFincas = tieneTodas;
+      this.whatsappFormDraft.empFincasIds = tieneTodas
+        ? []
+        : accEmp.map((a) => String(a.finca_id)).filter(Boolean);
+      this.whatsappFormDraft.empRol = accEmp[0]?.rol || 'operador';
+    }
+  }
+
+  resetearFormularioContactoWhatsApp(empresaIdDefault = 'EMP-01') {
+    this.whatsappContactoEditando = null;
+    this.whatsappFormDraft = {
+      telefono: '',
+      nombre: '',
+      empTodasFincas: true,
+      empFincasIds: [],
+      empRol: 'operador'
+    };
+    this.whatsappFilasPermisosForm = [
+      {
+        empresa_id: empresaIdDefault,
+        todasFincas: true,
+        fincasIds: [],
+        rol: 'operador'
+      }
+    ];
   }
 
   async consultarHealthWhatsAppServidor(opciones = {}) {
@@ -4593,6 +4969,7 @@ END $$;
           WHATSAPP_SYSTEM_TOKEN: Boolean(data?.WHATSAPP_SYSTEM_TOKEN === true),
           WHATSAPP_APP_SECRET: Boolean(data?.WHATSAPP_APP_SECRET === true),
           WHATSAPP_VERIFY_TOKEN: Boolean(data?.WHATSAPP_VERIFY_TOKEN === true),
+          SUPABASE_SERVICE_ROLE_KEY: Boolean(data?.SUPABASE_SERVICE_ROLE_KEY === true),
           consultado: true
         };
       } else {
@@ -4600,6 +4977,7 @@ END $$;
           WHATSAPP_SYSTEM_TOKEN: false,
           WHATSAPP_APP_SECRET: false,
           WHATSAPP_VERIFY_TOKEN: false,
+          SUPABASE_SERVICE_ROLE_KEY: false,
           consultado: true
         };
       }
@@ -4608,6 +4986,7 @@ END $$;
         WHATSAPP_SYSTEM_TOKEN: false,
         WHATSAPP_APP_SECRET: false,
         WHATSAPP_VERIFY_TOKEN: false,
+        SUPABASE_SERVICE_ROLE_KEY: false,
         consultado: true
       };
     } finally {
@@ -4623,25 +5002,50 @@ END $$;
     const rol = this.getRolActual ? this.getRolActual() : 'administrador';
     const isSuper = Boolean(esSuperAdmin || rol === 'superadmin');
 
-    if (isSuper && !this.whatsappServerHealth?.consultado && !this.whatsappHealthCargando && typeof window !== 'undefined' && typeof window.fetch === 'function') {
-      this.consultarHealthWhatsAppServidor();
-    }
-    const health = this.whatsappServerHealth || {
-      WHATSAPP_SYSTEM_TOKEN: false,
-      WHATSAPP_APP_SECRET: false,
-      WHATSAPP_VERIFY_TOKEN: false,
-      consultado: false
-    };
-    const renderBadgeSecreto = (existe) => existe
-      ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[10px]">✓ configurado</span>`
-      : `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-bold text-[10px]">✗ falta configurar</span>`;
-
     const todasEmpresas = Array.isArray(empresas) && empresas.length > 0
       ? empresas
       : (this.getEmpresas ? this.getEmpresas() : [{ id: 'EMP-01', nombre: 'INVERSIONES' }]);
     const empActiva = empresaActiva || (this.getEmpresaActiva ? this.getEmpresaActiva() : todasEmpresas[0]) || { id: 'EMP-01', nombre: 'INVERSIONES' };
     const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : (Array.isArray(fincas) ? fincas : []);
-    const fincasDeEmpresaActiva = todasLasFincasGlobal.filter((f) => f && f.empresaId === empActiva.id);
+    const fincasDeEmpresaActiva = todasLasFincasGlobal.filter(
+      (f) => f && String(this.obtenerEmpresaIdDeFinca(f)) === String(empActiva.id)
+    );
+
+    // Cargar automáticamente desde Supabase (o desde whatsappRepoOverride en pruebas)
+    const contextoClave = `${rol}::${empActiva.id || ''}`;
+    if (
+      (!this.whatsappDatos?.cargados || this.whatsappDatos.contextoClave !== contextoClave) &&
+      !this.whatsappDatos?.cargando &&
+      (this.whatsappRepoOverride || typeof globalThis.fetch === 'function')
+    ) {
+      this.cargarDatosWhatsAppDesdeSupabase();
+    }
+
+    if (!Array.isArray(this.whatsappFilasPermisosForm) || this.whatsappFilasPermisosForm.length === 0) {
+      this.whatsappFilasPermisosForm = [
+        {
+          empresa_id: empActiva.id,
+          todasFincas: true,
+          fincasIds: [],
+          rol: 'operador'
+        }
+      ];
+    }
+
+    if (isSuper && !this.whatsappServerHealth?.consultado && !this.whatsappHealthCargando && typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      this.consultarHealthWhatsAppServidor();
+    }
+
+    const health = this.whatsappServerHealth || {
+      WHATSAPP_SYSTEM_TOKEN: false,
+      WHATSAPP_APP_SECRET: false,
+      WHATSAPP_VERIFY_TOKEN: false,
+      SUPABASE_SERVICE_ROLE_KEY: false,
+      consultado: false
+    };
+    const renderBadgeSecreto = (existe) => existe
+      ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[10px]">✓ configurado</span>`
+      : `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-bold text-[10px]">✗ falta configurar</span>`;
 
     const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
       ? window.location.origin
@@ -4649,41 +5053,62 @@ END $$;
     const webhookUrl = `${originUrl}/api/whatsapp`;
     const privacidadUrl = `${originUrl}/privacidad`;
 
-    const canales = listarCanalesWhatsApp({ empresaId: empActiva.id, esSuperAdmin: isSuper });
-    const canalEmpresaActiva = obtenerCanalActivoEmpresa(empActiva.id);
+    const canalesRaw = Array.isArray(this.whatsappDatos?.channels) && this.whatsappDatos.channels.length > 0
+      ? this.whatsappDatos.channels
+      : [{ ...DEFAULT_SHARED_WHATSAPP_CHANNEL }];
+    const canales = isSuper
+      ? canalesRaw
+      : canalesRaw.filter((c) => c.tipo === 'compartido' || String(c.empresa_id) === String(empActiva.id));
+
+    const canalDedicadoEmp = canalesRaw.find(
+      (c) => c.tipo === 'dedicado' && c.activo !== false && String(c.empresa_id) === String(empActiva.id)
+    );
+    const canalCompartido = canalesRaw.find((c) => c.tipo === 'compartido' && c.activo !== false) || DEFAULT_SHARED_WHATSAPP_CHANNEL;
+    const canalEmpresaActiva = canalDedicadoEmp || canalCompartido;
     const numeroWaMe = normalizarTelefonoWhatsApp(canalEmpresaActiva.display_phone_number || '+57 322 5694112') || '573225694112';
     const linkAbrirChat = `https://wa.me/${numeroWaMe}`;
 
-    const contactosGlobal = listarContactosWhatsApp({ esSuperAdmin: true });
-    const contactosEmpresaActiva = listarContactosWhatsApp({ empresaId: empActiva.id, esSuperAdmin: false });
-    const logsEmpresaActiva = listarLogsMensajesWhatsApp({ empresaId: empActiva.id, esSuperAdmin: false, limite: 30 });
-    const estadosVisibles = listarEstadosMensajesWhatsApp({
-      empresaId: isSuper ? null : empActiva.id,
-      esSuperAdmin: isSuper,
-      limite: 50
-    });
-    const reporteConsumo = obtenerReporteConsumoWhatsApp({
+    const todosContactosCargados = Array.isArray(this.whatsappDatos?.contacts) ? this.whatsappDatos.contacts : [];
+    const contactosVisibles = isSuper
+      ? todosContactosCargados
+      : todosContactosCargados.filter((c) =>
+          Array.isArray(c.accesos) && c.accesos.some((a) => String(a.empresa_id) === String(empActiva.id))
+        );
+
+    const todosLogs = Array.isArray(this.whatsappDatos?.messagesLog) ? this.whatsappDatos.messagesLog : [];
+    const logsEmpresaActiva = todosLogs
+      .filter((m) => String(m.empresa_id) === String(empActiva.id))
+      .slice(0, 30);
+
+    const todosEstados = Array.isArray(this.whatsappDatos?.messageStatus) ? this.whatsappDatos.messageStatus : [];
+    const estadosVisibles = (isSuper
+      ? todosEstados
+      : todosEstados.filter((s) => String(s.empresa_id) === String(empActiva.id))
+    ).slice(0, 50);
+
+    const reporteConsumo = calcularReporteConsumoWhatsAppDesdeLogs(todosLogs, {
       empresaId: isSuper ? null : empActiva.id,
       esSuperAdmin: isSuper,
       empresasCatalogo: todasEmpresas
     });
 
-    const idsFincasEmpSet = new Set(fincasDeEmpresaActiva.map((f) => f.id));
+    const idsFincasEmpSet = new Set(fincasDeEmpresaActiva.map((f) => String(f.id)));
     const animalesEmpresa = (this.getTodosLosAnimales ? this.getTodosLosAnimales() : []).filter(
-      (a) => a && (idsFincasEmpSet.has(a.fincaId) || (!idsFincasEmpSet.size && (!fincaActiva || a.fincaId === fincaActiva.id)))
+      (a) => a && (idsFincasEmpSet.has(String(a.fincaId || a.finca_id)) || (!idsFincasEmpSet.size && (!fincaActiva || a.fincaId === fincaActiva.id)))
     );
     const primerTagEjemplo = animalesEmpresa.length > 0
-      ? (animalesEmpresa[0].identificacionTag || animalesEmpresa[0].numero || '045')
+      ? (animalesEmpresa[0].identificacionTag || animalesEmpresa[0].identificacion_tag || animalesEmpresa[0].numero || '045')
       : '045';
     const primeraFincaEjemplo = fincasDeEmpresaActiva[0]?.nombre || fincaActiva?.nombre || 'Vesubio';
-    const remitenteSimuladorDefault = contactosEmpresaActiva[0]?.telefono || '573017839578';
+    const remitenteSimuladorDefault = contactosVisibles[0]?.telefono || '573017839578';
 
     const mapaNombresEmpresas = new Map(todasEmpresas.map((e) => [String(e.id), e.nombre]));
-    const mapaNombresFincas = new Map(todasLasFincasGlobal.map((f) => [String(f.id), f.nombre]));
+    const draft = this.whatsappFormDraft || { telefono: '', nombre: '', empTodasFincas: true, empFincasIds: [], empRol: 'operador' };
+    const editando = this.whatsappContactoEditando;
 
     return `
       <div class="space-y-6">
-        <!-- CABECERA OFICIAL WHATSAPP CLOUD API v25.0 MULTITENANT -->
+        <!-- CABECERA OFICIAL WHATSAPP CLOUD API v25.0 MULTITENANT (100% SUPABASE) -->
         <div class="bovi-module-header p-5 rounded-2xl border border-emerald-700 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div class="space-y-1">
             <div class="flex items-center gap-2 flex-wrap">
@@ -4695,16 +5120,19 @@ END $$;
                 Graph API ${GRAPH_API_VERSION}
               </span>
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-500/20 text-purple-700 border border-purple-400/40">
-                Base Central + RLS por empresa_id
+                100% Supabase + Multi-Empresa / Multi-Finca + RLS
               </span>
             </div>
             <p class="text-xs text-slate-600 max-w-3xl">
               ${isSuper
-                ? 'Arquitectura Multitenant lista para producción: un único Webhook central (/api/whatsapp), enrutamiento automático por canal compartido (+57 322 5694112) o dedicado, aislamiento estricto por empresa_id y auditoría de consumo mensual.'
-                : `Gestiona los números autorizados de ${empActiva.nombre}, asigna su finca por defecto y consulta el historial de mensajes y estados de entrega 100% aislado de otras empresas.`}
+                ? 'Todo se almacena en Supabase (cero localStorage). Un teléfono puede tener permisos simultáneos en varias empresas y fincas, con búsqueda automática sin menús de selección.'
+                : `Gestiona los teléfonos y fincas autorizadas de ${empActiva.nombre} en Supabase. Puedes autorizar un teléfono que ya opere en otra empresa sin ver ni alterar permisos ajenos.`}
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0 flex-wrap">
+            <button type="button" id="btn-wa-recargar-supabase" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs cursor-pointer transition flex items-center gap-1.5">
+              <span>🔄</span> ${this.whatsappDatos?.cargando ? 'Cargando...' : 'Sincronizar'}
+            </button>
             <a href="${privacidadUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs transition flex items-center gap-1.5">
               <span>🛡️</span> Política /privacidad
             </a>
@@ -4714,6 +5142,23 @@ END $$;
           </div>
         </div>
 
+        ${this.whatsappDatos?.faltaMigracionSql ? `
+          <div id="banner-wa-falta-migracion" class="p-4 rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-950 space-y-2 text-xs">
+            <div class="font-black text-sm flex items-center justify-between gap-2 flex-wrap">
+              <span>⚠️ Falta ejecutar la migración SQL de WhatsApp en el proyecto Supabase "ganadero"</span>
+              <button type="button" id="btn-wa-reintentar-migracion" class="px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-black text-xs cursor-pointer">
+                🔄 Ya ejecuté el SQL — Reintentar
+              </button>
+            </div>
+            <p>
+              Las 6 tablas <code>whatsapp_channels</code>, <code>whatsapp_contacts</code>, <code>whatsapp_contact_access</code>,
+              <code>whatsapp_sessions</code>, <code>whatsapp_messages_log</code> y <code>whatsapp_message_status</code> aún no existen en Supabase.
+              Abre el <strong>SQL Editor</strong> del proyecto <code>ganadero</code> y ejecuta el archivo
+              <code>supabase/migrations/20261115000000_whatsapp_multitenant_access.sql</code> (o <code>supabase_whatsapp_multitenant.sql</code>).
+            </p>
+          </div>
+        ` : ''}
+
         ${this.whatsappFeedback ? `
           <div class="p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${this.whatsappFeedback.tipo === 'ok' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'}">
             <span>${this.whatsappFeedback.mensaje}</span>
@@ -4722,7 +5167,7 @@ END $$;
 
         ${isSuper ? `
           <!-- ================================================================ -->
-          <!-- PANEL EXCLUSIVO SUPER ADMIN: CANALES, CONTACTOS GLOBALES, CONSUMO -->
+          <!-- PANEL EXCLUSIVO SUPER ADMIN: WEBHOOK, SECRETOS Y CANALES         -->
           <!-- ================================================================ -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 lg:col-span-2">
@@ -4736,7 +5181,7 @@ END $$;
                 </button>
               </div>
               <p class="text-[11px] text-slate-600">
-                Valida firma <code>X-Hub-Signature-256</code> (HMAC-SHA256) y enruta automáticamente cada mensaje según <code>phone_number_id</code> y <code>whatsapp_contacts</code>.
+                Valida firma <code>X-Hub-Signature-256</code> (HMAC-SHA256) sobre el body crudo y consulta permisos en <code>whatsapp_contacts</code> + <code>whatsapp_contact_access</code> usando <code>SUPABASE_SERVICE_ROLE_KEY</code>.
               </p>
             </div>
 
@@ -4755,22 +5200,26 @@ END $$;
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_APP_SECRET</span>
                 ${renderBadgeSecreto(health.WHATSAPP_APP_SECRET)}
               </div>
-              <div class="flex justify-between items-center py-1" data-secret="WHATSAPP_VERIFY_TOKEN">
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="WHATSAPP_VERIFY_TOKEN">
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
                 ${renderBadgeSecreto(health.WHATSAPP_VERIFY_TOKEN)}
+              </div>
+              <div class="flex justify-between items-center py-1" data-secret="SUPABASE_SERVICE_ROLE_KEY">
+                <span class="font-mono text-[11px] text-slate-700">SUPABASE_SERVICE_ROLE_KEY</span>
+                ${renderBadgeSecreto(health.SUPABASE_SERVICE_ROLE_KEY)}
               </div>
             </div>
           </div>
 
-          <!-- 1. LISTA DE CANALES (COMPARTIDO Y DEDICADOS) + CREAR CANAL DEDICADO -->
+          <!-- 1. LISTA DE CANALES EN SUPABASE (whatsapp_channels) -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
               <div>
                 <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
-                  <span>📡</span> 1. Canales de WhatsApp Registrados (<code>whatsapp_channels</code>)
+                  <span>📡</span> 1. Canales de WhatsApp en Supabase (<code>whatsapp_channels</code>)
                 </h5>
                 <p class="text-xs text-slate-600">
-                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa. El código de idioma de plantilla (por defecto <code>"es"</code>) es configurable y debe coincidir exactamente con Meta.
+                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code> • plantilla <code>notificacion_ganadero_ad</code> • idioma <code>es</code>) y canales dedicados por empresa.
                 </p>
               </div>
             </div>
@@ -4808,7 +5257,7 @@ END $$;
                         <div class="flex items-center gap-1">
                           <input type="text" class="input-wa-ch-tpl-name px-2 py-1 text-[11px] font-mono rounded border border-slate-300 w-36" data-id="${ch.id}" value="${ch.template_name || 'notificacion_ganadero_ad'}" title="Nombre de la plantilla en Meta">
                           <input type="text" class="input-wa-ch-tpl-lang px-2 py-1 text-[11px] font-mono font-bold rounded border border-slate-300 w-16 text-center" data-id="${ch.id}" value="${ch.template_lang || 'es'}" title="Código de idioma exacto en Meta (por defecto es)">
-                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma">
+                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-waba-id="${ch.waba_id || '118927644541032'}" data-display-phone="${ch.display_phone_number || '+57 322 5694112'}" data-nombre="${ch.nombre || ''}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma en Supabase">
                             💾
                           </button>
                         </div>
@@ -4829,7 +5278,6 @@ END $$;
               </table>
             </div>
 
-            <!-- FORMULARIO PARA CREAR CANAL DEDICADO Y ASIGNARLO A UNA EMPRESA -->
             <form id="form-wa-crear-canal" class="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
               <div class="text-xs font-black text-slate-800">➕ Crear Canal Dedicado y Asignarlo a una Empresa</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
@@ -4869,59 +5317,17 @@ END $$;
                 </div>
               </div>
               <button type="submit" class="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-xl shadow cursor-pointer transition">
-                💾 Guardar Canal Dedicado
+                💾 Guardar Canal Dedicado en Supabase
               </button>
             </form>
-          </div>
-
-          <!-- 2. REPORTE DE CONSUMO POR EMPRESA Y MES (PARA FACTURACIÓN) -->
-          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
-            <div>
-              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
-                <span>📊</span> 2. Reporte de Consumo Mensual por Empresa (Facturación Meta)
-              </h5>
-              <p class="text-xs text-slate-600">
-                Conteo consolidado desde <code>whatsapp_messages_log</code> para facturar a cada empresa cliente sus mensajes de texto y plantillas.
-              </p>
-            </div>
-            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
-              <table class="w-full text-xs text-left" id="tabla-wa-consumo-facturacion">
-                <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
-                  <tr>
-                    <th class="p-2.5">Mes (YYYY-MM)</th>
-                    <th class="p-2.5">Empresa</th>
-                    <th class="p-2.5 text-right">Entrantes (IN)</th>
-                    <th class="p-2.5 text-right">Respuestas Texto (OUT)</th>
-                    <th class="p-2.5 text-right">Plantillas (OUT)</th>
-                    <th class="p-2.5 text-right">Total Mensajes</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${reporteConsumo.length > 0 ? reporteConsumo.map((r) => `
-                    <tr>
-                      <td class="p-2.5 font-mono font-bold text-slate-800">${r.mes}</td>
-                      <td class="p-2.5 font-bold text-slate-800">${r.empresa_nombre} <span class="text-[10px] font-mono text-slate-600">(${r.empresa_id})</span></td>
-                      <td class="p-2.5 text-right font-mono">${r.entrantes_texto}</td>
-                      <td class="p-2.5 text-right font-mono">${r.salientes_texto}</td>
-                      <td class="p-2.5 text-right font-mono font-bold text-purple-800">${r.plantillas_salientes}</td>
-                      <td class="p-2.5 text-right font-mono font-black text-emerald-800">${r.total_mensajes}</td>
-                    </tr>
-                  `).join('') : `
-                    <tr>
-                      <td colspan="6" class="p-4 text-center text-slate-600">Sin mensajes registrados aún en el periodo actual.</td>
-                    </tr>
-                  `}
-                </tbody>
-              </table>
-            </div>
           </div>
         ` : ''}
 
         <!-- ================================================================ -->
-        <!-- PANEL DE EMPRESA (Y GESTIÓN DE CONTACTOS / SIMULADOR / ESTADOS)  -->
+        <!-- CONTACTOS AUTORIZADOS (MULTI-EMPRESA / MULTI-FINCA) Y SIMULADOR  -->
         <!-- ================================================================ -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- COLUMNA IZQUIERDA: NÚMERO DE CANAL DE LA EMPRESA Y LISTA BLANCA DE CONTACTOS -->
+          <!-- COLUMNA IZQUIERDA: CONTACTOS AUTORIZADOS Y MATRIZ DE PERMISOS -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
             <div class="p-4 bg-white rounded-xl border border-emerald-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
@@ -4935,7 +5341,7 @@ END $$;
                   </span>
                 </div>
                 <span class="text-[11px] text-slate-600 block mt-0.5">
-                  Comandos: <code>INFO &lt;ID&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt;</code> • <code>FINCA &lt;nombre&gt;</code>
+                  Comandos: <code>INFO &lt;ID&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt; &lt;FINCA&gt;</code> • <code>AYUDA</code>
                 </span>
               </div>
               <a href="${linkAbrirChat}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow whitespace-nowrap">
@@ -4943,98 +5349,201 @@ END $$;
               </a>
             </div>
 
-            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
-              <span>✅</span> ${isSuper ? 'Lista Blanca Global de Contactos por Empresa (whatsapp_contacts)' : `Contactos Autorizados de ${empActiva.nombre}`}
-            </h5>
+            <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <span>✅</span> ${isSuper ? 'Contactos autorizados (Multi-Empresa y Multi-Finca)' : `Contactos autorizados de ${empActiva.nombre}`}
+              </h5>
+              ${editando ? `
+                <button type="button" id="btn-wa-cancelar-edicion" class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px] cursor-pointer">
+                  ✕ Cancelar edición
+                </button>
+              ` : ''}
+            </div>
 
-            <form id="form-wa-contacto" class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <form id="form-wa-contacto" class="bg-white p-4 rounded-xl border ${editando ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-200'} space-y-3">
+              ${editando ? `
+                <div class="text-[11px] font-black text-amber-900 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                  ✏️ Editando permisos de <strong>${editando.nombre}</strong> (+${editando.telefono})
+                </div>
+              ` : ''}
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Teléfono (E.164 sin +, ej. 573017839578):</label>
-                  <input type="text" id="wa-contacto-telefono" placeholder="573017839578" required class="w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-300">
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Teléfono (ej. 573017839578 o 3017839578):</label>
+                  <input type="text" id="wa-contacto-telefono" value="${draft.telefono || ''}" placeholder="573017839578" required class="w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-300">
                 </div>
                 <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Nombre del Operador / Vaquero:</label>
-                  <input type="text" id="wa-contacto-nombre" placeholder="Ej. Carlos Pérez" required class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300">
-                </div>
-                ${isSuper ? `
-                  <div>
-                    <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa:</label>
-                    <select id="wa-contacto-empresa-id" class="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white">
-                      ${todasEmpresas.map((e) => `<option value="${e.id}" ${e.id === empActiva.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
-                    </select>
-                  </div>
-                ` : ''}
-                <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Finca por Defecto:</label>
-                  <select id="wa-contacto-finca-id" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white">
-                    <option value="">Todas las fincas de la empresa</option>
-                    ${fincasDeEmpresaActiva.map((f) => `<option value="${f.id}" ${fincaActiva && f.id === fincaActiva.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Rol:</label>
-                  <select id="wa-contacto-rol" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white">
-                    <option value="operador">Operador / Mayordomo</option>
-                    <option value="administrador">Administrador</option>
-                    <option value="veterinario">Veterinario / Consultor</option>
-                  </select>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Nombre de la Persona:</label>
+                  <input type="text" id="wa-contacto-nombre" value="${draft.nombre || ''}" placeholder="Ej. Sandy Lara" required class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300">
                 </div>
               </div>
+
+              ${isSuper ? `
+                <!-- SECCIÓN PERMISOS MULTI-EMPRESA / MULTI-FINCA (SUPER ADMIN) -->
+                <div id="seccion-wa-permisos" class="space-y-2.5 pt-2 border-t border-slate-100">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-[11px] font-black uppercase text-emerald-900">🔑 PERMISOS (Una o varias empresas y fincas):</span>
+                    <button type="button" id="btn-wa-agregar-fila-permiso" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-[11px] cursor-pointer">
+                      ➕ Agregar otra empresa
+                    </button>
+                  </div>
+
+                  <div id="contenedor-wa-permisos-filas" class="space-y-2.5">
+                    ${(this.whatsappFilasPermisosForm || []).map((fila, idx) => {
+                      const fincasEmpFila = todasLasFincasGlobal.filter(
+                        (f) => f && String(this.obtenerEmpresaIdDeFinca(f)) === String(fila.empresa_id)
+                      );
+                      return `
+                        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2" data-perm-row="${idx}">
+                          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                            <div class="sm:col-span-6">
+                              <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa:</label>
+                              <select class="wa-perm-empresa w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white" data-idx="${idx}">
+                                ${todasEmpresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(fila.empresa_id) ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+                              </select>
+                            </div>
+                            <div class="sm:col-span-5">
+                              <label class="block text-[10px] font-bold text-slate-700 mb-1">Rol en esta empresa:</label>
+                              <select class="wa-perm-rol w-full px-2 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white" data-idx="${idx}">
+                                <option value="operador" ${fila.rol === 'operador' ? 'selected' : ''}>Operador</option>
+                                <option value="administrador" ${fila.rol === 'administrador' ? 'selected' : ''}>Administrador</option>
+                                <option value="veterinario" ${fila.rol === 'veterinario' ? 'selected' : ''}>Veterinario (solo INFO)</option>
+                              </select>
+                            </div>
+                            <div class="sm:col-span-1 flex justify-end">
+                              ${(this.whatsappFilasPermisosForm || []).length > 1 ? `
+                                <button type="button" class="btn-wa-quitar-fila-permiso px-2 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-black cursor-pointer" data-idx="${idx}" title="Quitar permiso de empresa">
+                                  ✕
+                                </button>
+                              ` : ''}
+                            </div>
+                          </div>
+
+                          <div class="space-y-1.5">
+                            <span class="block text-[10px] font-bold text-slate-700">Fincas autorizadas:</span>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-black cursor-pointer ${fila.todasFincas ? 'bg-emerald-100 border-emerald-400 text-emerald-950' : 'bg-white border-slate-300 text-slate-700'}">
+                                <input type="checkbox" class="wa-perm-todas-fincas" data-idx="${idx}" ${fila.todasFincas ? 'checked' : ''}>
+                                <span>Todas las fincas</span>
+                              </label>
+                              ${fincasEmpFila.map((f) => {
+                                const marcada = !fila.todasFincas && Array.isArray(fila.fincasIds) && fila.fincasIds.includes(String(f.id));
+                                return `
+                                  <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${marcada ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-white border-slate-300 text-slate-700'}">
+                                    <input type="checkbox" class="wa-perm-finca-chk" data-idx="${idx}" value="${f.id}" ${marcada ? 'checked' : ''}>
+                                    <span>${f.nombre}</span>
+                                  </label>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              ` : `
+                <!-- SECCIÓN PERMISOS EXCLUSIVA DE LA EMPRESA ACTIVA (ADMIN DE EMPRESA) -->
+                <div id="seccion-wa-permisos-empresa" class="space-y-2.5 pt-2 border-t border-slate-100">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label class="block text-[10px] font-bold text-slate-700 mb-1">Rol en ${empActiva.nombre}:</label>
+                      <select id="wa-contacto-rol" class="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white">
+                        <option value="operador" ${draft.empRol === 'operador' ? 'selected' : ''}>Operador</option>
+                        <option value="administrador" ${draft.empRol === 'administrador' ? 'selected' : ''}>Administrador</option>
+                        <option value="veterinario" ${draft.empRol === 'veterinario' ? 'selected' : ''}>Veterinario (solo INFO)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-700">Fincas autorizadas en ${empActiva.nombre}:</label>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-black cursor-pointer ${draft.empTodasFincas ? 'bg-emerald-100 border-emerald-400 text-emerald-950' : 'bg-white border-slate-300 text-slate-700'}">
+                        <input type="checkbox" id="wa-emp-todas-fincas" ${draft.empTodasFincas ? 'checked' : ''}>
+                        <span>Todas las fincas</span>
+                      </label>
+                      ${fincasDeEmpresaActiva.map((f) => {
+                        const marcada = !draft.empTodasFincas && Array.isArray(draft.empFincasIds) && draft.empFincasIds.includes(String(f.id));
+                        return `
+                          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${marcada ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-white border-slate-300 text-slate-700'}">
+                            <input type="checkbox" class="wa-emp-finca-chk" value="${f.id}" ${marcada ? 'checked' : ''}>
+                            <span>${f.nombre}</span>
+                          </label>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                </div>
+              `}
+
               <div class="flex items-center justify-between gap-2 pt-1">
-                <span class="text-[10px] text-slate-600">Regla: un número solo puede estar activo en <strong>una</strong> empresa a la vez.</span>
-                <button type="submit" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition">
-                  ➕ Autorizar Teléfono
+                <span class="text-[10px] text-slate-600">
+                  Se normaliza automáticamente (ej. <code>3017839578</code> → <code>573017839578</code>) y se guarda en Supabase.
+                </span>
+                <button type="submit" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition whitespace-nowrap">
+                  ${editando ? '💾 Guardar permisos' : '➕ Guardar contacto y permisos'}
                 </button>
               </div>
             </form>
 
             <!-- TABLA DE CONTACTOS AUTORIZADOS -->
-            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white max-h-64 overflow-y-auto">
+            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white max-h-80 overflow-y-auto">
               <table class="w-full text-xs text-left" id="tabla-wa-contactos">
                 <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
                   <tr>
-                    <th class="p-2">Teléfono</th>
-                    <th class="p-2">Nombre / Rol</th>
-                    ${isSuper ? '<th class="p-2">Empresa</th>' : ''}
-                    <th class="p-2">Finca Activa</th>
-                    <th class="p-2 text-center">Estado</th>
-                    <th class="p-2 text-center">Acción</th>
+                    <th class="p-2.5">Teléfono</th>
+                    <th class="p-2.5">Nombre</th>
+                    <th class="p-2.5">Permisos</th>
+                    <th class="p-2.5 text-center">Estado</th>
+                    <th class="p-2.5 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  ${(isSuper ? contactosGlobal : contactosEmpresaActiva).length > 0 ? (isSuper ? contactosGlobal : contactosEmpresaActiva).map((c) => {
-                    const fincasEmpContacto = todasLasFincasGlobal.filter((f) => f && f.empresaId === c.empresa_id);
+                  ${contactosVisibles.length > 0 ? contactosVisibles.map((c) => {
+                    const resumenPermisos = isSuper
+                      ? formatearResumenPermisosContacto(c.accesos, todasEmpresas, todasLasFincasGlobal, { incluirRol: false })
+                      : formatearResumenPermisosContacto(c.accesos, todasEmpresas, todasLasFincasGlobal, { soloEmpresaId: empActiva.id, incluirRol: true });
+                    const rolesTexto = isSuper
+                      ? formatearResumenPermisosContacto(c.accesos, todasEmpresas, todasLasFincasGlobal, { incluirRol: true })
+                      : '';
+                    const accesosPropios = isSuper
+                      ? (c.accesos || [])
+                      : (c.accesos || []).filter((a) => String(a.empresa_id) === String(empActiva.id));
+                    const estaActivoVista = c.activo !== false && (accesosPropios.length === 0 || accesosPropios.some((a) => a.activo !== false));
+
                     return `
                       <tr>
-                        <td class="p-2 font-mono font-bold text-slate-800">+${c.telefono}</td>
-                        <td class="p-2">
-                          <div class="font-bold text-slate-800">${c.nombre}</div>
-                          <div class="text-[10px] text-slate-600 uppercase">${c.rol || 'operador'}</div>
+                        <td class="p-2.5 font-mono font-bold text-slate-800 whitespace-nowrap">+${c.telefono}</td>
+                        <td class="p-2.5 font-bold text-slate-800">${c.nombre}</td>
+                        <td class="p-2.5">
+                          <div class="font-semibold text-slate-800">${resumenPermisos}</div>
+                          ${isSuper && rolesTexto ? `<div class="text-[10px] text-slate-500 mt-0.5">${rolesTexto}</div>` : ''}
                         </td>
-                        ${isSuper ? `<td class="p-2 font-bold text-slate-700">${mapaNombresEmpresas.get(String(c.empresa_id)) || c.empresa_id}</td>` : ''}
-                        <td class="p-2">
-                          <select class="select-wa-finca-contacto px-2 py-1 text-[11px] rounded border border-slate-300 bg-white" data-id="${c.id}" data-telefono="${c.telefono}" data-empresa="${c.empresa_id}" data-nombre="${c.nombre}" data-rol="${c.rol || 'operador'}" data-activo="${c.activo !== false}">
-                            <option value="">Todas (${fincasEmpContacto.length})</option>
-                            ${fincasEmpContacto.map((f) => `<option value="${f.id}" ${c.finca_id === f.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
-                          </select>
+                        <td class="p-2.5 text-center">
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${estaActivoVista ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-200 text-slate-700'}">
+                            ${estaActivoVista ? 'Activo' : 'Inactivo'}
+                          </span>
                         </td>
-                        <td class="p-2 text-center">
-                          <button type="button" class="btn-wa-toggle-contacto px-2 py-0.5 rounded-full text-[10px] font-black cursor-pointer ${c.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-200 text-slate-700'}" data-id="${c.id}" data-activo="${c.activo === false ? 'true' : 'false'}">
-                            ${c.activo !== false ? 'Activo ✓' : 'Inactivo'}
-                          </button>
-                        </td>
-                        <td class="p-2 text-center">
-                          <button type="button" class="btn-wa-eliminar-contacto text-rose-700 hover:text-rose-900 font-bold text-xs cursor-pointer" data-id="${c.id}" title="Eliminar contacto">
-                            🗑️
-                          </button>
+                        <td class="p-2.5 text-center whitespace-nowrap">
+                          <div class="inline-flex items-center gap-1">
+                            <button type="button" class="btn-wa-editar-contacto px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] cursor-pointer" data-id="${c.id}" title="Editar permisos">
+                              ✏️ Editar permisos
+                            </button>
+                            <button type="button" class="btn-wa-toggle-contacto px-2 py-1 rounded ${estaActivoVista ? 'bg-amber-100 hover:bg-amber-200 text-amber-900' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900'} font-bold text-[10px] cursor-pointer" data-id="${c.id}" data-telefono="${c.telefono}" data-activo="${estaActivoVista ? 'false' : 'true'}">
+                              ${estaActivoVista ? 'Desactivar' : 'Activar'}
+                            </button>
+                            <button type="button" class="btn-wa-eliminar-contacto px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[10px] cursor-pointer" data-id="${c.id}" data-telefono="${c.telefono}" title="Eliminar">
+                              🗑️ Eliminar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     `;
                   }).join('') : `
                     <tr>
-                      <td colspan="${isSuper ? 6 : 5}" class="p-4 text-center text-slate-600">
-                        No hay contactos registrados aún. Agrega el teléfono E.164 arriba (ej. <code>573017839578</code>).
+                      <td colspan="5" class="p-4 text-center text-slate-600">
+                        ${this.whatsappDatos?.cargando
+                          ? 'Consultando contactos autorizados en Supabase...'
+                          : 'No hay contactos autorizados en Supabase aún. Agrega el teléfono arriba (ej. <code>573017839578</code>).'}
                       </td>
                     </tr>
                   `}
@@ -5043,14 +5552,14 @@ END $$;
             </div>
           </div>
 
-          <!-- COLUMNA DERECHA: SIMULADOR MULTITENANT CON DATOS DE LA EMPRESA -->
+          <!-- COLUMNA DERECHA: SIMULADOR MULTI-FINCA (LÓGICA IDÉNTICA AL WEBHOOK) + ÚLTIMOS MENSAJES -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 flex flex-col justify-between">
             <div class="space-y-3.5">
               <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
-                <span>🤖</span> Simulador de Comandos (${empActiva.nombre})
+                <span>🤖</span> Simulador de Comandos (Búsqueda Automática Multi-Finca)
               </h5>
               <p class="text-xs text-slate-600">
-                Opera exclusivamente sobre el inventario de <strong>${empActiva.nombre}</strong> (${animalesEmpresa.length} ejemplares activos en sus fincas).
+                Usa exactamente la misma lógica del webhook: busca automáticamente en todas las empresas y fincas autorizadas del contacto elegido, sin menús de selección.
               </p>
 
               <div class="flex flex-wrap items-center gap-2">
@@ -5061,8 +5570,11 @@ END $$;
                 <button type="button" data-cmd="PESO ${primerTagEjemplo} 350" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
                   PESO ${primerTagEjemplo} 350
                 </button>
-                <button type="button" data-cmd="FINCA ${primeraFincaEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
-                  FINCA ${primeraFincaEjemplo}
+                <button type="button" data-cmd="PESO ${primerTagEjemplo} 350 ${primeraFincaEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
+                  PESO ${primerTagEjemplo} 350 ${primeraFincaEjemplo}
+                </button>
+                <button type="button" data-cmd="AYUDA" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
+                  AYUDA
                 </button>
               </div>
 
@@ -5070,12 +5582,15 @@ END $$;
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
                     <label class="block text-[11px] font-bold text-slate-700 mb-1">📞 Contacto Remitente:</label>
-                    <input type="text" id="wa-sim-remitente" value="${remitenteSimuladorDefault}" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 outline-none">
+                    <input type="text" id="wa-sim-remitente" list="wa-lista-contactos-sim" value="${remitenteSimuladorDefault}" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 outline-none">
+                    <datalist id="wa-lista-contactos-sim">
+                      ${contactosVisibles.map((c) => `<option value="${c.telefono}">${c.nombre} (+${c.telefono})</option>`).join('')}
+                    </datalist>
                   </div>
                   <div class="sm:col-span-2">
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">💬 Comando (INFO / PESO / FINCA):</label>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">💬 Comando (INFO / PESO / AYUDA):</label>
                     <div class="flex gap-2">
-                      <input type="text" id="wa-sim-mensaje" value="INFO ${primerTagEjemplo}" placeholder="INFO 045 | PESO 045 350 | FINCA Vesubio" class="w-full px-3 py-2 text-xs font-mono font-black text-emerald-950 bg-emerald-50/60 rounded-lg border-2 border-emerald-400 outline-none">
+                      <input type="text" id="wa-sim-mensaje" value="INFO ${primerTagEjemplo}" placeholder="INFO 045 | PESO 045 350 | PESO 045 350 Vesubio" class="w-full px-3 py-2 text-xs font-mono font-black text-emerald-950 bg-emerald-50/60 rounded-lg border-2 border-emerald-400 outline-none">
                       <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-lg shadow whitespace-nowrap cursor-pointer">
                         ▶️ Probar
                       </button>
@@ -5087,52 +5602,94 @@ END $$;
               <div class="bg-slate-900 text-slate-600 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-56 overflow-y-auto font-mono text-xs">
                 ${this.whatsappHistorialSimulador.length > 0 ? this.whatsappHistorialSimulador.map((item) => `
                   <div class="p-2.5 rounded-lg ${item.autorizado ? 'bg-slate-800 border border-emerald-500/40' : 'bg-rose-950/60 border border-rose-500/40'} space-y-1">
-                    <div class="flex justify-between text-[10px] text-slate-600">
+                    <div class="flex justify-between text-[10px] text-slate-400">
                       <span>📱 Remitente: +${item.remitente}</span>
                       <span>🕒 ${item.hora}</span>
                     </div>
-                    <div class="text-emerald-700 font-bold">➔ "${item.entrante}"</div>
-                    <div class="text-slate-800 whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
+                    <div class="text-emerald-400 font-bold">➔ "${item.entrante}"</div>
+                    <div class="text-slate-100 whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
                   </div>
                 `).join('') : `
-                  <div class="text-slate-600 text-center py-4">
-                    Ejecuta un comando arriba para verificar la respuesta aislada de <strong>${empActiva.nombre}</strong>.
+                  <div class="text-slate-400 text-center py-4">
+                    Ejecuta un comando arriba para probar la búsqueda automática multi-finca del contacto elegido.
                   </div>
                 `}
               </div>
             </div>
 
-            <!-- HISTORIAL DE MENSAJES DE LA EMPRESA -->
+            <!-- ÚLTIMOS MENSAJES DESDE SUPABASE (whatsapp_messages_log) -->
             <div class="pt-3 border-t border-slate-200 space-y-2">
               <div class="text-xs font-black text-slate-800">
-                📝 Últimos Mensajes de ${empActiva.nombre} (${logsEmpresaActiva.length})
+                📝 Últimos mensajes en Supabase — ${empActiva.nombre} (${logsEmpresaActiva.length})
               </div>
               <div class="max-h-40 overflow-y-auto bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 text-[11px]">
                 ${logsEmpresaActiva.length > 0 ? logsEmpresaActiva.map((m) => `
                   <div class="p-2 flex justify-between items-center gap-2">
                     <div>
-                      <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${m.direccion === 'in' ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900'}">${m.direccion.toUpperCase()}</span>
+                      <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${m.direccion === 'in' ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900'}">${String(m.direccion || 'out').toUpperCase()}</span>
                       <span class="font-mono font-bold text-slate-800 ml-1">+${m.telefono}</span>
                       <span class="text-slate-600 ml-1">${m.contenido_resumen}</span>
                     </div>
                     <span class="text-[10px] font-mono text-slate-600 shrink-0">${String(m.created_at || '').slice(0, 16).replace('T', ' ')}</span>
                   </div>
                 `).join('') : `
-                  <div class="p-3 text-center text-slate-600">Sin mensajes registrados para esta empresa.</div>
+                  <div class="p-3 text-center text-slate-600">Sin mensajes registrados en Supabase para esta empresa.</div>
                 `}
               </div>
             </div>
           </div>
         </div>
 
-        <!-- ÚLTIMOS 50 ESTADOS (whatsapp_message_status) CON ERRORES EN ROJO -->
+        <!-- CONSUMO MENSUAL DESDE SUPABASE (whatsapp_messages_log) -->
         <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
           <div>
             <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
-              <span>📡</span> ${isSuper ? 'Últimos 50 Estados de Entrega Globales (whatsapp_message_status)' : `Estados de Entrega de ${empActiva.nombre}`}
+              <span>📊</span> ${isSuper ? 'Consumo mensual por empresa (whatsapp_messages_log)' : `Consumo mensual de ${empActiva.nombre}`}
             </h5>
             <p class="text-xs text-slate-600">
-              Auditoría en tiempo real de callbacks <code>value.statuses[]</code> de Meta. Los errores se resaltan en rojo (ej. <code>131047 = Fuera de ventana de 24h</code>).
+              Conteo en tiempo real desde <code>whatsapp_messages_log</code> en Supabase (una fila de salida por empresa involucrada).
+            </p>
+          </div>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+            <table class="w-full text-xs text-left" id="tabla-wa-consumo-facturacion">
+              <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="p-2.5">Mes (YYYY-MM)</th>
+                  <th class="p-2.5">Empresa</th>
+                  <th class="p-2.5 text-right">Entrantes (IN)</th>
+                  <th class="p-2.5 text-right">Respuestas Texto (OUT)</th>
+                  <th class="p-2.5 text-right">Plantillas (OUT)</th>
+                  <th class="p-2.5 text-right">Total Mensajes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${reporteConsumo.length > 0 ? reporteConsumo.map((r) => `
+                  <tr>
+                    <td class="p-2.5 font-mono font-bold text-slate-800">${r.mes}</td>
+                    <td class="p-2.5 font-bold text-slate-800">${r.empresa_nombre} <span class="text-[10px] font-mono text-slate-600">(${r.empresa_id})</span></td>
+                    <td class="p-2.5 text-right font-mono">${r.entrantes_texto}</td>
+                    <td class="p-2.5 text-right font-mono">${r.salientes_texto}</td>
+                    <td class="p-2.5 text-right font-mono font-bold text-purple-800">${r.plantillas_salientes}</td>
+                    <td class="p-2.5 text-right font-mono font-black text-emerald-800">${r.total_mensajes}</td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="6" class="p-4 text-center text-slate-600">Sin mensajes registrados en Supabase para el periodo actual.</td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ESTADOS DE ENTREGA DESDE SUPABASE (whatsapp_message_status) -->
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+          <div>
+            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <span>📡</span> ${isSuper ? 'Estados de entrega globales (whatsapp_message_status)' : `Estados de entrega de ${empActiva.nombre}`}
+            </h5>
+            <p class="text-xs text-slate-600">
+              Callbacks <code>value.statuses[]</code> guardados en Supabase. Los errores de Meta se resaltan en rojo.
             </p>
           </div>
           <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
@@ -5171,7 +5728,7 @@ END $$;
                 }).join('') : `
                   <tr>
                     <td colspan="${isSuper ? 6 : 5}" class="p-4 text-center text-slate-600">
-                      Sin estados de entrega registrados aún.
+                      Sin estados de entrega registrados en Supabase aún.
                     </td>
                   </tr>
                 `}

@@ -196,6 +196,8 @@ export class SupabaseSyncService {
     this.tenantContext = {
       empresaId: context.empresaId || null,
       esSuperAdmin: Boolean(context.esSuperAdmin),
+      rol: context.rol || (context.esSuperAdmin ? 'superadmin' : null),
+      usuario: context.usuario || null,
       fincasIds: Array.isArray(context.fincasIds) ? context.fincasIds : [],
       token: context.token || null
     };
@@ -262,6 +264,12 @@ export class SupabaseSyncService {
     if (this.tenantContext) {
       if (this.tenantContext.empresaId) {
         headers['x-empresa-id'] = this.tenantContext.empresaId;
+      }
+      if (this.tenantContext.rol) {
+        headers['x-ganadero-rol'] = this.tenantContext.rol;
+      }
+      if (this.tenantContext.usuario) {
+        headers['x-ganadero-usuario'] = this.tenantContext.usuario;
       }
       if (this.tenantContext.token) {
         headers['x-session-token'] = this.tenantContext.token;
