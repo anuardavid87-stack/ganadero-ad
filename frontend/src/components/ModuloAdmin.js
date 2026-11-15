@@ -18,11 +18,22 @@ import {
   obtenerModeloGeminiActivo
 } from '../core/nutricionIA.js';
 import {
-  obtenerConfigWhatsAppLocal,
-  guardarConfigWhatsAppLocal,
-  verificarNumeroEnWhitelist,
-  procesarComandoWhatsApp,
-  enviarMensajeWhatsApp
+  GRAPH_API_VERSION,
+  DEFAULT_SHARED_WHATSAPP_CHANNEL,
+  normalizarTelefonoWhatsApp,
+  listarCanalesWhatsApp,
+  obtenerCanalActivoEmpresa,
+  guardarCanalWhatsApp,
+  listarContactosWhatsApp,
+  guardarContactoWhatsApp,
+  cambiarEstadoContactoWhatsApp,
+  eliminarContactoWhatsApp,
+  listarLogsMensajesWhatsApp,
+  listarEstadosMensajesWhatsApp,
+  obtenerReporteConsumoWhatsApp,
+  registrarLogMensajeWhatsApp,
+  actualizarSesion24hWhatsApp,
+  procesarComandoWhatsApp
 } from '../core/whatsappCloudService.js';
 import { formatearFecha } from '../core/zootecnia.js';
 
@@ -360,7 +371,7 @@ export class ModuloAdmin {
     } else if (this.seccion === 'finanzas') {
       return this.renderSeccionFinanzas(fincas, fincaActiva, costos, inversiones, esAdmin, esConsultor);
     } else if (this.seccion === 'whatsapp') {
-      return this.renderSeccionWhatsApp(fincaActiva);
+      return this.renderSeccionWhatsApp(fincaActiva, empresas, empresaActiva, fincas, esSuperAdmin);
     } else if (this.seccion === 'gemini') {
       if (!esSuperAdmin) {
         return `
@@ -4184,52 +4195,8 @@ END $$;
     }
 
     // ========================================================================
-    // EVENTOS DE CONFIGURACIÓN Y SIMULADOR BIDIRECCIONAL DE WHATSAPP CLOUD API
+    // EVENTOS DE WHATSAPP CLOUD API v25.0 MULTITENANT (SUPER ADMIN & EMPRESA)
     // ========================================================================
-    const formWhatsAppCfg = this.container.querySelector('#form-whatsapp-cloud-config');
-    if (formWhatsAppCfg) {
-      formWhatsAppCfg.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const phoneNumberId = (this.container.querySelector('#wa-phone-id')?.value || '').trim();
-        const accessToken = (this.container.querySelector('#wa-access-token')?.value || '').trim();
-        const verifyToken = (this.container.querySelector('#wa-verify-token')?.value || 'ganadero_ad_verify_2026').trim();
-        const authorizedNumbers = (this.container.querySelector('#wa-authorized-numbers')?.value || '').trim();
-
-        const guardada = guardarConfigWhatsAppLocal({
-          phoneNumberId,
-          accessToken,
-          verifyToken,
-          authorizedNumbers
-        });
-
-        // También sincronizar en Supabase si el servicio está configurado
-        const supa = this.getSupabaseService ? this.getSupabaseService() : null;
-        if (supa && typeof supa.estaConfigurado === 'function' && supa.estaConfigurado()) {
-          try {
-            await supa._postgrestUpsert('operaciones_diarias', [{
-              id: 'SYS_WHATSAPP_CONFIG',
-              empresa_id: null,
-              fecha: new Date().toISOString().split('T')[0],
-              finca_id: null,
-              finca_nombre: 'SISTEMA',
-              accion: 'SYS_WHATSAPP_CONFIG',
-              modulo: 'whatsapp_cloud',
-              detalles: guardada,
-              usuario: 'Admin'
-            }], 'id', 8000);
-          } catch (err) {
-            console.warn('[WhatsApp Cloud] Aviso sincronizando configuración en Supabase:', err.message);
-          }
-        }
-
-        this.whatsappFeedback = {
-          tipo: 'ok',
-          mensaje: '✅ Configuración de WhatsApp Cloud API (Tokens y Whitelist) guardada exitosamente en el programa.'
-        };
-        this.render();
-      });
-    }
-
     const btnCopiarWebhookUrl = this.container.querySelector('#btn-copiar-webhook-wa');
     if (btnCopiarWebhookUrl) {
       btnCopiarWebhookUrl.addEventListener('click', async () => {
@@ -4239,99 +4206,302 @@ END $$;
           if (navigator.clipboard) await navigator.clipboard.writeText(val);
           btnCopiarWebhookUrl.textContent = '✅ URL Copiada';
           setTimeout(() => { btnCopiarWebhookUrl.textContent = '📋 Copiar URL'; }, 2000);
-        } catch (err) {
+        } catch {
           alert(`URL del Webhook: ${val}`);
         }
       });
     }
 
-    // Simulador en vivo de comandos WhatsApp ("INFO 045" / "PESO 045 350")
+    // Super Admin: Crear / Asignar Canal Dedicado a una Empresa
+    const formCrearCanalWA = this.container.querySelector('#form-wa-crear-canal');
+    if (formCrearCanalWA) {
+      formCrearCanalWA.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const phoneNumberId = (this.container.querySelector('#wa-canal-phone-id')?.value || '').trim();
+        const wabaId = (this.container.querySelector('#wa-canal-waba-id')?.value || '').trim();
+        const displayPhone = (this.container.querySelector('#wa-canal-display-phone')?.value || '').trim();
+        const nombre = (this.container.querySelector('#wa-canal-nombre')?.value || '').trim();
+        const empresaId = (this.container.querySelector('#wa-canal-empresa-id')?.value || '').trim();
+        const templateName = (this.container.querySelector('#wa-canal-template-name')?.value || 'notificacion_ganadero_ad').trim();
+        const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es_CO').trim();
+        const tokenOverride = (this.container.querySelector('#wa-canal-token-override')?.value || '').trim();
+
+        const res = guardarCanalWhatsApp({
+          phone_number_id: phoneNumberId,
+          waba_id: wabaId,
+          display_phone_number: displayPhone,
+          nombre: nombre || `Canal Dedicado ${empresaId}`,
+          tipo: 'dedicado',
+          empresa_id: empresaId,
+          template_name: templateName,
+          template_lang: templateLang,
+          access_token_override: tokenOverride || null,
+          activo: true
+        }, { esSuperAdmin: esSuperAdmin });
+
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Canal dedicado (${res.channel.display_phone_number || res.channel.phone_number_id}) asignado a la empresa ${empresaId}.`
+          };
+        }
+        this.render();
+      });
+    }
+
+    // Agregar contacto a la Lista Blanca (whatsapp_contacts) con validación de teléfono único activo
+    const formContactoWA = this.container.querySelector('#form-wa-contacto');
+    if (formContactoWA) {
+      formContactoWA.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const telefono = (this.container.querySelector('#wa-contacto-telefono')?.value || '').trim();
+        const nombre = (this.container.querySelector('#wa-contacto-nombre')?.value || '').trim();
+        const rolContacto = (this.container.querySelector('#wa-contacto-rol')?.value || 'operador').trim();
+        const empresaSelect = this.container.querySelector('#wa-contacto-empresa-id');
+        const empresaId = empresaSelect
+          ? empresaSelect.value
+          : (empresaActiva?.id || empresas[0]?.id || 'EMP-01');
+        const fincaId = (this.container.querySelector('#wa-contacto-finca-id')?.value || '').trim() || null;
+
+        const res = guardarContactoWhatsApp({
+          telefono,
+          nombre: nombre || 'Operador Autorizado',
+          rol: rolContacto,
+          empresa_id: empresaId,
+          finca_id: fincaId,
+          activo: true
+        });
+
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Contacto +${res.contact.telefono} (${res.contact.nombre}) autorizado en la empresa ${empresaId}.`
+          };
+        }
+        this.render();
+      });
+    }
+
+    // Activar / Desactivar contacto en whatsapp_contacts
+    this.container.querySelectorAll('.btn-wa-toggle-contacto').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const nuevoActivo = btn.getAttribute('data-activo') === 'true';
+        const res = cambiarEstadoContactoWhatsApp(id, nuevoActivo, {
+          empresaId: empresaActiva?.id,
+          esSuperAdmin
+        });
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `⛔ ${res.error}` };
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Estado del contacto +${res.contact.telefono} actualizado a ${res.contact.activo ? 'ACTIVO' : 'INACTIVO'}.`
+          };
+        }
+        this.render();
+      });
+    });
+
+    // Cambiar finca por defecto de un contacto
+    this.container.querySelectorAll('.select-wa-finca-contacto').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        const id = sel.getAttribute('data-id');
+        const tel = sel.getAttribute('data-telefono');
+        const empId = sel.getAttribute('data-empresa');
+        const nombre = sel.getAttribute('data-nombre');
+        const rolC = sel.getAttribute('data-rol');
+        const activo = sel.getAttribute('data-activo') === 'true';
+        const fincaId = sel.value || null;
+        const res = guardarContactoWhatsApp({
+          id,
+          telefono: tel,
+          empresa_id: empId,
+          finca_id: fincaId,
+          nombre,
+          rol: rolC,
+          activo
+        });
+        if (res.ok) {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `✅ Finca por defecto actualizada para +${res.contact.telefono}.`
+          };
+          this.render();
+        }
+      });
+    });
+
+    // Eliminar contacto de whatsapp_contacts
+    this.container.querySelectorAll('.btn-wa-eliminar-contacto').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const res = eliminarContactoWhatsApp(id, {
+          empresaId: empresaActiva?.id,
+          esSuperAdmin
+        });
+        if (res.ok) {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `🗑️ Contacto +${res.deleted?.telefono || ''} eliminado de la lista blanca.`
+          };
+          this.render();
+        }
+      });
+    });
+
+    // Simulador Multitenant de comandos WhatsApp ("INFO <ID>" / "PESO <ID> <KG>" / "FINCA <nombre>")
+    // Opera estrictamente sobre los datos de la empresa activa
     const formSimuladorWA = this.container.querySelector('#form-simulador-whatsapp');
     if (formSimuladorWA) {
       formSimuladorWA.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const remitente = (this.container.querySelector('#wa-sim-remitente')?.value || '').trim();
+        const remitenteRaw = (this.container.querySelector('#wa-sim-remitente')?.value || '').trim();
+        const remitente = normalizarTelefonoWhatsApp(remitenteRaw);
         const textoComando = (this.container.querySelector('#wa-sim-mensaje')?.value || '').trim();
         if (!textoComando) return;
 
-        const cfg = obtenerConfigWhatsAppLocal();
-        const listaWhitelist = String(cfg.authorizedNumbers || '')
-          .split(',')
-          .map((n) => n.replace(/[^\d]/g, '').trim())
-          .filter(Boolean);
+        const empIdSim = empresaActiva?.id || empresas[0]?.id || 'EMP-01';
+        const canalEmpresa = obtenerCanalActivoEmpresa(empIdSim);
+        const numeroBotNorm = normalizarTelefonoWhatsApp(canalEmpresa.display_phone_number);
 
-        // Validar Whitelist si hay números configurados
-        const autorizado = verificarNumeroEnWhitelist(remitente, listaWhitelist.length > 0 ? listaWhitelist : null);
-        if (!autorizado) {
+        // Prohibido usar el propio número del bot como remitente
+        if (remitente === numeroBotNorm || remitente === String(canalEmpresa.phone_number_id)) {
+          this.whatsappFeedback = {
+            tipo: 'error',
+            mensaje: '⛔ El teléfono remitente no puede ser el propio número del bot (+57 322 5694112). Usa un teléfono de contacto de tu empresa.'
+          };
+          this.render();
+          return;
+        }
+
+        // Buscar contacto activo en la empresa actual
+        const contactosEmpresa = listarContactosWhatsApp({ empresaId: empIdSim, esSuperAdmin: false });
+        let contactoSim = contactosEmpresa.find(
+          (c) => c.activo !== false && normalizarTelefonoWhatsApp(c.telefono) === remitente
+        );
+
+        // Si el usuario aún no ha creado contactos en su empresa y está probando en su panel,
+        // validar si el número está en otra empresa o autorizarlo para la prueba si no choca
+        if (!contactoSim && contactosEmpresa.length === 0 && remitente) {
+          const autoReg = guardarContactoWhatsApp({
+            telefono: remitente,
+            empresa_id: empIdSim,
+            finca_id: fincaActiva?.id || null,
+            nombre: 'Administrador Empresa',
+            rol: 'administrador',
+            activo: true
+          });
+          if (autoReg.ok) contactoSim = autoReg.contact;
+        }
+
+        if (!contactoSim) {
           this.whatsappHistorialSimulador.unshift({
             hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            remitente,
+            remitente: remitente || remitenteRaw,
             entrante: textoComando,
             autorizado: false,
-            respuesta: '⛔ [Status 200 - Ignorado por Seguridad Whitelist]: El número remitente NO está en la lista de teléfonos autorizados.'
+            respuesta: 'Este número no está autorizado. Contacta al administrador de tu empresa.'
           });
           this.render();
           return;
         }
 
-        // Adaptador conectado a los animales reales de la finca activa en la app
-        const animalesFinca = this.getAnimales ? this.getAnimales() : [];
-        const todosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : animalesFinca;
-        const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-        const poolBusqueda = fincaAct
-          ? todosAnimales.filter((a) => a && a.fincaId === fincaAct.id)
-          : todosAnimales;
+        const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : fincas;
+        const fincasDeEstaEmpresa = todasLasFincasGlobal.filter((f) => f && f.empresaId === empIdSim);
+        const idsFincasEmpresa = new Set(fincasDeEstaEmpresa.map((f) => f.id));
+        const fincaFiltroId = contactoSim.finca_id && idsFincasEmpresa.has(contactoSim.finca_id)
+          ? contactoSim.finca_id
+          : (fincaActiva && idsFincasEmpresa.has(fincaActiva.id) ? fincaActiva.id : null);
+
+        const todosAnimales = this.getTodosLosAnimales ? this.getTodosLosAnimales() : (this.getAnimales ? this.getAnimales() : []);
+        const poolEmpresa = todosAnimales.filter((a) => {
+          if (!a || !idsFincasEmpresa.has(a.fincaId)) return false;
+          if (fincaFiltroId && a.fincaId !== fincaFiltroId) return false;
+          return true;
+        });
 
         const dbLocalAdapter = {
           consultarAnimalPorId: async (idAnimal) => {
             const buscado = String(idAnimal || '').trim().toUpperCase();
-            return poolBusqueda.find(
+            return poolEmpresa.find(
               (a) => String(a.identificacionTag || a.numero || '').trim().toUpperCase() === buscado
             ) || null;
           },
           registrarPesoAnimal: async ({ idAnimal, pesoKg, fecha }) => {
             const buscado = String(idAnimal || '').trim().toUpperCase();
+            const animal = poolEmpresa.find(
+              (a) => String(a.identificacionTag || a.numero || '').trim().toUpperCase() === buscado
+            );
+            if (!animal) return { exito: false, motivo: 'NO_ENCONTRADO' };
+            const pesoAnterior = Number(animal.ultimoPesoKg ?? animal.pesoActualKg ?? animal.peso ?? 0);
             const fechaHoy = fecha || new Date().toISOString().split('T')[0];
             if (this.onRegistrarPesoWhatsAppLocal) {
               this.onRegistrarPesoWhatsAppLocal({ tag: buscado, pesoKg, fecha: fechaHoy });
             }
             return {
-              ok: true,
-              tag: buscado,
-              pesoKg,
+              exito: true,
+              animal: { ...animal, identificacion_tag: animal.identificacionTag || animal.numero },
+              pesoAnterior,
+              pesoNuevo: pesoKg,
               fecha: fechaHoy
             };
+          },
+          cambiarFincaActiva: async ({ nombreFinca }) => {
+            const q = String(nombreFinca || '').trim().toLowerCase();
+            const encontrada = fincasDeEstaEmpresa.find(
+              (f) => String(f.nombre || '').toLowerCase().includes(q) || String(f.codigo || '').toLowerCase() === q
+            );
+            if (!encontrada) {
+              return { exito: false, fincasDisponibles: fincasDeEstaEmpresa, empresaNombre: empresaActiva?.nombre || empIdSim };
+            }
+            guardarContactoWhatsApp({ ...contactoSim, finca_id: encontrada.id });
+            if (this.onSeleccionarFinca) this.onSeleccionarFinca(encontrada.id);
+            return { exito: true, finca: encontrada, empresaNombre: empresaActiva?.nombre || empIdSim };
           }
         };
 
-        const resCmd = await procesarComandoWhatsApp(textoComando, dbLocalAdapter, remitente);
+        actualizarSesion24hWhatsApp(canalEmpresa.id, remitente, empIdSim);
+        registrarLogMensajeWhatsApp({
+          empresa_id: empIdSim,
+          channel_id: canalEmpresa.id,
+          telefono: remitente,
+          direccion: 'in',
+          tipo: 'text',
+          contenido_resumen: textoComando
+        });
 
-        let notaEnvioReal = '';
-        if (cfg.phoneNumberId && cfg.accessToken) {
-          const resReal = await enviarMensajeWhatsApp(remitente, resCmd.respuestaTexto, {
-            phoneNumberId: cfg.phoneNumberId,
-            accessToken: cfg.accessToken
-          });
-          if (resReal.ok) {
-            const msgId = resReal.data?.messages?.[0]?.id || 'OK';
-            notaEnvioReal = `\n\n📤 [Enviado a WhatsApp Real +${remitente} | ID: ${msgId}]`;
-          } else {
-            notaEnvioReal = `\n\n⚠️ [No se pudo enviar a WhatsApp Real: ${resReal.error}]`;
-          }
-        }
+        const resCmd = await procesarComandoWhatsApp(textoComando, dbLocalAdapter, {
+          remitente,
+          empresaId: empIdSim,
+          fincaId: fincaFiltroId
+        });
+
+        registrarLogMensajeWhatsApp({
+          empresa_id: empIdSim,
+          channel_id: canalEmpresa.id,
+          telefono: remitente,
+          direccion: 'out',
+          tipo: 'text',
+          contenido_resumen: resCmd.mensajeRespuesta
+        });
 
         this.whatsappHistorialSimulador.unshift({
           hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           remitente,
           entrante: textoComando,
           autorizado: true,
-          respuesta: resCmd.respuestaTexto + notaEnvioReal
+          respuesta: resCmd.mensajeRespuesta
         });
         this.render();
       });
     }
 
-    // Botones rápidos de ejemplo en el simulador ("INFO ..." / "PESO ...")
+    // Botones rápidos de ejemplo en el simulador ("INFO ..." / "PESO ..." / "FINCA ...")
     this.container.querySelectorAll('.btn-wa-ejemplo-cmd').forEach((btn) => {
       btn.addEventListener('click', () => {
         const cmd = btn.getAttribute('data-cmd') || '';
@@ -4342,112 +4512,86 @@ END $$;
         }
       });
     });
-
-    // Envío de mensaje saliente real hacia Meta Graph API v17.0
-    const formEnvioRealWA = this.container.querySelector('#form-envio-real-whatsapp');
-    if (formEnvioRealWA) {
-      formEnvioRealWA.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const destino = (this.container.querySelector('#wa-real-destino')?.value || '').trim();
-        const texto = (this.container.querySelector('#wa-real-texto')?.value || '').trim();
-        const cfg = obtenerConfigWhatsAppLocal();
-
-        if (!cfg.phoneNumberId || !cfg.accessToken) {
-          this.whatsappFeedback = {
-            tipo: 'error',
-            mensaje: '⚠️ Primero ingresa y guarda tu WHATSAPP_PHONE_NUMBER_ID y WHATSAPP_ACCESS_TOKEN arriba para enviar mensajes reales a Meta API.'
-          };
-          this.render();
-          return;
-        }
-
-        const resEnvio = await enviarMensajeWhatsApp(destino, texto, {
-          phoneNumberId: cfg.phoneNumberId,
-          accessToken: cfg.accessToken
-        });
-
-        if (resEnvio.ok) {
-          const wamid = resEnvio.data?.messages?.[0]?.id || '';
-          this.whatsappFeedback = {
-            tipo: 'ok',
-            mensaje: `✅ Petición aceptada por Meta Graph API v17.0 para +${destino}${wamid ? ` (ID: ${wamid})` : ''}. Recuerda: en Meta WhatsApp API, si aún no le has escrito desde tu celular al número del bot en las últimas 24h, usa primero el botón "👋 1° Abrir Ventana (hello_world)" o escríbele "Hola" desde tu WhatsApp al número de prueba de Meta.`
-          };
-        } else {
-          this.whatsappFeedback = {
-            tipo: 'error',
-            mensaje: `❌ Error de Meta API: ${resEnvio.error || 'Verifica tu Token y Phone Number ID.'}`
-          };
-        }
-        this.render();
-      });
-    }
-
-    const btnEnviarPlantillaWA = this.container.querySelector('#btn-wa-enviar-plantilla');
-    if (btnEnviarPlantillaWA) {
-      btnEnviarPlantillaWA.addEventListener('click', async () => {
-        const destino = (this.container.querySelector('#wa-real-destino')?.value || '').trim();
-        const cfg = obtenerConfigWhatsAppLocal();
-
-        if (!cfg.phoneNumberId || !cfg.accessToken) {
-          this.whatsappFeedback = {
-            tipo: 'error',
-            mensaje: '⚠️ Primero ingresa y guarda tu WHATSAPP_PHONE_NUMBER_ID y WHATSAPP_ACCESS_TOKEN arriba.'
-          };
-          this.render();
-          return;
-        }
-
-        const resPlantilla = await enviarMensajeWhatsApp(destino, '', {
-          phoneNumberId: cfg.phoneNumberId,
-          accessToken: cfg.accessToken,
-          usarPlantillaHelloWorld: true
-        });
-
-        if (resPlantilla.ok) {
-          const wamid = resPlantilla.data?.messages?.[0]?.id || '';
-          this.whatsappFeedback = {
-            tipo: 'ok',
-            mensaje: `✅ Plantilla oficial "hello_world" enviada a +${destino}${wamid ? ` (ID: ${wamid})` : ''}. ¡Revisa tu WhatsApp! Cuando te llegue, respóndele cualquier mensaje (ej. "INFO 80") para dejar abierta la ventana de 24 horas de texto libre.`
-          };
-        } else {
-          this.whatsappFeedback = {
-            tipo: 'error',
-            mensaje: `❌ Error enviando plantilla hello_world: ${resPlantilla.error}`
-          };
-        }
-        this.render();
-      });
-    }
   }
 
-  renderSeccionWhatsApp(fincaActiva) {
-    const cfg = obtenerConfigWhatsAppLocal();
+  renderSeccionWhatsApp(fincaActiva, empresas = [], empresaActiva = null, fincas = [], esSuperAdmin = false) {
+    const rol = this.getRolActual ? this.getRolActual() : 'administrador';
+    const isSuper = Boolean(esSuperAdmin || rol === 'superadmin');
+    const todasEmpresas = Array.isArray(empresas) && empresas.length > 0
+      ? empresas
+      : (this.getEmpresas ? this.getEmpresas() : [{ id: 'EMP-01', nombre: 'INVERSIONES' }]);
+    const empActiva = empresaActiva || (this.getEmpresaActiva ? this.getEmpresaActiva() : todasEmpresas[0]) || { id: 'EMP-01', nombre: 'INVERSIONES' };
+    const todasLasFincasGlobal = this.getTodasLasFincas ? this.getTodasLasFincas() : (Array.isArray(fincas) ? fincas : []);
+    const fincasDeEmpresaActiva = todasLasFincasGlobal.filter((f) => f && f.empresaId === empActiva.id);
+
     const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
       ? window.location.origin
       : 'https://ganadero-ad.vercel.app';
     const webhookUrl = `${originUrl}/api/whatsapp`;
+    const privacidadUrl = `${originUrl}/privacidad`;
 
-    const animalesFinca = (this.getTodosLosAnimales ? this.getTodosLosAnimales() : []).filter(
-      (a) => !fincaActiva || a.fincaId === fincaActiva.id
+    const canales = listarCanalesWhatsApp({ empresaId: empActiva.id, esSuperAdmin: isSuper });
+    const canalEmpresaActiva = obtenerCanalActivoEmpresa(empActiva.id);
+    const numeroWaMe = normalizarTelefonoWhatsApp(canalEmpresaActiva.display_phone_number || '+57 322 5694112') || '573225694112';
+    const linkAbrirChat = `https://wa.me/${numeroWaMe}`;
+
+    const contactosGlobal = listarContactosWhatsApp({ esSuperAdmin: true });
+    const contactosEmpresaActiva = listarContactosWhatsApp({ empresaId: empActiva.id, esSuperAdmin: false });
+    const logsEmpresaActiva = listarLogsMensajesWhatsApp({ empresaId: empActiva.id, esSuperAdmin: false, limite: 30 });
+    const estadosVisibles = listarEstadosMensajesWhatsApp({
+      empresaId: isSuper ? null : empActiva.id,
+      esSuperAdmin: isSuper,
+      limite: 50
+    });
+    const reporteConsumo = obtenerReporteConsumoWhatsApp({
+      empresaId: isSuper ? null : empActiva.id,
+      esSuperAdmin: isSuper,
+      empresasCatalogo: todasEmpresas
+    });
+
+    const idsFincasEmpSet = new Set(fincasDeEmpresaActiva.map((f) => f.id));
+    const animalesEmpresa = (this.getTodosLosAnimales ? this.getTodosLosAnimales() : []).filter(
+      (a) => a && (idsFincasEmpSet.has(a.fincaId) || (!idsFincasEmpSet.size && (!fincaActiva || a.fincaId === fincaActiva.id)))
     );
-    const primerTagEjemplo = animalesFinca.length > 0
-      ? (animalesFinca[0].identificacionTag || '045')
+    const primerTagEjemplo = animalesEmpresa.length > 0
+      ? (animalesEmpresa[0].identificacionTag || animalesEmpresa[0].numero || '045')
       : '045';
-    const primerTelAutorizado = (cfg.authorizedNumbers || '573001234567').split(',')[0].trim() || '573001234567';
+    const primeraFincaEjemplo = fincasDeEmpresaActiva[0]?.nombre || fincaActiva?.nombre || 'Vesubio';
+    const remitenteSimuladorDefault = contactosEmpresaActiva[0]?.telefono || '573017839578';
+
+    const mapaNombresEmpresas = new Map(todasEmpresas.map((e) => [String(e.id), e.nombre]));
+    const mapaNombresFincas = new Map(todasLasFincasGlobal.map((f) => [String(f.id), f.nombre]));
 
     return `
       <div class="space-y-6">
-        <!-- CABECERA EXPLICATIVA -->
+        <!-- CABECERA OFICIAL WHATSAPP CLOUD API v25.0 MULTITENANT -->
         <div class="bovi-module-header p-5 rounded-2xl border border-emerald-700 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div class="space-y-1">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-2xl">💬</span>
-              <h4 class="text-base sm:text-lg font-black">Integración Bidireccional con WhatsApp Cloud API (Meta)</h4>
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-700 border border-emerald-400/40">Graph API v17.0</span>
+              <h4 class="text-base sm:text-lg font-black">
+                ${isSuper ? 'Gobierno Global WhatsApp Cloud API (Multitenant)' : `WhatsApp de Empresa — ${empActiva.nombre}`}
+              </h4>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-700 border border-emerald-400/40">
+                Graph API ${GRAPH_API_VERSION}
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-500/20 text-purple-700 border border-purple-400/40">
+                Base Central + RLS por empresa_id
+              </span>
             </div>
-            <p class="text-xs text-slate-600 max-w-2xl">
-              Aquí puedes ingresar tus tokens de Meta, configurar la lista blanca (Whitelist) de teléfonos autorizados y probar los comandos <strong>INFO &lt;ID&gt;</strong> y <strong>PESO &lt;ID&gt; &lt;KG&gt;</strong> directamente con los animales de tu finca activa (<strong>${fincaActiva ? fincaActiva.nombre : 'Todas'}</strong>).
+            <p class="text-xs text-slate-600 max-w-3xl">
+              ${isSuper
+                ? 'Arquitectura Multitenant lista para producción: un único Webhook central (/api/whatsapp), enrutamiento automático por canal compartido (+57 322 5694112) o dedicado, aislamiento estricto por empresa_id y auditoría de consumo mensual.'
+                : `Gestiona los números autorizados de ${empActiva.nombre}, asigna su finca por defecto y consulta el historial de mensajes y estados de entrega 100% aislado de otras empresas.`}
             </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 flex-wrap">
+            <a href="${privacidadUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs transition flex items-center gap-1.5">
+              <span>🛡️</span> Política /privacidad
+            </a>
+            <a href="${linkAbrirChat}" target="_blank" rel="noopener noreferrer" id="btn-wa-abrir-chat-empresa" class="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs shadow transition flex items-center gap-1.5">
+              <span>📲</span> Abrir chat (${canalEmpresaActiva.display_phone_number || '+57 322 5694112'})
+            </a>
           </div>
         </div>
 
@@ -4457,146 +4601,446 @@ END $$;
           </div>
         ` : ''}
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- COLUMNA 1: FORMULARIO PARA INGRESAR TOKENS, URL WEBHOOK Y WHITELIST -->
-          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2.5">
-              <span>🔑</span> 1. Ingresar Credenciales de Meta & Números Autorizados (Whitelist)
-            </h5>
-
-            <!-- URL DEL WEBHOOK PARA COPIAR EN META DEVELOPERS -->
-            <div class="p-3 bg-white rounded-xl border border-emerald-200 space-y-1.5">
+        ${isSuper ? `
+          <!-- ================================================================ -->
+          <!-- PANEL EXCLUSIVO SUPER ADMIN: CANALES, CONTACTOS GLOBALES, CONSUMO -->
+          <!-- ================================================================ -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 lg:col-span-2">
               <label class="block text-[11px] font-black uppercase text-emerald-900">
-                🌐 URL del Endpoint Webhook (Para pegar en Meta App Dashboard):
+                🌐 URL Única del Webhook para todas las empresas (Meta App Dashboard):
               </label>
               <div class="flex items-center gap-2">
-                <input type="text" id="wa-webhook-url-input" readonly value="${webhookUrl}" class="w-full px-3 py-2 bg-slate-100 text-slate-800 font-mono text-xs font-bold rounded-lg border border-slate-300 outline-none">
+                <input type="text" id="wa-webhook-url-input" readonly value="${webhookUrl}" class="w-full px-3 py-2 bg-white text-slate-800 font-mono text-xs font-bold rounded-lg border border-slate-300 outline-none">
                 <button type="button" id="btn-copiar-webhook-wa" class="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg whitespace-nowrap cursor-pointer transition">
                   📋 Copiar URL
                 </button>
               </div>
-              <span class="text-[10px] text-slate-600 block">Soporta verificación <strong>GET</strong> (<code>hub.mode</code>, <code>hub.verify_token</code>, <code>hub.challenge</code>) y recepción de mensajes <strong>POST</strong>.</span>
+              <p class="text-[11px] text-slate-600">
+                Valida firma <code>X-Hub-Signature-256</code> (HMAC-SHA256) y enruta automáticamente cada mensaje según <code>phone_number_id</code> y <code>whatsapp_contacts</code>.
+              </p>
             </div>
 
-            <form id="form-whatsapp-cloud-config" class="space-y-3.5">
-              <div>
-                <label class="block text-xs font-bold text-slate-800 mb-1">
-                  📱 Phone Number ID (<code>WHATSAPP_PHONE_NUMBER_ID</code>):
-                </label>
-                <input type="text" id="wa-phone-id" value="${cfg.phoneNumberId}" placeholder="Ej. 109876543210987" class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs">
+              <div class="font-black text-slate-800 uppercase text-[11px] mb-1">🔒 Secretos en Servidor (Nunca en Frontend)</div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+                <span class="font-mono text-[11px] text-slate-700">WHATSAPP_SYSTEM_TOKEN</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
               </div>
-
-              <div>
-                <label class="block text-xs font-bold text-slate-800 mb-1">
-                  🔐 Token de Acceso de Meta (<code>WHATSAPP_ACCESS_TOKEN</code>):
-                </label>
-                <input type="password" id="wa-access-token" value="${cfg.accessToken}" placeholder="EAAGm0PX4ZCpsBA..." class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70">
+                <span class="font-mono text-[11px] text-slate-700">WHATSAPP_APP_SECRET</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
               </div>
-
-              <div>
-                <label class="block text-xs font-bold text-slate-800 mb-1">
-                  🛡️ Token de Verificación del Webhook (<code>WHATSAPP_VERIFY_TOKEN</code>):
-                </label>
-                <input type="text" id="wa-verify-token" value="${cfg.verifyToken}" placeholder="Ej. ganadero_ad_verify_2026" class="w-full px-3 py-2.5 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+              <div class="flex justify-between items-center py-1">
+                <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold text-[10px]">configurado ✓</span>
               </div>
+            </div>
+          </div>
 
+          <!-- 1. LISTA DE CANALES (COMPARTIDO Y DEDICADOS) + CREAR CANAL DEDICADO -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
               <div>
-                <label class="block text-xs font-bold text-slate-800 mb-1">
-                  ✅ Números de Teléfono Autorizados - Whitelist (Separados por coma):
-                </label>
-                <textarea id="wa-authorized-numbers" rows="2" placeholder="Ej. 573001234567, 573109876543" class="w-full px-3 py-2 bg-white text-xs font-mono font-bold rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">${cfg.authorizedNumbers}</textarea>
-                <span class="text-[10px] text-slate-600 block mt-0.5">
-                  Si un número NO está en esta lista, el webhook retorna <strong>Status 200</strong> sin ejecutar nada en la base de datos.
-                </span>
+                <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <span>📡</span> 1. Canales de WhatsApp Registrados (<code>whatsapp_channels</code>)
+                </h5>
+                <p class="text-xs text-slate-600">
+                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code>) y canales dedicados por empresa.
+                </p>
               </div>
+            </div>
 
-              <button type="submit" class="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2">
-                <span>💾</span> Guardar Datos de WhatsApp Cloud API
+            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+              <table class="w-full text-xs text-left" id="tabla-wa-canales">
+                <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th class="p-2.5">Nombre / Tipo</th>
+                    <th class="p-2.5">Teléfono Visible</th>
+                    <th class="p-2.5">Phone Number ID</th>
+                    <th class="p-2.5">WABA ID</th>
+                    <th class="p-2.5">Empresa Asignada</th>
+                    <th class="p-2.5">Plantilla (24h)</th>
+                    <th class="p-2.5">Token Servidor</th>
+                    <th class="p-2.5 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${canales.map((ch) => `
+                    <tr>
+                      <td class="p-2.5 font-bold text-slate-800">
+                        ${ch.nombre}
+                        <span class="ml-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${ch.tipo === 'compartido' ? 'bg-emerald-100 text-emerald-900' : 'bg-purple-100 text-purple-900'}">
+                          ${ch.tipo}
+                        </span>
+                      </td>
+                      <td class="p-2.5 font-mono font-bold text-slate-800">${ch.display_phone_number || '+57 322 5694112'}</td>
+                      <td class="p-2.5 font-mono text-slate-700">${ch.phone_number_id}</td>
+                      <td class="p-2.5 font-mono text-slate-700">${ch.waba_id || '118927644541032'}</td>
+                      <td class="p-2.5 font-bold text-slate-700">
+                        ${ch.tipo === 'compartido' ? '🌐 Todas (Compartido)' : (mapaNombresEmpresas.get(String(ch.empresa_id)) || ch.empresa_id)}
+                      </td>
+                      <td class="p-2.5 font-mono text-[11px] text-slate-700">${ch.template_name || 'notificacion_ganadero_ad'} (${ch.template_lang || 'es_CO'})</td>
+                      <td class="p-2.5 text-[11px] font-bold text-emerald-800">${ch.token_estado || 'configurado ✓'}</td>
+                      <td class="p-2.5 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${ch.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
+                          ${ch.activo !== false ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- FORMULARIO PARA CREAR CANAL DEDICADO Y ASIGNARLO A UNA EMPRESA -->
+            <form id="form-wa-crear-canal" class="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+              <div class="text-xs font-black text-slate-800">➕ Crear Canal Dedicado y Asignarlo a una Empresa</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa Destino:</label>
+                  <select id="wa-canal-empresa-id" class="w-full px-2.5 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white">
+                    ${todasEmpresas.map((e) => `<option value="${e.id}" ${e.id === empActiva.id ? 'selected' : ''}>${e.nombre} (${e.id})</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Phone Number ID (Único):</label>
+                  <input type="text" id="wa-canal-phone-id" placeholder="Ej. 109876543210987" required class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">WABA ID:</label>
+                  <input type="text" id="wa-canal-waba-id" placeholder="Ej. 118927644541032" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Número Visible (Display):</label>
+                  <input type="text" id="wa-canal-display-phone" placeholder="Ej. +57 310 0000000" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Nombre del Canal:</label>
+                  <input type="text" id="wa-canal-nombre" placeholder="Ej. Línea Dedicada Hacienda" class="w-full px-2.5 py-2 text-xs rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Plantilla Aprobada:</label>
+                  <input type="text" id="wa-canal-template-name" value="notificacion_ganadero_ad" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla:</label>
+                  <input type="text" id="wa-canal-template-lang" value="es_CO" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Token Override (Opcional):</label>
+                  <input type="password" id="wa-canal-token-override" placeholder="Vacío = usa WHATSAPP_SYSTEM_TOKEN" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
+                </div>
+              </div>
+              <button type="submit" class="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-xl shadow cursor-pointer transition">
+                💾 Guardar Canal Dedicado
               </button>
             </form>
           </div>
 
-          <!-- COLUMNA 2: SIMULADOR INTERACTIVO EN VIVO (COMANDOS INFO Y PESO) -->
-          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 flex flex-col justify-between">
-            <div class="space-y-4">
-              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2.5">
-                <span>🤖</span> 2. Probar Comandos "INFO" y "PESO" en Tiempo Real
+          <!-- 2. REPORTE DE CONSUMO POR EMPRESA Y MES (PARA FACTURACIÓN) -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+            <div>
+              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <span>📊</span> 2. Reporte de Consumo Mensual por Empresa (Facturación Meta)
               </h5>
+              <p class="text-xs text-slate-600">
+                Conteo consolidado desde <code>whatsapp_messages_log</code> para facturar a cada empresa cliente sus mensajes de texto y plantillas.
+              </p>
+            </div>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+              <table class="w-full text-xs text-left" id="tabla-wa-consumo-facturacion">
+                <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th class="p-2.5">Mes (YYYY-MM)</th>
+                    <th class="p-2.5">Empresa</th>
+                    <th class="p-2.5 text-right">Entrantes (IN)</th>
+                    <th class="p-2.5 text-right">Respuestas Texto (OUT)</th>
+                    <th class="p-2.5 text-right">Plantillas (OUT)</th>
+                    <th class="p-2.5 text-right">Total Mensajes</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${reporteConsumo.length > 0 ? reporteConsumo.map((r) => `
+                    <tr>
+                      <td class="p-2.5 font-mono font-bold text-slate-800">${r.mes}</td>
+                      <td class="p-2.5 font-bold text-slate-800">${r.empresa_nombre} <span class="text-[10px] font-mono text-slate-600">(${r.empresa_id})</span></td>
+                      <td class="p-2.5 text-right font-mono">${r.entrantes_texto}</td>
+                      <td class="p-2.5 text-right font-mono">${r.salientes_texto}</td>
+                      <td class="p-2.5 text-right font-mono font-bold text-purple-800">${r.plantillas_salientes}</td>
+                      <td class="p-2.5 text-right font-mono font-black text-emerald-800">${r.total_mensajes}</td>
+                    </tr>
+                  `).join('') : `
+                    <tr>
+                      <td colspan="6" class="p-4 text-center text-slate-600">Sin mensajes registrados aún en el periodo actual.</td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
 
-              <p class="text-xs text-slate-600 leading-relaxed">
-                Prueba aquí mismo cómo responde el bot consultando o registrando pesos reales sobre tu inventario de <strong>${fincaActiva ? fincaActiva.nombre : 'tu finca'}</strong> (${animalesFinca.length} animales disponibles):
+        <!-- ================================================================ -->
+        <!-- PANEL DE EMPRESA (Y GESTIÓN DE CONTACTOS / SIMULADOR / ESTADOS)  -->
+        <!-- ================================================================ -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- COLUMNA IZQUIERDA: NÚMERO DE CANAL DE LA EMPRESA Y LISTA BLANCA DE CONTACTOS -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div class="p-4 bg-white rounded-xl border border-emerald-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <span class="text-[10px] font-black uppercase text-emerald-800 block">
+                  📱 Línea de WhatsApp Asignada a ${empActiva.nombre}:
+                </span>
+                <div class="text-base font-black font-mono text-slate-800 mt-0.5">
+                  ${canalEmpresaActiva.display_phone_number || '+57 322 5694112'}
+                  <span class="ml-1.5 px-2 py-0.5 rounded text-[10px] uppercase ${canalEmpresaActiva.tipo === 'dedicado' ? 'bg-purple-100 text-purple-900' : 'bg-emerald-100 text-emerald-900'}">
+                    Canal ${canalEmpresaActiva.tipo}
+                  </span>
+                </div>
+                <span class="text-[11px] text-slate-600 block mt-0.5">
+                  Comandos: <code>INFO &lt;ID&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt;</code> • <code>FINCA &lt;nombre&gt;</code>
+                </span>
+              </div>
+              <a href="${linkAbrirChat}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow whitespace-nowrap">
+                💬 Abrir chat
+              </a>
+            </div>
+
+            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
+              <span>✅</span> ${isSuper ? 'Lista Blanca Global de Contactos por Empresa (whatsapp_contacts)' : `Contactos Autorizados de ${empActiva.nombre}`}
+            </h5>
+
+            <form id="form-wa-contacto" class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Teléfono (E.164 sin +, ej. 573017839578):</label>
+                  <input type="text" id="wa-contacto-telefono" placeholder="573017839578" required class="w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-300">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Nombre del Operador / Vaquero:</label>
+                  <input type="text" id="wa-contacto-nombre" placeholder="Ej. Carlos Pérez" required class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300">
+                </div>
+                ${isSuper ? `
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa:</label>
+                    <select id="wa-contacto-empresa-id" class="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white">
+                      ${todasEmpresas.map((e) => `<option value="${e.id}" ${e.id === empActiva.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
+                    </select>
+                  </div>
+                ` : ''}
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Finca por Defecto:</label>
+                  <select id="wa-contacto-finca-id" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white">
+                    <option value="">Todas las fincas de la empresa</option>
+                    ${fincasDeEmpresaActiva.map((f) => `<option value="${f.id}" ${fincaActiva && f.id === fincaActiva.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Rol:</label>
+                  <select id="wa-contacto-rol" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white">
+                    <option value="operador">Operador / Mayordomo</option>
+                    <option value="administrador">Administrador</option>
+                    <option value="veterinario">Veterinario / Consultor</option>
+                  </select>
+                </div>
+              </div>
+              <div class="flex items-center justify-between gap-2 pt-1">
+                <span class="text-[10px] text-slate-600">Regla: un número solo puede estar activo en <strong>una</strong> empresa a la vez.</span>
+                <button type="submit" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition">
+                  ➕ Autorizar Teléfono
+                </button>
+              </div>
+            </form>
+
+            <!-- TABLA DE CONTACTOS AUTORIZADOS -->
+            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white max-h-64 overflow-y-auto">
+              <table class="w-full text-xs text-left" id="tabla-wa-contactos">
+                <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th class="p-2">Teléfono</th>
+                    <th class="p-2">Nombre / Rol</th>
+                    ${isSuper ? '<th class="p-2">Empresa</th>' : ''}
+                    <th class="p-2">Finca Activa</th>
+                    <th class="p-2 text-center">Estado</th>
+                    <th class="p-2 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${(isSuper ? contactosGlobal : contactosEmpresaActiva).length > 0 ? (isSuper ? contactosGlobal : contactosEmpresaActiva).map((c) => {
+                    const fincasEmpContacto = todasLasFincasGlobal.filter((f) => f && f.empresaId === c.empresa_id);
+                    return `
+                      <tr>
+                        <td class="p-2 font-mono font-bold text-slate-800">+${c.telefono}</td>
+                        <td class="p-2">
+                          <div class="font-bold text-slate-800">${c.nombre}</div>
+                          <div class="text-[10px] text-slate-600 uppercase">${c.rol || 'operador'}</div>
+                        </td>
+                        ${isSuper ? `<td class="p-2 font-bold text-slate-700">${mapaNombresEmpresas.get(String(c.empresa_id)) || c.empresa_id}</td>` : ''}
+                        <td class="p-2">
+                          <select class="select-wa-finca-contacto px-2 py-1 text-[11px] rounded border border-slate-300 bg-white" data-id="${c.id}" data-telefono="${c.telefono}" data-empresa="${c.empresa_id}" data-nombre="${c.nombre}" data-rol="${c.rol || 'operador'}" data-activo="${c.activo !== false}">
+                            <option value="">Todas (${fincasEmpContacto.length})</option>
+                            ${fincasEmpContacto.map((f) => `<option value="${f.id}" ${c.finca_id === f.id ? 'selected' : ''}>${f.nombre}</option>`).join('')}
+                          </select>
+                        </td>
+                        <td class="p-2 text-center">
+                          <button type="button" class="btn-wa-toggle-contacto px-2 py-0.5 rounded-full text-[10px] font-black cursor-pointer ${c.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-200 text-slate-700'}" data-id="${c.id}" data-activo="${c.activo === false ? 'true' : 'false'}">
+                            ${c.activo !== false ? 'Activo ✓' : 'Inactivo'}
+                          </button>
+                        </td>
+                        <td class="p-2 text-center">
+                          <button type="button" class="btn-wa-eliminar-contacto text-rose-700 hover:text-rose-900 font-bold text-xs cursor-pointer" data-id="${c.id}" title="Eliminar contacto">
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr>
+                      <td colspan="${isSuper ? 6 : 5}" class="p-4 text-center text-slate-600">
+                        No hay contactos registrados aún. Agrega el teléfono E.164 arriba (ej. <code>573017839578</code>).
+                      </td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- COLUMNA DERECHA: SIMULADOR MULTITENANT CON DATOS DE LA EMPRESA -->
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3.5">
+              <h5 class="text-sm font-black text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span>🤖</span> Simulador de Comandos (${empActiva.nombre})
+              </h5>
+              <p class="text-xs text-slate-600">
+                Opera exclusivamente sobre el inventario de <strong>${empActiva.nombre}</strong> (${animalesEmpresa.length} ejemplares activos en sus fincas).
               </p>
 
-              <!-- BOTONES RÁPIDOS DE PRUEBA -->
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-[11px] font-bold text-slate-600">Clic para rellenar ejemplo:</span>
+                <span class="text-[11px] font-bold text-slate-600">Ejemplos rápidos:</span>
                 <button type="button" data-cmd="INFO ${primerTagEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
                   INFO ${primerTagEjemplo}
                 </button>
                 <button type="button" data-cmd="PESO ${primerTagEjemplo} 350" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
                   PESO ${primerTagEjemplo} 350
                 </button>
+                <button type="button" data-cmd="FINCA ${primeraFincaEjemplo}" class="btn-wa-ejemplo-cmd px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-mono font-black cursor-pointer transition">
+                  FINCA ${primeraFincaEjemplo}
+                </button>
               </div>
 
               <form id="form-simulador-whatsapp" class="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">📞 Teléfono Remitente:</label>
-                    <input type="text" id="wa-sim-remitente" value="${primerTelAutorizado}" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 outline-none">
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">📞 Contacto Remitente:</label>
+                    <input type="text" id="wa-sim-remitente" value="${remitenteSimuladorDefault}" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300 outline-none">
                   </div>
                   <div class="sm:col-span-2">
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">💬 Mensaje WhatsApp (INFO o PESO):</label>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">💬 Comando (INFO / PESO / FINCA):</label>
                     <div class="flex gap-2">
-                      <input type="text" id="wa-sim-mensaje" value="INFO ${primerTagEjemplo}" placeholder="Ej. INFO 045 o PESO 045 350" class="w-full px-3 py-2 text-xs font-mono font-black text-emerald-950 bg-emerald-50/60 rounded-lg border-2 border-emerald-400 outline-none">
+                      <input type="text" id="wa-sim-mensaje" value="INFO ${primerTagEjemplo}" placeholder="INFO 045 | PESO 045 350 | FINCA Vesubio" class="w-full px-3 py-2 text-xs font-mono font-black text-emerald-950 bg-emerald-50/60 rounded-lg border-2 border-emerald-400 outline-none">
                       <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-lg shadow whitespace-nowrap cursor-pointer">
-                        ▶️ Enviar
+                        ▶️ Probar
                       </button>
                     </div>
                   </div>
                 </div>
               </form>
 
-              <!-- CONSOLA DE RESPUESTAS DEL BOT -->
-              <div class="bg-slate-900 text-slate-600 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-60 overflow-y-auto font-mono text-xs">
+              <div class="bg-slate-900 text-slate-600 p-3.5 rounded-xl border border-slate-800 space-y-2.5 max-h-56 overflow-y-auto font-mono text-xs">
                 ${this.whatsappHistorialSimulador.length > 0 ? this.whatsappHistorialSimulador.map((item) => `
                   <div class="p-2.5 rounded-lg ${item.autorizado ? 'bg-slate-800 border border-emerald-500/40' : 'bg-rose-950/60 border border-rose-500/40'} space-y-1">
                     <div class="flex justify-between text-[10px] text-slate-600">
-                      <span>📱 De: +${item.remitente}</span>
+                      <span>📱 Remitente: +${item.remitente}</span>
                       <span>🕒 ${item.hora}</span>
                     </div>
-                    <div class="text-emerald-700 font-bold">➔ Recibido: "${item.entrante}"</div>
+                    <div class="text-emerald-700 font-bold">➔ "${item.entrante}"</div>
                     <div class="text-slate-800 whitespace-pre-line pl-2 border-l-2 border-emerald-500 mt-1">${item.respuesta}</div>
                   </div>
                 `).join('') : `
                   <div class="text-slate-600 text-center py-4">
-                    Escribe <strong>INFO ${primerTagEjemplo}</strong> o <strong>PESO ${primerTagEjemplo} 350</strong> arriba y presiona <strong>▶️ Enviar</strong> para ver la respuesta del bot en vivo.
+                    Ejecuta un comando arriba para verificar la respuesta aislada de <strong>${empActiva.nombre}</strong>.
                   </div>
                 `}
               </div>
             </div>
 
-            <!-- ENVÍO DE MENSAJE SALIENTE REAL VÍA META GRAPH API -->
-            <form id="form-envio-real-whatsapp" class="pt-3 border-t border-slate-200 space-y-2.5">
-              <label class="block text-xs font-black text-slate-800">
-                📤 3. Probar Envío Saliente Real (<code>enviarMensajeWhatsApp</code> a Meta API v17.0):
-              </label>
-              <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-                <strong>💡 ¿Por qué dice "Enviado" y no llega al celular? (Regla de 24h de Meta):</strong><br>
-                Meta bloquea la entrega de texto libre si tu celular (<code>+${primerTelAutorizado}</code>) no le ha escrito primero al número del Bot en las últimas 24 horas. Haz clic primero en <strong>"👋 1° Abrir Ventana (hello_world)"</strong> o escríbele un mensaje desde tu WhatsApp al número de prueba de Meta.
+            <!-- HISTORIAL DE MENSAJES DE LA EMPRESA -->
+            <div class="pt-3 border-t border-slate-200 space-y-2">
+              <div class="text-xs font-black text-slate-800">
+                📝 Últimos Mensajes de ${empActiva.nombre} (${logsEmpresaActiva.length})
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input type="text" id="wa-real-destino" value="${primerTelAutorizado}" placeholder="Número destino (ej. 57300...)" class="px-3 py-2 bg-white text-xs font-mono rounded-lg border border-slate-300 outline-none">
-                <input type="text" id="wa-real-texto" value="Hola desde Ganadero AD" placeholder="Mensaje a enviar..." class="px-3 py-2 bg-white text-xs rounded-lg border border-slate-300 outline-none">
+              <div class="max-h-40 overflow-y-auto bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 text-[11px]">
+                ${logsEmpresaActiva.length > 0 ? logsEmpresaActiva.map((m) => `
+                  <div class="p-2 flex justify-between items-center gap-2">
+                    <div>
+                      <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] ${m.direccion === 'in' ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900'}">${m.direccion.toUpperCase()}</span>
+                      <span class="font-mono font-bold text-slate-800 ml-1">+${m.telefono}</span>
+                      <span class="text-slate-600 ml-1">${m.contenido_resumen}</span>
+                    </div>
+                    <span class="text-[10px] font-mono text-slate-600 shrink-0">${String(m.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                  </div>
+                `).join('') : `
+                  <div class="p-3 text-center text-slate-600">Sin mensajes registrados para esta empresa.</div>
+                `}
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button type="button" id="btn-wa-enviar-plantilla" class="px-3 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-lg cursor-pointer transition shadow">
-                  👋 1° Abrir Ventana (Plantilla hello_world)
-                </button>
-                <button type="submit" class="px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-800 font-black text-xs rounded-lg cursor-pointer transition shadow">
-                  🚀 2° Enviar Texto Libre a WhatsApp
-                </button>
-              </div>
-            </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ÚLTIMOS 50 ESTADOS (whatsapp_message_status) CON ERRORES EN ROJO -->
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+          <div>
+            <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <span>📡</span> ${isSuper ? 'Últimos 50 Estados de Entrega Globales (whatsapp_message_status)' : `Estados de Entrega de ${empActiva.nombre}`}
+            </h5>
+            <p class="text-xs text-slate-600">
+              Auditoría en tiempo real de callbacks <code>value.statuses[]</code> de Meta. Los errores se resaltan en rojo (ej. <code>131047 = Fuera de ventana de 24h</code>).
+            </p>
+          </div>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+            <table class="w-full text-xs text-left" id="tabla-wa-ultimos-estados">
+              <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="p-2.5">Fecha / Hora</th>
+                  ${isSuper ? '<th class="p-2.5">Empresa</th>' : ''}
+                  <th class="p-2.5">Destinatario</th>
+                  <th class="p-2.5">WAMID</th>
+                  <th class="p-2.5">Estado</th>
+                  <th class="p-2.5">Detalle / Error Meta</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${estadosVisibles.length > 0 ? estadosVisibles.map((st) => {
+                  const tieneError = Boolean(st.error_code || st.status === 'failed');
+                  return `
+                    <tr class="${tieneError ? 'bg-rose-50 text-rose-900' : ''}">
+                      <td class="p-2.5 font-mono text-[11px]">${String(st.timestamp || st.created_at || '').slice(0, 19).replace('T', ' ')}</td>
+                      ${isSuper ? `<td class="p-2.5 font-bold">${mapaNombresEmpresas.get(String(st.empresa_id)) || st.empresa_id || '—'}</td>` : ''}
+                      <td class="p-2.5 font-mono font-bold">+${st.recipient_id || '—'}</td>
+                      <td class="p-2.5 font-mono text-[10px]">${String(st.wamid || '').slice(0, 28)}</td>
+                      <td class="p-2.5">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${tieneError ? 'bg-rose-200 text-rose-950 border border-rose-400' : 'bg-emerald-100 text-emerald-900'}">
+                          ${st.status}
+                        </span>
+                      </td>
+                      <td class="p-2.5 font-mono text-[11px] ${tieneError ? 'text-rose-900 font-bold' : 'text-slate-600'}">
+                        ${tieneError
+                          ? `❌ [${st.error_code || 'ERR'}] ${st.error_title || 'Fallo de entrega'}${st.error_details ? ` — ${st.error_details}` : ''}`
+                          : '✓ Entregado sin errores'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('') : `
+                  <tr>
+                    <td colspan="${isSuper ? 6 : 5}" class="p-4 text-center text-slate-600">
+                      Sin estados de entrega registrados aún.
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

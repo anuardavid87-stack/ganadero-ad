@@ -172,6 +172,15 @@ if (fs.existsSync('Ganadero_AD.apk')) {
   fs.copyFileSync('Ganadero_AD.apk', 'public/Ganadero_AD.apk');
 }
 
+// Sincronizar página pública /privacidad (sin login) en todas las carpetas destino
+if (fs.existsSync('privacidad.html')) {
+  if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });
+  fs.copyFileSync('privacidad.html', 'public/privacidad.html');
+  if (fs.existsSync('frontend')) fs.copyFileSync('privacidad.html', 'frontend/privacidad.html');
+  if (fs.existsSync('www')) fs.copyFileSync('privacidad.html', 'www/privacidad.html');
+  console.log('✓ privacidad.html sincronizado en raíz, public, frontend y www.');
+}
+
 // Sincronizar activos PWA (manifest, sw, icon, favicon) en todas las ubicaciones necesarias
 const pwaFiles = ['manifest.webmanifest', 'sw.js', 'icon.svg', 'icon.png', 'icon-192.png', 'favicon.ico'];
 if (!fs.existsSync('public')) fs.mkdirSync('public', { recursive: true });

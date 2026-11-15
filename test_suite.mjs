@@ -6235,6 +6235,21 @@ console.log('\n--- 56. Pruebas de Blindaje contra Fantasmas, Purga Atómica y Es
 }
 
 import {
+  GRAPH_API_VERSION,
+  DEFAULT_SHARED_WHATSAPP_CHANNEL,
+  calcularHmacSha256Hex,
+  validarFirmaWebhookMeta,
+  reiniciarEstadoWhatsAppMultitenantParaTests,
+  listarCanalesWhatsApp,
+  obtenerCanalActivoEmpresa,
+  guardarCanalWhatsApp,
+  guardarContactoWhatsApp,
+  listarContactosWhatsApp,
+  actualizarSesion24hWhatsApp,
+  verificarSesion24hWhatsApp,
+  enviarWhatsApp,
+  obtenerReporteConsumoWhatsApp,
+  listarEstadosMensajesWhatsApp,
   verificarWebhookWhatsApp,
   verificarNumeroEnWhitelist,
   enviarMensajeWhatsApp,
@@ -6445,12 +6460,48 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     'BoviTrackApp (Destete Madre+Cría): Actualiza peso de la vaca (512 kg), peso del ternero (185 kg) y vincula madre ↔ cría en historial'
   );
 
-  // 57.5: Integración Bidireccional con API Oficial de WhatsApp Cloud de Meta
+  // 57.5: Integración Bidireccional Multitenant con API Oficial de WhatsApp Cloud de Meta (v25.0)
+  reiniciarEstadoWhatsAppMultitenantParaTests();
+
+  test(
+    GRAPH_API_VERSION === 'v25.0' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.phone_number_id === '111443548633291' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.display_phone_number === '+57 322 5694112' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.waba_id === '118927644541032' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.tipo === 'compartido' &&
+    DEFAULT_SHARED_WHATSAPP_CHANNEL.empresa_id === null,
+    'WhatsApp Cloud API v25.0: Constante GRAPH_API_VERSION = "v25.0" y canal COMPARTIDO por defecto (111443548633291 / +57 322 5694112 / WABA 118927644541032)'
+  );
+
+  // Regla de teléfono único activo en whatsapp_contacts (un teléfono solo puede estar activo en UNA empresa)
+  const regEmp1 = guardarContactoWhatsApp({
+    telefono: '+57 300 111 2233',
+    empresa_id: 'EMP-01',
+    finca_id: 'FIN-ORD-1',
+    nombre: 'Operador Emp 1',
+    rol: 'operador',
+    activo: true
+  });
+  const regConflictoEmp2 = guardarContactoWhatsApp({
+    telefono: '573001112233',
+    empresa_id: 'EMP-02',
+    finca_id: 'FIN-EMP2-1',
+    nombre: 'Intento Duplicado Emp 2',
+    rol: 'operador',
+    activo: true
+  });
+  test(
+    regEmp1.ok === true &&
+    regEmp1.contact.telefono === '573001112233' &&
+    regConflictoEmp2.ok === false &&
+    regConflictoEmp2.codigo === 'TELEFONO_ACTIVO_OTRA_EMPRESA',
+    'WhatsApp Contacts (Regla Multitenant): Un teléfono solo puede estar activo en UNA empresa y rechaza duplicados entre empresas'
+  );
+
   const envMockWA = {
     WHATSAPP_VERIFY_TOKEN: 'token_secreto_ganadero_test',
-    WHATSAPP_ACCESS_TOKEN: 'EAAG_MOCK_TOKEN_12345',
-    WHATSAPP_PHONE_NUMBER_ID: '9988776655',
-    WHATSAPP_AUTHORIZED_NUMBERS: '573001112233,573104445566'
+    WHATSAPP_SYSTEM_TOKEN: 'EAAG_MOCK_SYSTEM_TOKEN_V25',
+    WHATSAPP_APP_SECRET: 'meta_app_secret_test_2026'
   };
 
   // GET Verification
@@ -6471,17 +6522,39 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     'WhatsApp Cloud Webhook (GET): Valida hub.mode, hub.verify_token y retorna hub.challenge en texto plano'
   );
 
+  // Validación criptográfica X-Hub-Signature-256 (HMAC-SHA256)
+  const rawSample = JSON.stringify({ object: 'whatsapp_business_account', entry: [] });
+  const firmaValida = 'sha256=' + calcularHmacSha256Hex(rawSample, envMockWA.WHATSAPP_APP_SECRET);
+  const checkSigOk = validarFirmaWebhookMeta(rawSample, firmaValida, envMockWA.WHATSAPP_APP_SECRET);
+  const checkSigBad = validarFirmaWebhookMeta(rawSample, 'sha256=0000000000000000000000000000000000000000000000000000000000000000', envMockWA.WHATSAPP_APP_SECRET);
+
+  const postFirmaInvalida = await procesarWebhookPostWhatsApp({ entry: [] }, {
+    env: envMockWA,
+    rawBody: rawSample,
+    signatureHeader: 'sha256=firma_falsa',
+    validarFirma: true
+  });
+
+  test(
+    checkSigOk.ok === true &&
+    checkSigBad.ok === false &&
+    checkSigBad.status === 401 &&
+    postFirmaInvalida.status === 401,
+    'WhatsApp Cloud Webhook (Seguridad X-Hub-Signature-256): Valida HMAC-SHA256 con WHATSAPP_APP_SECRET y rechaza firmas inválidas con HTTP 401'
+  );
+
   // Whitelist verification
   test(
     verificarNumeroEnWhitelist('+57 300 111 2233', envMockWA) === true &&
     verificarNumeroEnWhitelist('573990000000', envMockWA) === false,
-    'WhatsApp Cloud Webhook (Seguridad Whitelist): Autoriza números en whitelist y bloquea remitentes desconocidos'
+    'WhatsApp Cloud Webhook (Seguridad Whitelist): Autoriza números en whatsapp_contacts y bloquea remitentes desconocidos'
   );
 
-  // Mock DB & Fetch para probar comandos INFO, PESO y enviarMensajeWhatsApp
+  // Mock DB & Fetch con aislamiento por empresa_id y finca_id
   const dbAnimalesMock = {
-    '045': {
+    'EMP-01::045': {
       id: 'ANM-VACA-045',
+      empresa_id: 'EMP-01',
       finca_id: 'FIN-ORD-1',
       identificacion_tag: '045',
       nombre: 'Reina',
@@ -6491,22 +6564,50 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
       ultimo_peso_kg: 480,
       fecha_ultimo_pesaje: '2026-09-01',
       lote: 'Ordeño 1'
+    },
+    'EMP-02::045': {
+      id: 'ANM-EMP2-045',
+      empresa_id: 'EMP-02',
+      finca_id: 'FIN-EMP2-1',
+      identificacion_tag: '045',
+      nombre: 'Duquesa Otra Empresa',
+      especie: 'bovino',
+      estado_reproductivo: 'Vacía',
+      dias_gestacion: 0,
+      ultimo_peso_kg: 390,
+      fecha_ultimo_pesaje: '2026-09-05',
+      lote: 'Horro'
     }
   };
   const pesajesInsertadosDB = [];
 
   const dbAdapterMock = {
-    async consultarAnimalPorTag(tag) {
-      return dbAnimalesMock[tag] || null;
+    async consultarAnimalPorId(tag, { empresaId }) {
+      if (!empresaId) throw new Error('Falta empresaId');
+      return dbAnimalesMock[`${empresaId}::${tag}`] || null;
     },
-    async registrarPesoAnimal(tag, pesoKg, fecha) {
-      const animal = dbAnimalesMock[tag];
+    async registrarPesoAnimal({ idAnimal, pesoKg, fecha, empresaId, fincaId }) {
+      if (!empresaId) throw new Error('Falta empresaId');
+      const animal = dbAnimalesMock[`${empresaId}::${idAnimal}`];
       if (!animal) return { exito: false, motivo: 'NO_ENCONTRADO' };
       const pesoAnterior = animal.ultimo_peso_kg;
       animal.ultimo_peso_kg = pesoKg;
       animal.fecha_ultimo_pesaje = fecha;
-      pesajesInsertadosDB.push({ tag, pesoKg, fecha });
+      pesajesInsertadosDB.push({ tag: idAnimal, pesoKg, fecha, empresaId, fincaId });
       return { exito: true, animal, pesoAnterior, pesoNuevo: pesoKg, fecha };
+    },
+    async cambiarFincaActiva({ nombreFinca, empresaId, remitente }) {
+      const fincasPorEmp = {
+        'EMP-01': [
+          { id: 'FIN-ORD-1', nombre: 'Vesubio', empresaId: 'EMP-01' },
+          { id: 'FIN-ORD-2', nombre: 'Waterloo', empresaId: 'EMP-01' }
+        ]
+      };
+      const lista = fincasPorEmp[empresaId] || [];
+      const f = lista.find((x) => x.nombre.toLowerCase() === nombreFinca.toLowerCase());
+      if (!f) return { exito: false, fincasDisponibles: lista };
+      guardarContactoWhatsApp({ telefono: remitente, empresa_id: empresaId, finca_id: f.id, nombre: 'Operador Emp 1', activo: true });
+      return { exito: true, finca: f, empresaNombre: 'INVERSIONES' };
     }
   };
 
@@ -6516,39 +6617,50 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     return {
       ok: true,
       status: 200,
-      json: async () => ({ messages: [{ id: 'wamid.HBgMNTczMDAxMTEyMjMz' }] })
+      json: async () => ({ messages: [{ id: `wamid.HBgM.${llamadasGraphAPI.length}` }] })
     };
   };
 
-  // Petición POST desde número NO autorizado -> retorna 200 sin ejecutar DB ni enviar WhatsApp
+  // Petición POST desde número NO autorizado -> responde UNA SOLA VEZ el aviso de no autorizado y no ejecuta comando
   const payloadNoAutorizado = {
     entry: [{
       changes: [{
         value: {
+          metadata: { phone_number_id: '111443548633291' },
           messages: [{ from: '573999999999', type: 'text', text: { body: 'INFO 045' } }]
         }
       }]
     }]
   };
-  const resNoAuth = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
+  const resNoAuth1 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
+    env: envMockWA,
+    dbAdapter: dbAdapterMock,
+    fetchImpl: mockFetchMeta
+  });
+  const resNoAuth2 = await procesarWebhookPostWhatsApp(payloadNoAutorizado, {
     env: envMockWA,
     dbAdapter: dbAdapterMock,
     fetchImpl: mockFetchMeta
   });
 
   test(
-    resNoAuth.status === 200 &&
-    resNoAuth.body.ignored === true &&
-    llamadasGraphAPI.length === 0,
-    'WhatsApp Cloud Webhook (POST Whitelist): Número no autorizado retorna HTTP 200 inmediatamente sin procesar ni enviar mensajes'
+    resNoAuth1.status === 200 &&
+    resNoAuth1.body.ignored === true &&
+    resNoAuth2.body.ignored === true &&
+    llamadasGraphAPI.length === 1 &&
+    llamadasGraphAPI[0].body.text.body === 'Este número no está autorizado. Contacta al administrador de tu empresa.',
+    'WhatsApp Cloud Webhook (POST No Autorizado): Responde UNA SOLA VEZ "Este número no está autorizado..." y bloquea ejecución de comandos'
   );
 
-  // Petición POST con comando "INFO 045" desde número autorizado
+  llamadasGraphAPI.length = 0;
+
+  // Petición POST con comando "INFO 045" desde número autorizado de EMP-01 en el canal compartido
   const payloadInfo = {
     entry: [{
       changes: [{
         value: {
-          messages: [{ from: '573001112233', type: 'text', text: { body: 'INFO 045' } }]
+          metadata: { phone_number_id: '111443548633291' },
+          messages: [{ id: 'wamid.in.1', from: '573001112233', type: 'text', text: { body: 'INFO 045' } }]
         }
       }]
     }]
@@ -6562,11 +6674,12 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   test(
     resInfo.status === 200 &&
     llamadasGraphAPI.length === 1 &&
-    llamadasGraphAPI[0].url === 'https://graph.facebook.com/v17.0/9988776655/messages' &&
+    llamadasGraphAPI[0].url === 'https://graph.facebook.com/v25.0/111443548633291/messages' &&
     llamadasGraphAPI[0].body.to === '573001112233' &&
     llamadasGraphAPI[0].body.text.body.includes('045') &&
-    llamadasGraphAPI[0].body.text.body.includes('Preñada'),
-    'WhatsApp Cloud Webhook (Comando INFO 045): Consulta base de datos y responde estado reproductivo vía Graph API v17.0'
+    llamadasGraphAPI[0].body.text.body.includes('Reina') &&
+    !llamadasGraphAPI[0].body.text.body.includes('Duquesa Otra Empresa'),
+    'WhatsApp Cloud Webhook (Comando INFO 045 Multitenant): Filtra por empresa_id (EMP-01) y responde vía Graph API v25.0 por el mismo canal'
   );
 
   // Petición POST con comando "PESO 045 350" desde número autorizado
@@ -6574,7 +6687,8 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     entry: [{
       changes: [{
         value: {
-          messages: [{ from: '573001112233', type: 'text', text: { body: 'PESO 045 350' } }]
+          metadata: { phone_number_id: '111443548633291' },
+          messages: [{ id: 'wamid.in.2', from: '573001112233', type: 'text', text: { body: 'PESO 045 350' } }]
         }
       }]
     }]
@@ -6590,38 +6704,158 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
     pesajesInsertadosDB.length === 1 &&
     pesajesInsertadosDB[0].tag === '045' &&
     pesajesInsertadosDB[0].pesoKg === 350 &&
-    dbAnimalesMock['045'].ultimo_peso_kg === 350 &&
+    pesajesInsertadosDB[0].empresaId === 'EMP-01' &&
+    dbAnimalesMock['EMP-01::045'].ultimo_peso_kg === 350 &&
+    dbAnimalesMock['EMP-02::045'].ultimo_peso_kg === 390 &&
     llamadasGraphAPI.length === 2 &&
     llamadasGraphAPI[1].body.text.body.includes('350 kg'),
-    'WhatsApp Cloud Webhook (Comando PESO 045 350): Inserta pesaje en base de datos, actualiza animal y envía confirmación por WhatsApp'
+    'WhatsApp Cloud Webhook (Comando PESO 045 350 Multitenant): Actualiza animal de EMP-01 sin tocar el animal homónimo de EMP-02'
   );
 
-  // 57.6: Verificación de renderizado de la pestaña visual "WhatsApp API" en ModuloAdmin
-  const adminWaTest = new ModuloAdmin({
+  // Comando "FINCA Waterloo" para cambiar la finca activa del contacto dentro de su empresa
+  const payloadFinca = {
+    entry: [{
+      changes: [{
+        value: {
+          metadata: { phone_number_id: '111443548633291' },
+          messages: [{ id: 'wamid.in.3', from: '573001112233', type: 'text', text: { body: 'FINCA Waterloo' } }]
+        }
+      }]
+    }]
+  };
+  const resFinca = await procesarWebhookPostWhatsApp(payloadFinca, {
+    env: envMockWA,
+    dbAdapter: dbAdapterMock,
+    fetchImpl: mockFetchMeta
+  });
+  const contactoActualizado = listarContactosWhatsApp({ empresaId: 'EMP-01' })[0];
+
+  test(
+    resFinca.status === 200 &&
+    contactoActualizado.finca_id === 'FIN-ORD-2' &&
+    llamadasGraphAPI[2].body.text.body.includes('Waterloo'),
+    'WhatsApp Cloud Webhook (Comando FINCA <nombre>): Cambia la finca activa del contacto entre las fincas de su propia empresa'
+  );
+
+  // Envío saliente enviarWhatsApp(empresa_id, telefono, mensaje | plantilla) y control de ventana de 24h
+  const envioPropioCanal = await enviarWhatsApp('EMP-01', '+57 322 5694112', 'Hola', {
+    env: envMockWA,
+    fetchImpl: mockFetchMeta
+  });
+  const envioSinVentana24h = await enviarWhatsApp('EMP-01', '573158889900', 'Texto libre fuera de 24h', {
+    env: envMockWA,
+    fetchImpl: mockFetchMeta
+  });
+  const envioDentroVentana24h = await enviarWhatsApp('EMP-01', '573001112233', 'Alerta zootécnica dentro de 24h', {
+    env: envMockWA,
+    fetchImpl: mockFetchMeta
+  });
+  const envioPlantillaFuera24h = await enviarWhatsApp('EMP-01', '573158889900', { tipo: 'template', template_name: 'notificacion_ganadero_ad', template_lang: 'es_CO' }, {
+    env: envMockWA,
+    fetchImpl: mockFetchMeta
+  });
+
+  test(
+    envioPropioCanal.ok === false &&
+    envioPropioCanal.codigo === 'DESTINO_PROPIO_CANAL' &&
+    envioSinVentana24h.ok === false &&
+    envioSinVentana24h.error === 'Fuera de la ventana de 24h: usa una plantilla aprobada' &&
+    envioDentroVentana24h.ok === true &&
+    envioPlantillaFuera24h.ok === true,
+    'enviarWhatsApp (Regla 24h & Seguridad): Bloquea envío al propio número del canal, bloquea texto libre > 24h y permite plantillas aprobadas'
+  );
+
+  // Procesamiento de value.statuses[] -> whatsapp_message_status con resolución de empresa_id por wamid
+  const payloadStatusError = {
+    entry: [{
+      changes: [{
+        value: {
+          metadata: { phone_number_id: '111443548633291' },
+          statuses: [{
+            id: envioDentroVentana24h.wamid,
+            recipient_id: '573001112233',
+            status: 'failed',
+            timestamp: '1760000000',
+            errors: [{
+              code: 131047,
+              title: 'Re-engagement message',
+              error_data: { details: 'More than 24 hours have passed since the customer last replied' }
+            }]
+          }]
+        }
+      }]
+    }]
+  };
+  await procesarWebhookPostWhatsApp(payloadStatusError, { env: envMockWA, fetchImpl: mockFetchMeta });
+  const estadosEmp1 = listarEstadosMensajesWhatsApp({ empresaId: 'EMP-01', esSuperAdmin: false });
+  const consumoGlobal = obtenerReporteConsumoWhatsApp({ esSuperAdmin: true, empresasCatalogo: [{ id: 'EMP-01', nombre: 'INVERSIONES' }] });
+
+  test(
+    estadosEmp1.length >= 1 &&
+    estadosEmp1[0].empresa_id === 'EMP-01' &&
+    estadosEmp1[0].error_code === '131047' &&
+    consumoGlobal.length >= 1 &&
+    consumoGlobal[0].empresa_id === 'EMP-01' &&
+    consumoGlobal[0].plantillas_salientes >= 1,
+    'WhatsApp Statuses & Consumo: Registra value.statuses[] con error_code (131047) asociado a empresa_id por wamid y consolida consumo mensual'
+  );
+
+  // 57.6: Verificación de UI Multitenant en ModuloAdmin (Super Admin vs Admin de Empresa) y página pública /privacidad
+  const adminWaSuper = new ModuloAdmin({
     containerId: 'admin-wa-test',
     getFincas: () => [fincaConfigOrdeno],
     getFincaActiva: () => fincaConfigOrdeno,
     getUsuarios: () => [],
     getRolActual: () => 'superadmin',
     getUsuarioActual: () => ({ id: 'U-1', usuario: 'anuardavid', rol: 'superadmin' }),
-    getEmpresas: () => [{ id: 'EMP-1', nombre: 'VACUNO INVERSIONES' }],
-    getEmpresaActiva: () => ({ id: 'EMP-1', nombre: 'VACUNO INVERSIONES' }),
+    getEmpresas: () => [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
+    getEmpresaActiva: () => ({ id: 'EMP-01', nombre: 'INVERSIONES' }),
     getAnimales: () => animalesMangaTest,
     getTodosLosAnimales: () => animalesMangaTest
   });
-  adminWaTest.container = new MockDomElement('admin-wa-test');
-  adminWaTest.seccion = 'whatsapp';
-  adminWaTest.render();
-  const htmlAdminWa = adminWaTest.container.innerHTML;
+  adminWaSuper.container = new MockDomElement('admin-wa-test');
+  adminWaSuper.seccion = 'whatsapp';
+  adminWaSuper.render();
+  const htmlAdminWaSuper = adminWaSuper.container.innerHTML;
+
+  const adminWaEmpresa = new ModuloAdmin({
+    containerId: 'admin-wa-emp-test',
+    getFincas: () => [fincaConfigOrdeno],
+    getFincaActiva: () => fincaConfigOrdeno,
+    getUsuarios: () => [],
+    getRolActual: () => 'administrador',
+    getUsuarioActual: () => ({ id: 'U-2', usuario: 'admin_emp', rol: 'administrador', empresaId: 'EMP-01' }),
+    getEmpresas: () => [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
+    getEmpresaActiva: () => ({ id: 'EMP-01', nombre: 'INVERSIONES' }),
+    getAnimales: () => animalesMangaTest,
+    getTodosLosAnimales: () => animalesMangaTest
+  });
+  adminWaEmpresa.container = new MockDomElement('admin-wa-emp-test');
+  adminWaEmpresa.seccion = 'whatsapp';
+  adminWaEmpresa.render();
+  const htmlAdminWaEmpresa = adminWaEmpresa.container.innerHTML;
+
+  const htmlPrivacidad = fs.readFileSync('privacidad.html', 'utf8');
 
   test(
-    htmlAdminWa.includes('id="form-whatsapp-cloud-config"') &&
-    htmlAdminWa.includes('id="wa-phone-id"') &&
-    htmlAdminWa.includes('id="wa-access-token"') &&
-    htmlAdminWa.includes('id="wa-verify-token"') &&
-    htmlAdminWa.includes('id="wa-authorized-numbers"') &&
-    htmlAdminWa.includes('id="form-simulador-whatsapp"'),
-    'ModuloAdmin (Pestaña WhatsApp API): Renderiza formulario de credenciales Meta, Whitelist y Simulador interactivo en pantalla'
+    htmlAdminWaSuper.includes('Graph API v25.0') &&
+    htmlAdminWaSuper.includes('id="tabla-wa-canales"') &&
+    htmlAdminWaSuper.includes('id="form-wa-crear-canal"') &&
+    htmlAdminWaSuper.includes('id="tabla-wa-consumo-facturacion"') &&
+    htmlAdminWaSuper.includes('id="tabla-wa-ultimos-estados"') &&
+    htmlAdminWaSuper.includes('131047') &&
+    !htmlAdminWaSuper.includes('id="wa-phone-id"') &&
+    !htmlAdminWaSuper.includes('hello_world') &&
+    htmlAdminWaEmpresa.includes('https://wa.me/573225694112') &&
+    htmlAdminWaEmpresa.includes('Abrir chat') &&
+    htmlAdminWaEmpresa.includes('id="form-wa-contacto"') &&
+    htmlAdminWaEmpresa.includes('id="form-simulador-whatsapp"') &&
+    !htmlAdminWaEmpresa.includes('id="form-wa-crear-canal"') &&
+    htmlPrivacidad.includes('SOLUCIONES AC S.A.S.') &&
+    htmlPrivacidad.includes('Magangué, Bolívar, Colombia') &&
+    htmlPrivacidad.includes('Ley 1581 de 2012') &&
+    htmlPrivacidad.includes('Supabase'),
+    'ModuloAdmin & /privacidad: Renderiza vistas diferenciadas Super Admin vs Empresa (v25.0, sin hello_world) y página legal pública /privacidad'
   );
 }
 

@@ -437,3 +437,87 @@ ON CONFLICT (id) DO UPDATE SET
     usuario = EXCLUDED.usuario,
     nombre = EXCLUDED.nombre,
     password = EXCLUDED.password;
+
+-- ============================================================================
+-- 22. WHATSAPP CLOUD API v25.0 MULTITENANT (CANALES, CONTACTOS, LOGS, SESIONES)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_channels (
+    id text PRIMARY KEY,
+    phone_number_id text UNIQUE NOT NULL,
+    waba_id text,
+    display_phone_number text,
+    nombre text NOT NULL DEFAULT 'Canal WhatsApp Ganadero AD',
+    tipo text NOT NULL DEFAULT 'compartido' CHECK (tipo IN ('compartido', 'dedicado')),
+    empresa_id text REFERENCES public.empresas(id) ON DELETE SET NULL,
+    access_token_override text,
+    template_name text DEFAULT 'notificacion_ganadero_ad',
+    template_lang text DEFAULT 'es_CO',
+    activo boolean DEFAULT true,
+    created_at timestamptz DEFAULT now()
+);
+
+INSERT INTO public.whatsapp_channels (
+    id, phone_number_id, waba_id, display_phone_number, nombre,
+    tipo, empresa_id, access_token_override, template_name, template_lang, activo
+)
+VALUES (
+    'CH-SHARED-DEFAULT', '111443548633291', '118927644541032', '+57 322 5694112',
+    'Canal Compartido Ganadero AD', 'compartido', NULL, NULL, 'notificacion_ganadero_ad', 'es_CO', true
+)
+ON CONFLICT (phone_number_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_contacts (
+    id text PRIMARY KEY,
+    telefono text NOT NULL,
+    empresa_id text NOT NULL,
+    finca_id text,
+    nombre text NOT NULL DEFAULT 'Operador de Campo',
+    rol text DEFAULT 'operador',
+    activo boolean DEFAULT true,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_contacts_telefono_activo
+    ON public.whatsapp_contacts (telefono) WHERE activo = true;
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_messages_log (
+    id text PRIMARY KEY,
+    empresa_id text,
+    channel_id text REFERENCES public.whatsapp_channels(id) ON DELETE SET NULL,
+    telefono text NOT NULL,
+    direccion text NOT NULL CHECK (direccion IN ('in', 'out')),
+    tipo text NOT NULL DEFAULT 'text' CHECK (tipo IN ('text', 'template')),
+    wamid text,
+    contenido_resumen text,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_message_status (
+    id text PRIMARY KEY,
+    empresa_id text,
+    channel_id text REFERENCES public.whatsapp_channels(id) ON DELETE SET NULL,
+    wamid text NOT NULL,
+    recipient_id text,
+    status text NOT NULL,
+    error_code text,
+    error_title text,
+    error_details text,
+    timestamp timestamptz,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.whatsapp_sessions (
+    channel_id text NOT NULL REFERENCES public.whatsapp_channels(id) ON DELETE CASCADE,
+    telefono text NOT NULL,
+    empresa_id text,
+    last_inbound_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (channel_id, telefono)
+);
+
+ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_messages_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_message_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_sessions ENABLE ROW LEVEL SECURITY;
+

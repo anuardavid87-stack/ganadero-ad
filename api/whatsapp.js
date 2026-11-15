@@ -1,97 +1,119 @@
-/**
- * ============================================================================
- * ENDPOINT SERVERLESS VERCEL: /api/whatsapp
- * ============================================================================
- * Maneja las peticiones GET (Verificación del Webhook de Meta) y POST
- * (Recepción bidireccional de mensajes entrantes desde WhatsApp Cloud API).
- *
- * Lee las credenciales desde Variables de Entorno (process.env) O automáticamente
- * desde la configuración guardada dentro del programa en:
- * ⚙️ Admin -> 💬 WhatsApp API (registro SYS_WHATSAPP_CONFIG en Supabase).
- * ============================================================================
- */
+// ============================================================================
+// GANADERO AD - VERCEL SERVERLESS FUNCTION: /api/whatsapp
+// Webhook Oficial Multitenant de WhatsApp Cloud API (Meta Graph API v25.0)
+// ============================================================================
+// Variables de entorno del servidor (NUNCA en el frontend):
+//   - WHATSAPP_SYSTEM_TOKEN (token permanente de System User)
+//   - WHATSAPP_APP_SECRET   (validación HMAC-SHA256 de X-Hub-Signature-256)
+//   - WHATSAPP_VERIFY_TOKEN (verificación GET del Webhook)
+//   - SUPABASE_URL
+//   - SUPABASE_SERVICE_ROLE_KEY
+// ============================================================================
 
 import {
+    GRAPH_API_VERSION,
     verificarWebhookWhatsApp,
-    procesarWebhookPostWhatsApp
+    validarFirmaWebhookMeta,
+    procesarWebhookPostWhatsApp,
+    enviarWhatsApp,
+    cargarEstadoWhatsAppDesdeSupabase,
+    sincronizarEstadoWhatsAppConSupabase
 } from '../frontend/src/core/whatsappCloudService.js';
 
-const DEFAULT_SUPABASE_URL = 'https://jucpxyjzmbthplbvzrsj.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1Y3B4eWp6bWJ0aHBsYnZ6cnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3ODExNjMsImV4cCI6MjEwNTM1NzE2M30.EYCHnq6pUNO3cUtD1fRb7l3k-XBbrGtgYmsxkmNzDsA';
-
-async function obtenerEnvCombinado() {
-    const envCombinado = { ...(process.env || {}) };
-    if (envCombinado.WHATSAPP_ACCESS_TOKEN && envCombinado.WHATSAPP_PHONE_NUMBER_ID && envCombinado.WHATSAPP_VERIFY_TOKEN) {
-        return envCombinado;
-    }
-
-    try {
-        const supabaseUrl = (envCombinado.SUPABASE_URL || envCombinado.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/+$/, '');
-        const supabaseKey = envCombinado.SUPABASE_SERVICE_ROLE_KEY || envCombinado.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
-
-        const res = await fetch(`${supabaseUrl}/rest/v1/operaciones_diarias?id=eq.SYS_WHATSAPP_CONFIG&limit=1`, {
-            method: 'GET',
-            headers: {
-                'apikey': supabaseKey,
-                'Authorization': `Bearer ${supabaseKey}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (res.ok) {
-            const filas = await res.json();
-            const detalles = filas?.[0]?.detalles;
-            if (detalles && typeof detalles === 'object') {
-                if (!envCombinado.WHATSAPP_PHONE_NUMBER_ID && detalles.phoneNumberId) {
-                    envCombinado.WHATSAPP_PHONE_NUMBER_ID = detalles.phoneNumberId;
-                }
-                if (!envCombinado.WHATSAPP_ACCESS_TOKEN && detalles.accessToken) {
-                    envCombinado.WHATSAPP_ACCESS_TOKEN = detalles.accessToken;
-                }
-                if (!envCombinado.WHATSAPP_VERIFY_TOKEN && detalles.verifyToken) {
-                    envCombinado.WHATSAPP_VERIFY_TOKEN = detalles.verifyToken;
-                }
-                if (!envCombinado.WHATSAPP_AUTHORIZED_NUMBERS && detalles.authorizedNumbers) {
-                    envCombinado.WHATSAPP_AUTHORIZED_NUMBERS = detalles.authorizedNumbers;
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('[Webhook WhatsApp] No se pudo consultar SYS_WHATSAPP_CONFIG en Supabase:', e.message);
-    }
-
-    return envCombinado;
+function obtenerVariablesServidor() {
+    const pEnv = typeof process !== 'undefined' && process.env ? process.env : {};
+    return {
+        WHATSAPP_SYSTEM_TOKEN: pEnv.WHATSAPP_SYSTEM_TOKEN || pEnv.WHATSAPP_ACCESS_TOKEN || '',
+        WHATSAPP_APP_SECRET: pEnv.WHATSAPP_APP_SECRET || '',
+        WHATSAPP_VERIFY_TOKEN: pEnv.WHATSAPP_VERIFY_TOKEN || '',
+        SUPABASE_URL: pEnv.SUPABASE_URL || '',
+        SUPABASE_SERVICE_ROLE_KEY: pEnv.SUPABASE_SERVICE_ROLE_KEY || pEnv.SUPABASE_ANON_KEY || ''
+    };
 }
 
 export default async function handler(req, res) {
-    try {
-        const envActivo = await obtenerEnvCombinado();
+    const env = obtenerVariablesServidor();
 
-        // --------------------------------------------------------------------
-        // 1. MÉTODO GET: Verificación oficial del Webhook de Meta
-        // --------------------------------------------------------------------
-        if (req.method === 'GET') {
-            const resultado = verificarWebhookWhatsApp(req.query || {}, envActivo);
-            res.status(resultado.status).setHeader('Content-Type', 'text/plain; charset=utf-8');
-            return res.send(resultado.body);
+    // ------------------------------------------------------------------------
+    // 1. MÉTODO GET: Verificación de Webhook de Meta o Estado Seguro Servidor
+    // ------------------------------------------------------------------------
+    if (req.method === 'GET') {
+        const query = req.query || {};
+
+        if (query.action === 'status') {
+            return res.status(200).json({
+                ok: true,
+                graph_api_version: GRAPH_API_VERSION,
+                tokens: {
+                    WHATSAPP_SYSTEM_TOKEN: env.WHATSAPP_SYSTEM_TOKEN ? 'configurado ✓' : 'pendiente de configurar en servidor',
+                    WHATSAPP_APP_SECRET: env.WHATSAPP_APP_SECRET ? 'configurado ✓' : 'pendiente de configurar en servidor',
+                    WHATSAPP_VERIFY_TOKEN: env.WHATSAPP_VERIFY_TOKEN ? 'configurado ✓' : 'pendiente de configurar en servidor'
+                }
+            });
         }
 
-        // --------------------------------------------------------------------
-        // 2. MÉTODO POST: Procesamiento de mensajes entrantes de WhatsApp
-        // --------------------------------------------------------------------
-        if (req.method === 'POST') {
-            const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-            const resultado = await procesarWebhookPostWhatsApp(payload, { env: envActivo });
-            return res.status(resultado.status || 200).json(resultado.body);
-        }
-
-        res.setHeader('Allow', 'GET, POST');
-        return res.status(405).json({ error: 'Method Not Allowed' });
-    } catch (error) {
-        console.error('[Webhook WhatsApp Serverless Error]:', error);
-        return res.status(200).json({
-            status: 'error',
-            message: error.message || 'Error interno procesando el webhook'
-        });
+        const resultado = verificarWebhookWhatsApp(query, env);
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return res.status(resultado.status).send(resultado.body);
     }
+
+    // ------------------------------------------------------------------------
+    // 2. MÉTODO POST: Webhook Entrante de Meta o Envío Saliente desde Servidor
+    // ------------------------------------------------------------------------
+    if (req.method === 'POST') {
+        try {
+            const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+            const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+            await cargarEstadoWhatsAppDesdeSupabase(env);
+
+            // Envío saliente solicitado desde la aplicación (solo se ejecuta desde servidor)
+            if (payload && payload.action === 'enviar_whatsapp') {
+                const resultadoEnvio = await enviarWhatsApp(
+                    payload.empresa_id,
+                    payload.telefono,
+                    payload.mensaje || payload.plantilla,
+                    {
+                        env,
+                        tipo: payload.tipo || 'text',
+                        esPlantilla: payload.tipo === 'template'
+                    }
+                );
+                await sincronizarEstadoWhatsAppConSupabase(undefined, env);
+                return res.status(resultadoEnvio.ok ? 200 : 400).json(resultadoEnvio);
+            }
+
+            // Validación criptográfica X-Hub-Signature-256 con WHATSAPP_APP_SECRET
+            const signatureHeader =
+                req.headers?.['x-hub-signature-256'] ||
+                req.headers?.['X-Hub-Signature-256'] ||
+                '';
+
+            if (env.WHATSAPP_APP_SECRET || signatureHeader) {
+                const validacion = validarFirmaWebhookMeta(rawBody, signatureHeader, env.WHATSAPP_APP_SECRET);
+                if (!validacion.ok) {
+                    return res.status(401).json({ error: validacion.error });
+                }
+            }
+
+            // Procesar evento multitenant y responder 200 a Meta
+            const resultado = await procesarWebhookPostWhatsApp(payload, {
+                env,
+                rawBody,
+                signatureHeader,
+                validarFirma: Boolean(env.WHATSAPP_APP_SECRET)
+            });
+
+            await sincronizarEstadoWhatsAppConSupabase(undefined, env);
+            return res.status(resultado.status).json(resultado.body);
+        } catch (error) {
+            return res.status(200).json({
+                status: 'EVENT_RECEIVED',
+                error: error?.message || 'Payload procesado con advertencias'
+            });
+        }
+    }
+
+    res.setHeader('Allow', ['GET', 'POST']);
+    return res.status(405).json({ error: 'Method Not Allowed' });
 }

@@ -14,7 +14,15 @@
       "destination": "/$1"
     },
     {
-      "source": "/((?!api/|.*\\.[\\w]+$).*)",
+      "source": "/privacidad",
+      "destination": "/privacidad.html"
+    },
+    {
+      "source": "/privacidad/",
+      "destination": "/privacidad.html"
+    },
+    {
+      "source": "/((?!api/|privacidad|.*\\.[\\w]+$).*)",
       "destination": "/index.html"
     }
   ],
