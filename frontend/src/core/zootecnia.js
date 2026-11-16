@@ -21,6 +21,18 @@ export const PARAMETROS_ESPECIES = {
 };
 
 /**
+ * Retorna la fecha local actual del dispositivo en formato ISO YYYY-MM-DD
+ * sin desfase horario UTC (evita que después de las 7:00 PM en Colombia cambie al día siguiente).
+ */
+export function obtenerFechaHoyLocal(fechaBase = null) {
+  const dt = fechaBase instanceof Date && !isNaN(fechaBase.getTime()) ? fechaBase : new Date();
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Convierte cualquier cadena de fecha (YYYY-MM-DD o DD/MM/YYYY) u objeto Date en Date válido.
  */
 export function parsearFechaObjeto(val) {

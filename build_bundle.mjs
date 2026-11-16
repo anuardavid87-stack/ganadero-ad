@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 
 const files = [
   'frontend/src/core/zootecnia.js',
+  'frontend/src/core/offlineManager.js',
   'frontend/src/core/auditorIA.js',
   'frontend/src/core/finanzas.js',
   'frontend/src/core/supabaseSync.js',

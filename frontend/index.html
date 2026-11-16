@@ -120,8 +120,20 @@
           </div>
         </div>
 
-        <!-- DERECHA: Toggle Rápido de Tema + Avatar Compacto (Solo Iniciales) con Menú Desplegable -->
+        <!-- DERECHA: Modo Sin Conexión + Toggle Rápido de Tema + Avatar Compacto -->
         <div class="flex items-center gap-2 shrink-0">
+          <!-- Botón de Modo Trabajo Sin Conexión (Descargar Inventario / Sincronizar Pendientes) -->
+          <button
+            id="btn-modo-offline-header"
+            type="button"
+            class="px-2.5 h-9 rounded-xl border bovi-icon-btn flex items-center gap-1.5 text-xs font-bold transition cursor-pointer active:scale-95"
+            title="Modo Trabajo Sin Conexión: Descargar inventario al dispositivo o sincronizar cambios pendientes"
+          >
+            <span id="icono-modo-offline-header">📶</span>
+            <span id="texto-modo-offline-header" class="hidden sm:inline">Sin Red</span>
+            <span id="badge-cola-offline-header" class="hidden px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white">0</span>
+          </button>
+
           <!-- Botón de Cambio Rápido de Tema (Sol / Luna) -->
           <button
             id="btn-theme-toggle-header"
@@ -186,6 +198,19 @@
                     <span>Tema de Interfaz</span>
                   </span>
                   <span id="theme-label-dropdown" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-500/10">Claro Pastel</span>
+                </button>
+
+                <!-- Modo Sin Conexión dentro del Dropdown -->
+                <button
+                  id="btn-modo-offline-dropdown"
+                  type="button"
+                  class="w-full px-3 py-2 rounded-xl text-xs font-semibold bovi-dropdown-item flex items-center justify-between transition cursor-pointer"
+                >
+                  <span class="flex items-center gap-2.5">
+                    <span>📶</span>
+                    <span>Trabajar Sin Conexión</span>
+                  </span>
+                  <span id="label-offline-dropdown" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-700">Listo</span>
                 </button>
 
                 <!-- Copia de Seguridad -->
@@ -281,6 +306,9 @@
     👁️ Modo Consulta Activo: Permisos de sólo lectura habilitados.
   </div>
 
+  <!-- BANNER DE MODO CAMPO SIN CONEXIÓN / CAMBIOS PENDIENTES -->
+  <div id="banner-modo-offline-activo" class="bg-amber-100 border-b border-amber-300 text-amber-950 px-4 py-2 text-xs font-bold text-center hidden"></div>
+
   <!-- ====================================================================== -->
   <!-- CONTENEDOR DE PANTALLAS DINÁMICAS                                      -->
   <!-- ====================================================================== -->
@@ -348,6 +376,9 @@
 
   <!-- CONTENEDOR PARA MODAL FICHA ZOOTÉCNICA INDIVIDUAL -->
   <div id="modal-ficha-animal"></div>
+
+  <!-- CONTENEDOR PARA MODAL DE MODO TRABAJO SIN CONEXIÓN (DESCARGA INVENTARIO + COLA SYNC) -->
+  <div id="modal-modo-offline"></div>
 
   <!-- ====================================================================== -->
   <!-- NAVEGACIÓN INFERIOR MOBILE FIRST (ERGONÓMICA EN CAMPO)                  -->
@@ -491,6 +522,6 @@
     </div>
   </div>
 
-  <script src="./bundle.js?v=1794758970032"></script>
+  <script src="./bundle.js?v=1794857087218"></script>
 </body>
 </html>

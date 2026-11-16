@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-15T16:09:30.016Z
+ * Generado automáticamente: 2026-11-16T19:24:47.200Z
  */
 (function() {
   "use strict";
@@ -31,6 +31,18 @@ const PARAMETROS_ESPECIES = {
     pesoBaseUGG: 500
   }
 };
+
+/**
+ * Retorna la fecha local actual del dispositivo en formato ISO YYYY-MM-DD
+ * sin desfase horario UTC (evita que después de las 7:00 PM en Colombia cambie al día siguiente).
+ */
+function obtenerFechaHoyLocal(fechaBase = null) {
+  const dt = fechaBase instanceof Date && !isNaN(fechaBase.getTime()) ? fechaBase : new Date();
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 /**
  * Convierte cualquier cadena de fecha (YYYY-MM-DD o DD/MM/YYYY) u objeto Date en Date válido.
@@ -323,6 +335,277 @@ function calcularProyeccionServicio(fechaServicio, especie = 'bovino') {
   };
 }
 
+
+
+// ============================================================================
+// ARCHIVO: frontend/src/core/offlineManager.js
+// ============================================================================
+/**
+ * GANADERO AD - MOTOR DE TRABAJO EN CAMPO SIN CONEXIÓN (OFFLINE-FIRST ENGINE)
+ * Permite descargar el inventario completo al dispositivo (IndexedDB + localStorage),
+ * trabajar sin señal en corral/potrero/manga registrando pesajes, leche, reproducción o gastos,
+ * y encolar de forma persistente todos los cambios para enviarlos automáticamente a Supabase
+ * apenas el dispositivo recupere conexión a internet.
+ */
+
+const IDB_NAME_OFFLINE = 'ganadero_ad_offline_field_v1';
+const IDB_VERSION_OFFLINE = 1;
+const STORE_SNAPSHOT = 'inventario_snapshots';
+
+class OfflineFieldManager {
+  constructor() {
+    this._dbPromise = null;
+  }
+
+  _abrirDB() {
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      return Promise.resolve(null);
+    }
+    if (this._dbPromise) return this._dbPromise;
+
+    this._dbPromise = new Promise((resolve) => {
+      try {
+        const req = indexedDB.open(IDB_NAME_OFFLINE, IDB_VERSION_OFFLINE);
+        req.onupgradeneeded = (ev) => {
+          const db = ev.target.result;
+          if (!db.objectStoreNames.contains(STORE_SNAPSHOT)) {
+            db.createObjectStore(STORE_SNAPSHOT, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (ev) => resolve(ev.target.result);
+        req.onerror = () => resolve(null);
+      } catch (_err) {
+        resolve(null);
+      }
+    });
+    return this._dbPromise;
+  }
+
+  /**
+   * Guarda una copia completa del estado e inventario en IndexedDB (soporta >50MB en celulares)
+   * además de metadatos de preparación para trabajo en campo sin internet.
+   */
+  async guardarSnapshotInventario(state, metaExtra = {}) {
+    if (!state || typeof state !== 'object') return { ok: false };
+
+    const ahoraIso = new Date().toISOString();
+    const resumenMeta = {
+      descargadoEn: metaExtra.descargadoEn || ahoraIso,
+      empresaId: state.empresaActivaId || null,
+      fincaActivaId: state.fincaActivaId || null,
+      totalFincas: Array.isArray(state.fincas) ? state.fincas.length : 0,
+      totalAnimales: Array.isArray(state.animales)
+        ? state.animales.filter((a) => a && (a.estadoVida || a.estado || 'activo') === 'activo').length
+        : 0,
+      totalPesajes: Array.isArray(state.pesajes) ? state.pesajes.length : 0,
+      ...metaExtra
+    };
+
+    state._offlineMeta = {
+      ...(state._offlineMeta || {}),
+      ...resumenMeta
+    };
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('bovitrack_offline_meta_v1', JSON.stringify(state._offlineMeta));
+      } catch (_e) {}
+    }
+
+    const db = await this._abrirDB();
+    if (!db) {
+      return { ok: true, via: 'localStorage', meta: state._offlineMeta };
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([STORE_SNAPSHOT], 'readwrite');
+        const store = tx.objectStore(STORE_SNAPSHOT);
+        store.put({
+          id: 'SNAPSHOT_PRINCIPAL',
+          actualizadoEn: ahoraIso,
+          meta: state._offlineMeta,
+          state: JSON.parse(JSON.stringify(state))
+        });
+        tx.oncomplete = () => resolve({ ok: true, via: 'IndexedDB', meta: state._offlineMeta });
+        tx.onerror = () => resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      } catch (_err) {
+        resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      }
+    });
+  }
+
+  /**
+   * Recupera el snapshot completo desde IndexedDB (ideal cuando localStorage en móvil se truncó por cuota).
+   */
+  async cargarSnapshotInventario() {
+    const db = await this._abrirDB();
+    if (!db) return null;
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction([STORE_SNAPSHOT], 'readonly');
+        const store = tx.objectStore(STORE_SNAPSHOT);
+        const req = store.get('SNAPSHOT_PRINCIPAL');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch (_err) {
+        resolve(null);
+      }
+    });
+  }
+
+  /**
+   * Registra un cambio realizado sin conexión (o pendiente de subir) en la cola persistente,
+   * y protege el ejemplar modificado para que ninguna descarga posterior pise su peso/estado antes de subirlo.
+   */
+  registrarCambioPendiente(state, {
+    modulo = 'operacion',
+    tag = '',
+    animalId = '',
+    fincaId = '',
+    fincaNombre = '',
+    descripcion = 'Cambio registrado en dispositivo'
+  } = {}) {
+    if (!state || typeof state !== 'object') return null;
+
+    if (!Array.isArray(state._colaSincronizacionOffline)) {
+      state._colaSincronizacionOffline = [];
+    }
+    if (!state._animalesPendientesSync || typeof state._animalesPendientesSync !== 'object') {
+      state._animalesPendientesSync = {};
+    }
+
+    const ahoraIso = new Date().toISOString();
+    const ahoraTs = Date.now();
+    const cleanTag = String(tag || '').trim().toUpperCase();
+
+    if (cleanTag || animalId) {
+      const claveTag = `${fincaId || state.fincaActivaId || 'SIN_FINCA'}__${cleanTag}`;
+      const infoDirty = {
+        timestamp: ahoraTs,
+        fechaIso: ahoraIso,
+        modulo,
+        fincaId: fincaId || state.fincaActivaId || null,
+        tag: cleanTag,
+        animalId: animalId || null
+      };
+      if (cleanTag) state._animalesPendientesSync[claveTag] = infoDirty;
+      if (animalId) state._animalesPendientesSync[animalId] = infoDirty;
+    }
+
+    // Deduplicar si es el mismo animal + módulo en la misma cola pendiente
+    const claveItem = `${modulo}__${fincaId || state.fincaActivaId || ''}__${cleanTag || animalId || descripcion}`;
+    const item = {
+      id: `OFF-${ahoraTs}-${Math.random().toString(36).slice(2, 6)}`,
+      clave: claveItem,
+      fechaHora: ahoraIso,
+      modulo,
+      tag: cleanTag,
+      animalId: animalId || '',
+      fincaId: fincaId || state.fincaActivaId || '',
+      fincaNombre: fincaNombre || '',
+      descripcion
+    };
+
+    const idxPrev = state._colaSincronizacionOffline.findIndex((x) => x && x.clave === claveItem);
+    if (idxPrev >= 0) {
+      state._colaSincronizacionOffline[idxPrev] = item;
+    } else {
+      state._colaSincronizacionOffline.unshift(item);
+    }
+
+    // Mantener tope razonable de historial de cola descriptiva (los datos reales viven completos en state.*)
+    if (state._colaSincronizacionOffline.length > 1500) {
+      state._colaSincronizacionOffline = state._colaSincronizacionOffline.slice(0, 1500);
+    }
+
+    state._hayCambiosOfflinePendientes = true;
+    return item;
+  }
+
+  /**
+   * Limpia las banderas de pendientes únicamente después de confirmar subida exitosa a Supabase.
+   */
+  limpiarColaSincronizada(state) {
+    if (!state || typeof state !== 'object') return 0;
+    const cantidad = Array.isArray(state._colaSincronizacionOffline)
+      ? state._colaSincronizacionOffline.length
+      : 0;
+    state._colaSincronizacionOffline = [];
+    state._animalesPendientesSync = {};
+    state._hayCambiosOfflinePendientes = false;
+    if (!state._offlineMeta || typeof state._offlineMeta !== 'object') {
+      state._offlineMeta = {};
+    }
+    state._offlineMeta.ultimaSincronizacionSubida = new Date().toISOString();
+    return cantidad;
+  }
+
+  /**
+   * Solicita al Service Worker precachear activos estáticos para asegurar apertura sin red.
+   */
+  async calentarCacheServiceWorker() {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return false;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sw = reg?.active || navigator.serviceWorker.controller;
+      if (sw && typeof sw.postMessage === 'function') {
+        sw.postMessage({ type: 'WARM_OFFLINE_CACHE' });
+        return true;
+      }
+    } catch (_e) {}
+    return false;
+  }
+
+  /**
+   * Retorna estado consolidado del modo sin conexión para mostrar en la interfaz.
+   */
+  obtenerResumenOffline(state, online = true, fincasPermitidas = null) {
+    let meta = state?._offlineMeta || null;
+    if (!meta && typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('bovitrack_offline_meta_v1');
+        if (raw) meta = JSON.parse(raw);
+      } catch (_e) {}
+    }
+
+    const fincasLista = Array.isArray(fincasPermitidas)
+      ? fincasPermitidas
+      : (Array.isArray(state?.fincas) ? state.fincas : []);
+    const fincasSet = new Set(fincasLista.map((f) => f && f.id).filter(Boolean));
+
+    const animalesDisponibles = Array.isArray(state?.animales)
+      ? state.animales.filter((a) => {
+          if (!a) return false;
+          const activo = (a.estadoVida || a.estado || 'activo') === 'activo' && !a.motivoBaja;
+          if (!activo) return false;
+          return fincasSet.size > 0 ? fincasSet.has(a.fincaId) : true;
+        }).length
+      : 0;
+
+    const pesajesDisponibles = Array.isArray(state?.pesajes)
+      ? state.pesajes.filter((p) => p && (fincasSet.size === 0 || !p.fincaId || fincasSet.has(p.fincaId))).length
+      : 0;
+
+    const cola = Array.isArray(state?._colaSincronizacionOffline)
+      ? state._colaSincronizacionOffline
+      : [];
+
+    return {
+      online: Boolean(online),
+      listoParaOffline: animalesDisponibles > 0 || fincasLista.length > 0,
+      fincasLocales: fincasLista.length,
+      animalesLocales: animalesDisponibles,
+      pesajesLocales: pesajesDisponibles,
+      pendientesCount: cola.length,
+      hayCambiosPendientes: Boolean(state?._hayCambiosOfflinePendientes || cola.length > 0),
+      colaPendiente: cola,
+      descargadoEn: meta?.descargadoEn || null,
+      ultimaSincronizacionSubida: meta?.ultimaSincronizacionSubida || null
+    };
+  }
+}
 
 
 // ============================================================================
@@ -621,9 +904,14 @@ function detectarAlertasZootecnicas(animales = [], fechaReferencia = new Date())
 // ARCHIVO: frontend/src/core/finanzas.js
 // ============================================================================
 /**
- * BOVITRACK PRO PWA - MOTOR FINANCIERO AGROTECNOLÓGICO
- * Cálculos de costos fijos, cuotas de amortización diferidas, valorización de leche y carne, y ROI.
+ * GANADERO AD - MOTOR FINANCIERO, INVERSIONES DIFERIDAS, UTILIDAD BIOLÓGICA (NIC 41) Y AUDITORÍA DE CAMPO
+ * Estándares aplicados:
+ *  - NIC 41 / IAS 41 Agricultura (Valorización biológica de activos ganaderos sin doble conteo en ventas)
+ *  - Metodología CREA / FEDEGÁN / IFCN / Ranching for Profit (Producción equivalente de carne y leche, UGG/Ha, EBITDA)
+ *  - Amortización lineal diferida por meses de inversiones CAPEX agropecuarias
  */
+
+
 
 function consolidarCostosFijos(costos = {}) {
   return (
@@ -639,10 +927,10 @@ function consolidarCostosFijos(costos = {}) {
 function sumarCuotasInversionesDiferidas(inversiones = []) {
   if (!Array.isArray(inversiones)) return 0;
   return inversiones
-    .filter((inv) => (inv.estado || '').toLowerCase() === 'activa')
+    .filter((inv) => (inv.estado || 'activa').toLowerCase() === 'activa')
     .reduce((acum, inv) => {
-      const monto = parseFloat(inv.montoTotalInversion || inv.montoTotal) || 0;
-      const plazo = parseInt(inv.plazoMesesDiferido || inv.plazoMeses) || 1;
+      const monto = parseFloat(inv.montoTotalInversion || inv.montoTotal || inv.monto) || 0;
+      const plazo = Math.max(1, parseInt(inv.plazoMesesDiferido || inv.plazoMeses) || 1);
       const cuota = inv.cuotaMensual ? parseFloat(inv.cuotaMensual) : monto / plazo;
       return acum + cuota;
     }, 0);
@@ -658,7 +946,7 @@ function computarRendimientoFinanciero({
 }) {
   const precioLeche = parseFloat(finca?.precioLecheLitro || finca?.precios?.lecheLitro || 2400);
   const precioCarne = parseFloat(finca?.precioCarneKgPie || finca?.precios?.kiloEnPie || 8800);
-  const areaHa = parseFloat(finca?.areaTotalHa || finca?.areaHa || 1);
+  const areaHa = parseFloat(finca?.areaTotalHa || finca?.areaHa || finca?.hectareas || 1);
 
   // Costos
   const totalFijos = consolidarCostosFijos(costosFijos);
@@ -696,6 +984,1060 @@ function computarRendimientoFinanciero({
       ingresoPorHa: areaHa > 0 ? Math.round(ingresoTotalMes / areaHa) : 0,
       margenPorHa: areaHa > 0 ? Math.round(margenNeto / areaHa) : 0
     }
+  };
+}
+
+// ============================================================================
+// 1. MOTOR DE AMORTIZACIÓN DE INVERSIONES DIFERIDAS POR MESES
+// ============================================================================
+
+function ymToIndex(ymStr) {
+  if (!ymStr || typeof ymStr !== 'string') return null;
+  const m = ymStr.slice(0, 7).match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 12 + (parseInt(m[2], 10) - 1);
+}
+
+function indexToYm(idx) {
+  const y = Math.floor(idx / 12);
+  const m = (idx % 12) + 1;
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Calcula cuánto impacta una inversión diferida en un período dado para que
+ * el monto NO entre todo en un solo mes sino repartido en N cuotas mensuales.
+ */
+function calcularAmortizacionInversionEnPeriodo(inv, {
+  periodoFiltro = 'MES_ACTUAL',
+  fechaDesde = null,
+  fechaHasta = null,
+  fechaReferencia = null
+} = {}) {
+  if (!inv) {
+    return {
+      montoTotal: 0,
+      plazoMeses: 1,
+      cuotaMensual: 0,
+      mesesActivosEnPeriodo: 0,
+      impactoPeriodo: 0,
+      mesesTranscurridos: 0,
+      amortizadoAcumulado: 0,
+      saldoPorDiferir: 0,
+      porcentajeAvance: 0,
+      mesInicio: '',
+      mesFin: '',
+      activa: false
+    };
+  }
+
+  const hoyStr = fechaReferencia || obtenerFechaHoyLocal();
+  const fechaIniStr = String(inv.fecha || inv.fechaInicio || hoyStr).slice(0, 10);
+  const montoTotal = Math.max(0, Number(inv.monto ?? inv.montoTotalInversion ?? inv.montoTotal ?? 0));
+  const plazoMeses = Math.max(1, parseInt(inv.plazoMeses ?? inv.plazoMesesDiferido ?? 1, 10) || 1);
+  const cuotaMensual = montoTotal / plazoMeses;
+
+  const idxInicio = ymToIndex(fechaIniStr) ?? ymToIndex(hoyStr) ?? (2026 * 12);
+  const idxFin = idxInicio + plazoMeses - 1;
+  const idxHoy = ymToIndex(hoyStr) ?? idxInicio;
+
+  // Meses transcurridos hasta hoy (para barra de progreso de amortización)
+  const mesesTranscurridos = idxHoy < idxInicio
+    ? 0
+    : Math.min(plazoMeses, idxHoy - idxInicio + 1);
+  const amortizadoAcumulado = Math.round(cuotaMensual * mesesTranscurridos);
+  const saldoPorDiferir = Math.max(0, Math.round(montoTotal - amortizadoAcumulado));
+  const porcentajeAvance = Math.min(100, Math.round((mesesTranscurridos / plazoMeses) * 100));
+
+  // Determinar ventana de meses [winStart, winEnd] del período evaluado
+  let winStart = idxHoy;
+  let winEnd = idxHoy;
+
+  if (fechaDesde && fechaHasta) {
+    const iDesde = ymToIndex(fechaDesde);
+    const iHasta = ymToIndex(fechaHasta);
+    if (iDesde !== null && iHasta !== null && iHasta >= iDesde) {
+      // Si el rango está dentro del mismo mes o es menor a 45 días, prorratear por días/30 o 1 cuota mensual
+      const d1 = parsearFechaObjeto(fechaDesde);
+      const d2 = parsearFechaObjeto(fechaHasta);
+      const diasRango = (!isNaN(d1.getTime()) && !isNaN(d2.getTime()))
+        ? Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1)
+        : 30;
+
+      const solapeIni = Math.max(idxInicio, iDesde);
+      const solapeFin = Math.min(idxFin, iHasta);
+      if (solapeFin < solapeIni) {
+        return {
+          montoTotal,
+          plazoMeses,
+          cuotaMensual: Math.round(cuotaMensual),
+          mesesActivosEnPeriodo: 0,
+          impactoPeriodo: 0,
+          mesesTranscurridos,
+          amortizadoAcumulado,
+          saldoPorDiferir,
+          porcentajeAvance,
+          mesInicio: indexToYm(idxInicio),
+          mesFin: indexToYm(idxFin),
+          activa: idxHoy <= idxFin
+        };
+      }
+      const mesesSolapados = solapeFin - solapeIni + 1;
+      const factorEquivalente = (iDesde === iHasta || (diasRango >= 27 && diasRango <= 31 && mesesSolapados === 1))
+        ? 1
+        : Math.min(plazoMeses, Number((diasRango / 30).toFixed(4)));
+      const mesesEfectivos = Math.min(mesesSolapados, factorEquivalente);
+      return {
+        montoTotal,
+        plazoMeses,
+        cuotaMensual: Math.round(cuotaMensual),
+        mesesActivosEnPeriodo: Number(mesesEfectivos.toFixed(2)),
+        impactoPeriodo: Math.round(cuotaMensual * mesesEfectivos),
+        mesesTranscurridos,
+        amortizadoAcumulado,
+        saldoPorDiferir,
+        porcentajeAvance,
+        mesInicio: indexToYm(idxInicio),
+        mesFin: indexToYm(idxFin),
+        activa: idxHoy <= idxFin
+      };
+    }
+  }
+
+  if (periodoFiltro === 'MES_ACTUAL') {
+    winStart = idxHoy;
+    winEnd = idxHoy;
+  } else if (/^\d{4}-\d{2}$/.test(periodoFiltro)) {
+    const idxMes = ymToIndex(periodoFiltro);
+    winStart = idxMes ?? idxHoy;
+    winEnd = winStart;
+  } else if (periodoFiltro === 'ULTIMOS_90') {
+    winStart = idxHoy - 2;
+    winEnd = idxHoy;
+  } else if (periodoFiltro === 'ANIO_ACTUAL') {
+    const anio = parseInt(hoyStr.slice(0, 4), 10) || new Date().getFullYear();
+    winStart = anio * 12;
+    winEnd = idxHoy;
+  } else if (periodoFiltro === 'ALL') {
+    winStart = idxInicio;
+    winEnd = Math.max(idxInicio, idxHoy);
+  }
+
+  const solapeInicio = Math.max(idxInicio, winStart);
+  const solapeFinal = Math.min(idxFin, winEnd);
+  const mesesActivosEnPeriodo = solapeFinal >= solapeInicio ? (solapeFinal - solapeInicio + 1) : 0;
+  const impactoPeriodo = Math.round(cuotaMensual * mesesActivosEnPeriodo);
+
+  return {
+    montoTotal,
+    plazoMeses,
+    cuotaMensual: Math.round(cuotaMensual),
+    mesesActivosEnPeriodo,
+    impactoPeriodo,
+    mesesTranscurridos,
+    amortizadoAcumulado,
+    saldoPorDiferir,
+    porcentajeAvance,
+    mesInicio: indexToYm(idxInicio),
+    mesFin: indexToYm(idxFin),
+    activa: idxHoy <= idxFin && (inv.estado || 'activa').toLowerCase() !== 'anulada'
+  };
+}
+
+// ============================================================================
+// 2. MOTOR DE INFORME DE UTILIDAD INTEGRAL POR FINCA (ESTÁNDAR MUNDIAL NIC 41 / CREA)
+// ============================================================================
+
+/**
+ * Calcula la utilidad económica y biológica real de una finca en un período:
+ * - Leche según el último pesaje registrado (si NO hay pesaje de leche en la finca => $0 / Sin ordeño)
+ * - Ganancia de peso de todo el ganado (con respaldo al último dato de pesaje de la finca)
+ * - Partos / nacimientos registrados como ganancia biológica del ternero (ej. 30 kg × $/kg en sistema)
+ * - Todos los costos directos, gastos administrativos, nómina, cuotas diferidas de inversiones y mortalidad NIC 41
+ */
+function calcularInformeUtilidadPorFinca({
+  finca,
+  animales = [],
+  pesajes = [],
+  operacionesDiarias = [],
+  movimientosContables = [],
+  pagosNomina = [],
+  costosFijosFinca = {},
+  inversiones = [],
+  fechaDesde = null,
+  fechaHasta = null,
+  pesoBaseNacimientoKg = 30,
+  precioLecheOverride = null,
+  precioCarneOverride = null
+} = {}) {
+  const hoyStr = obtenerFechaHoyLocal();
+  const hastaStr = fechaHasta || hoyStr;
+  const desdeStr = fechaDesde || `${hastaStr.slice(0, 8)}01`;
+
+  const dtDesde = parsearFechaObjeto(desdeStr);
+  const dtHasta = parsearFechaObjeto(hastaStr);
+  const diasPeriodo = (!isNaN(dtDesde.getTime()) && !isNaN(dtHasta.getTime()) && dtHasta >= dtDesde)
+    ? Math.max(1, Math.round((dtHasta.getTime() - dtDesde.getTime()) / 86400000) + 1)
+    : 30;
+
+  const fincaId = finca?.id || '';
+  const nombreFinca = finca?.nombre || 'Predio Seleccionado';
+  const areaHa = Math.max(0, Number(finca?.areaHa || finca?.hectareas || finca?.areaTotalHa || 0));
+  const precioLecheLitro = precioLecheOverride !== null && precioLecheOverride !== undefined && Number(precioLecheOverride) > 0
+    ? Number(precioLecheOverride)
+    : Number(finca?.precioLecheLitro || finca?.precios?.lecheLitro || 2450);
+  const precioCarneKgPie = precioCarneOverride !== null && precioCarneOverride !== undefined && Number(precioCarneOverride) > 0
+    ? Number(precioCarneOverride)
+    : Number(finca?.precioCarneKgPie || finca?.precios?.kiloEnPie || 8900);
+  const pesoTerneroDefault = Math.max(1, Number(pesoBaseNacimientoKg) || 30);
+
+  // Filtrar animales pertenecientes a esta finca
+  const animalesFincaTodos = (animales || []).filter((a) => a && (!fincaId || (a.fincaId || a.finca_id) === fincaId));
+  const animalesActivos = animalesFincaTodos.filter(
+    (a) => (a.estadoVida || a.estado || 'activo') === 'activo' && !a.motivoBaja
+  );
+
+  // Operaciones y pesajes de esta finca
+  const pesajesFinca = (pesajes || []).filter((p) => p && (!fincaId || (p.fincaId || p.finca_id) === fincaId));
+  const opsFinca = (operacionesDiarias || []).filter((op) => op && (!fincaId || (op.fincaId || op.finca_id) === fincaId));
+
+  // --------------------------------------------------------------------------
+  // A) PRODUCCIÓN DE LECHE (Basado en último pesaje de leche; si no hay pesajes => SIN ORDEÑO = $0)
+  // --------------------------------------------------------------------------
+  const eventosLechePorAnimal = new Map(); // clave tag/id -> { litros, fecha }
+  let fechaUltimoPesajeLecheFinca = '';
+  let totalRegistrosLecheHistoricos = 0;
+
+  // 1. Revisar historialEventos de cada animal de la finca
+  for (const a of animalesActivos) {
+    const claveA = a.id || String(a.identificacionTag || a.numero || '').trim().toUpperCase();
+    const evs = Array.isArray(a.historialEventos) ? a.historialEventos : [];
+    for (const ev of evs) {
+      if (!ev || (ev.tipo !== 'pesaje_leche' && ev.tipo !== 'leche')) continue;
+      const litros = Number(ev.litros ?? ev.totalLitros ?? 0);
+      if (litros > 0) {
+        totalRegistrosLecheHistoricos++;
+        const fEv = String(ev.fecha || '').slice(0, 10);
+        if (fEv > fechaUltimoPesajeLecheFinca) fechaUltimoPesajeLecheFinca = fEv;
+        const prev = eventosLechePorAnimal.get(claveA);
+        if (!prev || fEv >= prev.fecha) {
+          eventosLechePorAnimal.set(claveA, { litros, fecha: fEv });
+        }
+      }
+    }
+    // También considerar promedioLecheDiariaL cargado explícitamente en el animal
+    const promDirecto = Number(a.promedioLecheDiariaL ?? a.produccionLecheDiaria ?? 0);
+    if (promDirecto > 0 && !eventosLechePorAnimal.has(claveA)) {
+      totalRegistrosLecheHistoricos++;
+      eventosLechePorAnimal.set(claveA, { litros: promDirecto, fecha: a.fechaUltimoControlLeche || '' });
+    }
+  }
+
+  // 2. Revisar operacionesDiarias de leche de la finca
+  for (const op of opsFinca) {
+    const acc = String(op.accion || op.modulo || '').toLowerCase();
+    if (acc !== 'pesaje_leche' && acc !== 'leche' && acc !== 'lecheria') continue;
+    const fOp = String(op.fecha || '').slice(0, 10);
+    let litrosOp = Number(op.litros ?? op.totalLitros ?? 0);
+    if (!litrosOp && typeof op.detalle === 'string') {
+      const mLit = op.detalle.match(/(\d+(?:\.\d+)?)\s*L/i);
+      if (mLit) litrosOp = parseFloat(mLit[1]);
+    }
+    if (litrosOp > 0) {
+      totalRegistrosLecheHistoricos++;
+      if (fOp > fechaUltimoPesajeLecheFinca) fechaUltimoPesajeLecheFinca = fOp;
+      const tagOp = String(op.tag || op.animalTag || '').trim().toUpperCase();
+      const anmMatch = animalesActivos.find(
+        (x) => (op.animalId && x.id === op.animalId) || (tagOp && String(x.identificacionTag || x.numero || '').trim().toUpperCase() === tagOp)
+      );
+      if (anmMatch) {
+        const claveA = anmMatch.id || tagOp;
+        const prev = eventosLechePorAnimal.get(claveA);
+        if (!prev || fOp >= prev.fecha) {
+          eventosLechePorAnimal.set(claveA, { litros: litrosOp, fecha: fOp });
+        }
+      } else if (tagOp) {
+        const prev = eventosLechePorAnimal.get(tagOp);
+        if (!prev || fOp >= prev.fecha) {
+          eventosLechePorAnimal.set(tagOp, { litros: litrosOp, fecha: fOp });
+        }
+      }
+    }
+  }
+
+  const tieneOrdeno = totalRegistrosLecheHistoricos > 0 && eventosLechePorAnimal.size > 0;
+  let litrosDiariosFinca = 0;
+  if (tieneOrdeno) {
+    for (const item of eventosLechePorAnimal.values()) {
+      litrosDiariosFinca += Number(item.litros) || 0;
+    }
+  }
+  litrosDiariosFinca = Number(litrosDiariosFinca.toFixed(1));
+  const vacasEnOrdeno = tieneOrdeno ? eventosLechePorAnimal.size : 0;
+  const litrosProducidosPeriodo = tieneOrdeno ? Number((litrosDiariosFinca * diasPeriodo).toFixed(1)) : 0;
+  const ingresoLeche = tieneOrdeno ? Math.round(litrosProducidosPeriodo * precioLecheLitro) : 0;
+
+  // --------------------------------------------------------------------------
+  // B) PARTOS / NACIMIENTOS EN EL PERÍODO (Ganancia biológica de la cría al nacer)
+  // --------------------------------------------------------------------------
+  const partosDedupMap = new Map(); // clave única cría o madre+fecha -> { fecha, pesoKg, tagCria, madreTag }
+
+  const registrarPartoPeriodo = ({ fecha, pesoKg, tagCria, madreTag }) => {
+    const f = String(fecha || '').slice(0, 10);
+    if (!f || f < desdeStr || f > hastaStr) return;
+    const pesoReal = Number(pesoKg) > 0 ? Number(pesoKg) : pesoTerneroDefault;
+    const cTag = String(tagCria || '').trim().toUpperCase();
+    const mTag = String(madreTag || '').trim().toUpperCase();
+    const clave = cTag ? `CRIA__${cTag}` : `MADRE__${mTag}__${f}`;
+    if (!partosDedupMap.has(clave)) {
+      partosDedupMap.set(clave, {
+        fecha: f,
+        pesoKg: pesoReal,
+        tagCria: cTag,
+        madreTag: mTag
+      });
+    }
+  };
+
+  for (const a of animalesFincaTodos) {
+    const mTag = a.identificacionTag || a.numero || '';
+    if (Array.isArray(a.partosPrevios)) {
+      for (const p of a.partosPrevios) {
+        if (!p) continue;
+        registrarPartoPeriodo({
+          fecha: p.fechaParto || p.fecha,
+          pesoKg: p.pesoAlNacerKg ?? p.pesoCria ?? p.peso,
+          tagCria: p.tagCria || p.criaTag,
+          madreTag: mTag
+        });
+      }
+    }
+    if (Array.isArray(a.historialEventos)) {
+      for (const ev of a.historialEventos) {
+        if (!ev || ev.tipo !== 'parto') continue;
+        registrarPartoPeriodo({
+          fecha: ev.fecha,
+          pesoKg: ev.pesoAlNacerKg ?? ev.pesoCria,
+          tagCria: ev.criaTag || ev.tagCria,
+          madreTag: mTag
+        });
+      }
+    }
+    // Terneros en inventario cuya fechaNacimiento está dentro del período evaluado
+    const fNac = String(a.fechaNacimiento || a.fecha_nacimiento || '').slice(0, 10);
+    if (fNac && fNac >= desdeStr && fNac <= hastaStr) {
+      const pNac = Number(a.pesoAlNacer || a.pesoNacimiento || a.pesoAlNacerKg || 0);
+      // Si acaba de nacer en la misma fecha de su único pesaje, ese peso corresponde al nacimiento
+      const pInicial = pNac > 0
+        ? pNac
+        : ((String(a.fechaUltimoPesaje || '').slice(0, 10) === fNac && Number(a.ultimoPesoKg) > 0 && Number(a.ultimoPesoKg) <= 65)
+            ? Number(a.ultimoPesoKg)
+            : pesoTerneroDefault);
+      registrarPartoPeriodo({
+        fecha: fNac,
+        pesoKg: pInicial,
+        tagCria: a.identificacionTag || a.numero,
+        madreTag: a.madreTag || a.madre || ''
+      });
+    }
+  }
+
+  for (const op of opsFinca) {
+    const acc = String(op.accion || op.modulo || '').toLowerCase();
+    if (acc !== 'partos' && acc !== 'parto') continue;
+    let pCria = Number(op.pesoCria ?? op.peso ?? 0);
+    let cTag = op.tagCria || op.criaTag || '';
+    if (typeof op.detalle === 'string') {
+      if (!pCria) {
+        const mKg = op.detalle.match(/(\d+(?:\.\d+)?)\s*kg/i);
+        if (mKg) pCria = parseFloat(mKg[1]);
+      }
+      if (!cTag) {
+        const mCr = op.detalle.match(/cr[íi]a\s+([A-Za-z0-9_-]+)/i);
+        if (mCr) cTag = mCr[1];
+      }
+    }
+    registrarPartoPeriodo({
+      fecha: op.fecha,
+      pesoKg: pCria,
+      tagCria: cTag,
+      madreTag: op.tag || ''
+    });
+  }
+
+  const listaPartosPeriodo = Array.from(partosDedupMap.values());
+  const totalPartosPeriodo = listaPartosPeriodo.length;
+  const kilosPartosPeriodo = Number(listaPartosPeriodo.reduce((acc, p) => acc + p.pesoKg, 0).toFixed(1));
+  const ingresoPartos = Math.round(kilosPartosPeriodo * precioCarneKgPie);
+
+  // --------------------------------------------------------------------------
+  // C) GANANCIA DE PESO DE TODO EL GANADO (Con respaldo al último dato de pesaje de la finca)
+  // --------------------------------------------------------------------------
+  // Agrupar pesajes históricos por animal para obtener su última GDP real conocida
+  const pesajesPorAnimal = new Map();
+  let fechaUltimoPesajeFinca = '';
+
+  for (const p of pesajesFinca) {
+    const pesoVal = Number(p.pesoNuevo ?? p.peso ?? p.peso_kg ?? 0);
+    if (pesoVal <= 0) continue;
+    const fPes = String(p.fecha || '').slice(0, 10);
+    if (fPes > fechaUltimoPesajeFinca) fechaUltimoPesajeFinca = fPes;
+
+    const clave = p.animalId || String(p.tag || p.animalTag || '').trim().toUpperCase();
+    if (!clave) continue;
+    if (!pesajesPorAnimal.has(clave)) pesajesPorAnimal.set(clave, []);
+    pesajesPorAnimal.get(clave).push({ peso: pesoVal, fecha: fPes, gdp: p.gdp });
+  }
+
+  const gdpsIndividualesMap = new Map();
+  const gdpsValidasFinca = [];
+
+  for (const a of animalesActivos) {
+    const claveId = a.id || '';
+    const claveTag = String(a.identificacionTag || a.numero || '').trim().toUpperCase();
+    const fUltAnm = String(a.fechaUltimoPesaje || '').slice(0, 10);
+    if (fUltAnm > fechaUltimoPesajeFinca) fechaUltimoPesajeFinca = fUltAnm;
+
+    const hist = [
+      ...(claveId && pesajesPorAnimal.get(claveId) ? pesajesPorAnimal.get(claveId) : []),
+      ...(claveTag && claveTag !== claveId && pesajesPorAnimal.get(claveTag) ? pesajesPorAnimal.get(claveTag) : [])
+    ];
+    // Ordenar por fecha descendente y deduplicar por fecha
+    const porFecha = new Map();
+    hist.forEach((h) => {
+      if (h.fecha && !porFecha.has(h.fecha)) porFecha.set(h.fecha, h);
+    });
+    const ordenados = Array.from(porFecha.values()).sort((x, y) => y.fecha.localeCompare(x.fecha));
+
+    let gdpAnimal = null;
+    if (ordenados.length >= 2) {
+      gdpAnimal = calcularGDP(ordenados[0].peso, ordenados[1].peso, ordenados[0].fecha, ordenados[1].fecha);
+    }
+    if (gdpAnimal === null && ordenados.length === 1 && ordenados[0].gdp !== null && ordenados[0].gdp !== undefined && !isNaN(Number(ordenados[0].gdp))) {
+      gdpAnimal = Number(ordenados[0].gdp);
+    }
+    if (gdpAnimal === null && a.gdpPromedioGDia !== undefined && a.gdpPromedioGDia !== null && !isNaN(Number(a.gdpPromedioGDia))) {
+      gdpAnimal = Number(a.gdpPromedioGDia);
+    }
+    if (gdpAnimal === null && a.gdpActual !== undefined && a.gdpActual !== null && !isNaN(Number(a.gdpActual))) {
+      gdpAnimal = Number(a.gdpActual);
+    }
+    if (gdpAnimal === null && Number(a.ultimoPesoKg) > 0 && a.fechaNacimiento) {
+      const calcNac = calcularGDPEjemplar({
+        animal: { ...a, pesoAlNacer: a.pesoAlNacer || pesoTerneroDefault, ultimoPesoKg: 0 },
+        pesoActual: Number(a.ultimoPesoKg),
+        fechaPesaje: fUltAnm || hastaStr
+      });
+      if (calcNac && calcNac.gdp !== null) gdpAnimal = calcNac.gdp;
+    }
+
+    // Acotar valores extremos irreales por errores de digitación (-1000 a +2200 g/día)
+    if (gdpAnimal !== null && !isNaN(gdpAnimal)) {
+      const acotado = Math.max(-1000, Math.min(2200, Math.round(gdpAnimal)));
+      gdpsIndividualesMap.set(a.id || claveTag, acotado);
+      gdpsValidasFinca.push(acotado);
+    }
+  }
+
+  // Respaldo al último dato promedio de pesaje de la finca para ejemplares activos sin segundo pesaje aún
+  const gdpPromedioFinca = gdpsValidasFinca.length > 0
+    ? Math.round(gdpsValidasFinca.reduce((s, v) => s + v, 0) / gdpsValidasFinca.length)
+    : 0;
+
+  let kilosGanadosMedidos = 0;
+  let kilosGanadosProyectadosUltimoDato = 0;
+  let uggTotalesFinca = 0;
+  let pesoTotalInventarioKg = 0;
+  let animalesConGdpDirecta = 0;
+  let animalesConGdpUltimoDatoFinca = 0;
+
+  for (const a of animalesActivos) {
+    const pesoAct = Number(a.ultimoPesoKg || a.pesoActual || 0);
+    if (pesoAct > 0) {
+      pesoTotalInventarioKg += pesoAct;
+      const baseUgg = (a.especie || 'bovino') === 'bufalino' ? 500 : 450;
+      uggTotalesFinca += pesoAct / baseUgg;
+    }
+
+    // Si nació dentro del período, su peso de nacimiento ya entró en Partos; sólo gana días posteriores al nacimiento
+    const fNac = String(a.fechaNacimiento || a.fecha_nacimiento || '').slice(0, 10);
+    let diasActivosAnimal = diasPeriodo;
+    if (fNac && fNac > hastaStr) {
+      diasActivosAnimal = 0;
+    } else if (fNac && fNac >= desdeStr && fNac <= hastaStr) {
+      const dtN = parsearFechaObjeto(fNac);
+      diasActivosAnimal = !isNaN(dtN.getTime())
+        ? Math.max(0, Math.round((dtHasta.getTime() - dtN.getTime()) / 86400000))
+        : 0;
+    }
+    if (diasActivosAnimal <= 0) continue;
+
+    const clave = a.id || String(a.identificacionTag || a.numero || '').trim().toUpperCase();
+    if (gdpsIndividualesMap.has(clave)) {
+      const gdpInd = gdpsIndividualesMap.get(clave);
+      kilosGanadosMedidos += (gdpInd / 1000) * diasActivosAnimal;
+      animalesConGdpDirecta++;
+    } else if (gdpPromedioFinca !== 0) {
+      kilosGanadosProyectadosUltimoDato += (gdpPromedioFinca / 1000) * diasActivosAnimal;
+      animalesConGdpUltimoDatoFinca++;
+    }
+  }
+
+  const kilosGanadosGanado = Number((kilosGanadosMedidos + kilosGanadosProyectadosUltimoDato).toFixed(1));
+  const ingresoGananciaPeso = Math.round(kilosGanadosGanado * precioCarneKgPie);
+
+  // --------------------------------------------------------------------------
+  // D) COSTOS, GASTOS, NÓMINA, INVERSIONES DIFERIDAS, VENTAS Y MORTALIDAD (NIC 41)
+  // --------------------------------------------------------------------------
+  const cumpleRangoFecha = (f) => {
+    const s = String(f || '').slice(0, 10);
+    return Boolean(s && s >= desdeStr && s <= hastaStr);
+  };
+
+  const movsFincaPeriodo = (movimientosContables || []).filter(
+    (m) => m && (!fincaId || (m.fincaId || m.finca_id) === fincaId) && cumpleRangoFecha(m.fecha)
+  );
+
+  let costosDirectosContab = 0;
+  let comprasGanadoReposicion = 0;
+  let gastosAdminContab = 0;
+  let nominaContab = 0;
+  let ventasLecheEfectivoContab = 0;
+  let ventasGanadoEfectivoContab = 0;
+  let otrosIngresosContab = 0;
+
+  const idsNominaEnMovs = new Set(movsFincaPeriodo.map((m) => m.nominaPagoId).filter(Boolean));
+
+  for (const m of movsFincaPeriodo) {
+    const monto = Math.max(0, Number(m.monto) || 0);
+    const tipo = String(m.tipo || '').toLowerCase();
+    const catLower = String(m.categoria || '').toLowerCase();
+
+    if (tipo === 'ingreso') {
+      if (catLower.includes('leche') || catLower.includes('queso')) {
+        ventasLecheEfectivoContab += monto;
+      } else if (catLower.includes('ganado') || catLower.includes('novillo') || catLower.includes('desteto')) {
+        ventasGanadoEfectivoContab += monto;
+      } else {
+        otrosIngresosContab += monto;
+      }
+    } else if (tipo === 'costo_directo') {
+      if (catLower.includes('compra de ganado')) {
+        comprasGanadoReposicion += monto;
+      } else {
+        costosDirectosContab += monto;
+      }
+    } else if (tipo === 'gasto_admin') {
+      gastosAdminContab += monto;
+    } else if (tipo === 'nomina') {
+      nominaContab += monto;
+    }
+    // Nota: tipo === 'inversion_diferida' NO entra de golpe aquí, sino abajo por su cuota mensual diferida
+  }
+
+  for (const p of (pagosNomina || [])) {
+    if (!p) continue;
+    const fid = p.fincaId || p.finca_id;
+    if (fincaId && fid !== fincaId) continue;
+    if (!cumpleRangoFecha(p.fecha) || idsNominaEnMovs.has(p.id)) continue;
+    nominaContab += Math.max(0, Number(p.costoTotalFinca || p.montoTotal || p.netoTrabajador || 0));
+  }
+
+  // Respaldo inteligente a costosFijosFinca parametrizados en Administración si aún no se digitaron en Contabilidad del período
+  const factorMes = diasPeriodo / 30;
+  const fijosConfig = costosFijosFinca || {};
+  let costosFijosRespaldo = 0;
+  if (costosDirectosContab === 0 && gastosAdminContab === 0) {
+    const fijosSinNomina =
+      (parseFloat(fijosConfig.insumos) || 0) +
+      (parseFloat(fijosConfig.herbicidas) || 0) +
+      (parseFloat(fijosConfig.maquinaria) || 0) +
+      (parseFloat(fijosConfig.servicios) || 0) +
+      (parseFloat(fijosConfig.otros) || 0);
+    costosFijosRespaldo += Math.round(fijosSinNomina * factorMes);
+  }
+  if (nominaContab === 0 && (parseFloat(fijosConfig.nomina) || 0) > 0) {
+    nominaContab = Math.round((parseFloat(fijosConfig.nomina) || 0) * factorMes);
+  }
+
+  // Inversiones Diferidas (tanto de ModuloContabilidad tipo 'inversion_diferida' como de ModuloAdmin inversiones[])
+  const inversionesUnificadasMap = new Map();
+  for (const m of (movimientosContables || [])) {
+    if (!m || String(m.tipo || '').toLowerCase() !== 'inversion_diferida') continue;
+    if (fincaId && (m.fincaId || m.finca_id) !== fincaId) continue;
+    inversionesUnificadasMap.set(m.id, m);
+  }
+  for (const inv of (inversiones || [])) {
+    if (!inv) continue;
+    if (fincaId && (inv.fincaId || inv.finca_id) !== fincaId) continue;
+    const key = inv.movimientoContableId || inv.id;
+    if (!inversionesUnificadasMap.has(key)) {
+      inversionesUnificadasMap.set(key, inv);
+    }
+  }
+
+  let cuotaInversionesDiferidas = 0;
+  const inversionesActivasDetalle = [];
+  for (const inv of inversionesUnificadasMap.values()) {
+    const calcInv = calcularAmortizacionInversionEnPeriodo(inv, {
+      fechaDesde: desdeStr,
+      fechaHasta: hastaStr,
+      fechaReferencia: hastaStr
+    });
+    if (calcInv.impactoPeriodo > 0 || calcInv.activa) {
+      cuotaInversionesDiferidas += calcInv.impactoPeriodo;
+      inversionesActivasDetalle.push({
+        id: inv.id,
+        concepto: inv.concepto || inv.nombreInversion || inv.descripcion || 'Inversión Diferida',
+        categoria: inv.categoria || 'Infraestructura / Equipos',
+        ...calcInv
+      });
+    }
+  }
+
+  // Variables Expertas Mundiales (NIC 41 / CREA / DairyComp 305):
+  // 1. Pérdida patrimonial biológica por Mortalidad en el período
+  let muertesCount = 0;
+  let kilosPerdidosMortalidad = 0;
+  // 2. Diferencial comercial en ventas de ganado (sobreprecio o descuento frente al valor biológico ya causado)
+  let ventasAnimalesCount = 0;
+  let valorVentasAnimalesReal = 0;
+  let diferencialComercialVentas = 0;
+
+  for (const a of animalesFincaTodos) {
+    const fBaja = String(a.fechaBaja || a.fechaExtraccion || '').slice(0, 10);
+    if (!fBaja || fBaja < desdeStr || fBaja > hastaStr) continue;
+    const mot = String(a.motivoBaja || a.estadoVida || '').toLowerCase();
+    const pesoSalida = Number(a.pesoVenta || a.ultimoPesoKg || a.pesoActual || 250);
+
+    if (mot.includes('muert')) {
+      muertesCount++;
+      kilosPerdidosMortalidad += pesoSalida;
+    } else if (mot.includes('venta')) {
+      ventasAnimalesCount++;
+      const valVenta = Number(a.valorVenta || 0);
+      if (valVenta > 0) {
+        valorVentasAnimalesReal += valVenta;
+        const valorBiologicoEnLibros = pesoSalida * precioCarneKgPie;
+        diferencialComercialVentas += Math.round(valVenta - valorBiologicoEnLibros);
+      }
+    }
+  }
+
+  const perdidaMortalidadCOP = Math.round(kilosPerdidosMortalidad * precioCarneKgPie);
+
+  // 3. Indicador de Alerta Experta: Lucro cesante estimado por Días Abiertos > 120d (Estándar DairyComp 305 / FEDEGÁN: ~0.8 L leche + proporción ternero perdido por día abierto extra)
+  let vientresCriticosAbiertos = 0;
+  let diasAbiertosExcesoTotal = 0;
+  for (const a of animalesActivos) {
+    if (String(a.sexo || 'hembra').toLowerCase() !== 'hembra') continue;
+    const fParto = a.fechaUltimoParto || a.ultimoParto;
+    if (!fParto) continue;
+    const dAb = calcularDiasAbiertos(fParto, a.estadoReproductivo, hastaStr);
+    if (dAb > 120) {
+      vientresCriticosAbiertos++;
+      diasAbiertosExcesoTotal += Math.min(diasPeriodo, dAb - 120);
+    }
+  }
+  const costoDiaAbiertoUnitario = Math.round((pesoTerneroDefault * precioCarneKgPie) / 365 + (tieneOrdeno ? precioLecheLitro * 1.5 : 0));
+  const lucroCesanteDiasAbiertos = Math.round(diasAbiertosExcesoTotal * costoDiaAbiertoUnitario);
+
+  // --------------------------------------------------------------------------
+  // E) CONSOLIDACIÓN DE ESTADO DE RESULTADOS BIOLÓGICO + ECONÓMICO Y KPIs MUNDIALES
+  // --------------------------------------------------------------------------
+  const totalCostosDirectos = costosDirectosContab + costosFijosRespaldo;
+  const totalGastosAdmin = gastosAdminContab;
+  const totalNomina = nominaContab;
+  const egresosOperativosSinDiferidos = totalCostosDirectos + totalGastosAdmin + totalNomina;
+  const totalEgresosConDiferidosYMortalidad = egresosOperativosSinDiferidos + cuotaInversionesDiferidas + perdidaMortalidadCOP;
+
+  const ingresoBrutoProduccion =
+    ingresoLeche +
+    ingresoGananciaPeso +
+    ingresoPartos +
+    otrosIngresosContab +
+    diferencialComercialVentas;
+
+  const ebitdaGanadero = ingresoBrutoProduccion - egresosOperativosSinDiferidos;
+  const utilidadNeta = ebitdaGanadero - cuotaInversionesDiferidas - perdidaMortalidadCOP;
+  const margenNetoPct = ingresoBrutoProduccion > 0
+    ? Number(((utilidadNeta / ingresoBrutoProduccion) * 100).toFixed(1))
+    : 0;
+  const roiOperativoPct = totalEgresosConDiferidosYMortalidad > 0
+    ? Number(((utilidadNeta / totalEgresosConDiferidosYMortalidad) * 100).toFixed(1))
+    : 0;
+
+  // Costos unitarios prorrateados por participación de ingresos (Estándar CREA Doble Propósito)
+  const baseProdCarneLeche = Math.max(1, ingresoLeche + ingresoGananciaPeso + ingresoPartos);
+  const propLeche = tieneOrdeno ? (ingresoLeche / baseProdCarneLeche) : 0;
+  const propCarne = 1 - propLeche;
+
+  const egresosTotalesAsignables = egresosOperativosSinDiferidos + cuotaInversionesDiferidas;
+  const kilosTotalesCarneProducidos = Number((kilosGanadosGanado + kilosPartosPeriodo).toFixed(1));
+
+  const costoUnitarioLitroLeche = (tieneOrdeno && litrosProducidosPeriodo > 0)
+    ? Math.round((egresosTotalesAsignables * propLeche) / litrosProducidosPeriodo)
+    : 0;
+  const costoUnitarioKgCarne = kilosTotalesCarneProducidos > 0
+    ? Math.round((egresosTotalesAsignables * propCarne) / kilosTotalesCarneProducidos)
+    : 0;
+
+  const uggRedondeado = Number(uggTotalesFinca.toFixed(2));
+  const cargaUGGPorHa = areaHa > 0 ? Number((uggTotalesFinca / areaHa).toFixed(2)) : 0;
+  const utilidadPorHa = areaHa > 0 ? Math.round(utilidadNeta / areaHa) : 0;
+  const utilidadAnualizadaPorHa = areaHa > 0 ? Math.round((utilidadNeta * (365 / diasPeriodo)) / areaHa) : 0;
+  const utilidadPorCabeza = animalesActivos.length > 0 ? Math.round(utilidadNeta / animalesActivos.length) : 0;
+  const utilidadPorUGG = uggTotalesFinca > 0 ? Math.round(utilidadNeta / uggTotalesFinca) : 0;
+
+  const puntoEquilibrioKgCarne = precioCarneKgPie > 0
+    ? Number((egresosTotalesAsignables / precioCarneKgPie).toFixed(1))
+    : 0;
+  const puntoEquilibrioLitrosPeriodo = (tieneOrdeno && precioLecheLitro > 0)
+    ? Number((egresosTotalesAsignables / precioLecheLitro).toFixed(1))
+    : 0;
+
+  // Flujo de caja en efectivo (para conciliación frente a utilidad biológica)
+  const ingresosCajaEfectivo = (ventasLecheEfectivoContab || (tieneOrdeno ? ingresoLeche : 0)) +
+    Math.max(ventasGanadoEfectivoContab, valorVentasAnimalesReal) +
+    otrosIngresosContab;
+  const flujoCajaLiquido = ingresosCajaEfectivo - egresosOperativosSinDiferidos - comprasGanadoReposicion;
+
+  return {
+    fincaId,
+    nombreFinca,
+    areaHa,
+    fechaDesde: desdeStr,
+    fechaHasta: hastaStr,
+    diasPeriodo,
+    precios: {
+      precioLecheLitro,
+      precioCarneKgPie,
+      pesoBaseNacimientoKg: pesoTerneroDefault
+    },
+    leche: {
+      tieneOrdeno,
+      vacasEnOrdeno,
+      fechaUltimoPesajeLeche: fechaUltimoPesajeLecheFinca || null,
+      litrosDiariosFinca,
+      litrosProducidosPeriodo,
+      ingresoLeche,
+      ventasLecheEfectivoContab
+    },
+    carne: {
+      animalesActivosCount: animalesActivos.length,
+      animalesConGdpDirecta,
+      animalesConGdpUltimoDatoFinca,
+      fechaUltimoPesajeFinca: fechaUltimoPesajeFinca || null,
+      gdpPromedioFinca,
+      kilosGanadosMedidos: Number(kilosGanadosMedidos.toFixed(1)),
+      kilosGanadosProyectadosUltimoDato: Number(kilosGanadosProyectadosUltimoDato.toFixed(1)),
+      kilosGanadosGanado,
+      ingresoGananciaPeso,
+      pesoTotalInventarioKg: Math.round(pesoTotalInventarioKg),
+      uggTotalesFinca: uggRedondeado,
+      cargaUGGPorHa
+    },
+    partos: {
+      totalPartosPeriodo,
+      kilosPartosPeriodo,
+      ingresoPartos,
+      detallePartos: listaPartosPeriodo
+    },
+    ajustesNIC41: {
+      otrosIngresosContab,
+      ventasAnimalesCount,
+      valorVentasAnimalesReal,
+      diferencialComercialVentas,
+      comprasGanadoReposicion,
+      muertesCount,
+      kilosPerdidosMortalidad: Number(kilosPerdidosMortalidad.toFixed(1)),
+      perdidaMortalidadCOP,
+      vientresCriticosAbiertos,
+      diasAbiertosExcesoTotal,
+      lucroCesanteDiasAbiertos
+    },
+    egresos: {
+      costosDirectos: totalCostosDirectos,
+      costosFijosRespaldo,
+      gastosAdmin: totalGastosAdmin,
+      nomina: totalNomina,
+      egresosOperativosSinDiferidos,
+      cuotaInversionesDiferidas: Math.round(cuotaInversionesDiferidas),
+      inversionesActivasDetalle,
+      perdidaMortalidadCOP,
+      totalEgresos: Math.round(totalEgresosConDiferidosYMortalidad)
+    },
+    resultados: {
+      ingresoBrutoProduccion: Math.round(ingresoBrutoProduccion),
+      ebitdaGanadero: Math.round(ebitdaGanadero),
+      utilidadNeta: Math.round(utilidadNeta),
+      margenNetoPct,
+      roiOperativoPct,
+      utilidadPorHa,
+      utilidadAnualizadaPorHa,
+      utilidadPorCabeza,
+      utilidadPorUGG,
+      kilosTotalesCarneProducidos,
+      costoUnitarioKgCarne,
+      costoUnitarioLitroLeche,
+      puntoEquilibrioKgCarne,
+      puntoEquilibrioLitrosPeriodo,
+      flujoCajaLiquido: Math.round(flujoCajaLiquido)
+    }
+  };
+}
+
+// ============================================================================
+// 3. AUDITORÍA DE JORNADAS: ANIMALES NO TRABAJADOS / FALTANTES EN CAMPO
+// ============================================================================
+
+/**
+ * Detecta automáticamente las fechas de jornadas de trabajo registradas en una finca
+ * para facilitar elegir con un clic la jornada a auditar (ej. Pesaje en Waterloo).
+ */
+function detectarJornadasTrabajoFinca({
+  fincaId,
+  pesajes = [],
+  operacionesDiarias = [],
+  servicios = [],
+  tipoTrabajo = 'pesajes'
+} = {}) {
+  const conteoPorFecha = new Map(); // fecha -> Set(claves animal)
+
+  const registrar = (fechaRaw, claveAnimal) => {
+    const f = String(fechaRaw || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !claveAnimal) return;
+    if (!conteoPorFecha.has(f)) conteoPorFecha.set(f, new Set());
+    conteoPorFecha.get(f).add(String(claveAnimal).toUpperCase());
+  };
+
+  if (tipoTrabajo === 'pesajes' || tipoTrabajo === 'cualquiera') {
+    for (const p of (pesajes || [])) {
+      if (!p) continue;
+      if (fincaId && (p.fincaId || p.finca_id) !== fincaId) continue;
+      registrar(p.fecha, p.animalId || p.tag || p.animalTag);
+    }
+  }
+
+  for (const op of (operacionesDiarias || [])) {
+    if (!op) continue;
+    if (fincaId && (op.fincaId || op.finca_id) !== fincaId) continue;
+    const acc = String(op.accion || op.modulo || '').toLowerCase();
+    const coincide =
+      tipoTrabajo === 'cualquiera' ||
+      (tipoTrabajo === 'pesajes' && (acc === 'pesajes' || acc === 'pesaje' || acc === 'destete' || acc === 'destetes')) ||
+      (tipoTrabajo === 'leche' && (acc === 'pesaje_leche' || acc === 'leche' || acc === 'lecheria')) ||
+      (tipoTrabajo === 'palpaciones' && (acc === 'palpacion' || acc === 'palpaciones')) ||
+      (tipoTrabajo === 'servicios' && (acc === 'servicios' || acc === 'servicio')) ||
+      (tipoTrabajo === 'partos' && (acc === 'partos' || acc === 'parto' || acc === 'destete' || acc === 'destetes'));
+    if (coincide) {
+      registrar(op.fecha, op.animalId || op.tag || op.animalTag);
+    }
+  }
+
+  if (tipoTrabajo === 'servicios' || tipoTrabajo === 'cualquiera') {
+    for (const s of (servicios || [])) {
+      if (!s) continue;
+      if (fincaId && (s.fincaId || s.finca_id) !== fincaId) continue;
+      registrar(s.fecha, s.animalId || s.tag || s.animalTag);
+    }
+  }
+
+  return Array.from(conteoPorFecha.entries())
+    .map(([fecha, setAnimales]) => ({
+      fecha,
+      cantidadAnimales: setAnimales.size
+    }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .slice(0, 30);
+}
+
+/**
+ * Genera el informe exacto de animales que NO se trabajaron en una jornada o rango de fechas
+ * (ej. Sistema tiene 250 activos en Waterloo, se pesaron 200 => lista los 50 faltantes para buscar en terreno).
+ */
+function calcularAnimalesNoTrabajados({
+  fincaId,
+  fincaNombre = '',
+  animales = [],
+  pesajes = [],
+  operacionesDiarias = [],
+  servicios = [],
+  tipoTrabajo = 'pesajes', // 'pesajes' | 'leche' | 'palpaciones' | 'servicios' | 'cualquiera'
+  fechaDesde = null,
+  fechaHasta = null,
+  filtroLote = 'todos',
+  filtroCategoria = 'todas',
+  filtroSexo = 'todos'
+} = {}) {
+  const hoyStr = obtenerFechaHoyLocal();
+  const desdeStr = fechaDesde || hoyStr;
+  const hastaStr = fechaHasta || desdeStr;
+
+  // 1. Inventario activo esperado en la finca
+  let inventarioEsperado = (animales || []).filter((a) => {
+    if (!a) return false;
+    if (fincaId && (a.fincaId || a.finca_id) !== fincaId) return false;
+    const activo = (a.estadoVida || a.estado || 'activo') === 'activo' && !a.motivoBaja;
+    if (!activo) return false;
+    // Excluir crías nacidas en fecha posterior al cierre de la jornada auditada
+    const fNac = String(a.fechaNacimiento || a.fecha_nacimiento || '').slice(0, 10);
+    if (fNac && fNac > hastaStr) return false;
+    return true;
+  });
+
+  if (filtroLote && filtroLote !== 'todos') {
+    const lLower = filtroLote.trim().toLowerCase();
+    inventarioEsperado = inventarioEsperado.filter((a) => String(a.lote || '').trim().toLowerCase() === lLower);
+  }
+  if (filtroCategoria && filtroCategoria !== 'todas') {
+    const cLower = filtroCategoria.trim().toLowerCase();
+    inventarioEsperado = inventarioEsperado.filter((a) => String(a.categoria || '').trim().toLowerCase().includes(cLower));
+  }
+  if (filtroSexo && filtroSexo !== 'todos') {
+    const sLower = filtroSexo.trim().toLowerCase();
+    inventarioEsperado = inventarioEsperado.filter((a) => String(a.sexo || 'hembra').trim().toLowerCase() === sLower);
+  }
+
+  // 2. Identificar todos los animales trabajados dentro del rango [desdeStr, hastaStr]
+  const idsTrabajados = new Set();
+  const tagsTrabajados = new Set();
+
+  const marcarTrabajado = (id, tag) => {
+    if (id) idsTrabajados.add(String(id));
+    if (tag) tagsTrabajados.add(String(tag).trim().toUpperCase());
+  };
+
+  const enRango = (fechaVal) => {
+    const f = String(fechaVal || '').slice(0, 10);
+    return Boolean(f && f >= desdeStr && f <= hastaStr);
+  };
+
+  if (tipoTrabajo === 'pesajes' || tipoTrabajo === 'cualquiera') {
+    for (const p of (pesajes || [])) {
+      if (!p) continue;
+      if (fincaId && (p.fincaId || p.finca_id) !== fincaId) continue;
+      if (enRango(p.fecha)) {
+        marcarTrabajado(p.animalId, p.tag || p.animalTag);
+      }
+    }
+    for (const a of inventarioEsperado) {
+      if (enRango(a.fechaUltimoPesaje || a.ultimoPesajeFecha)) {
+        marcarTrabajado(a.id, a.identificacionTag || a.numero);
+      }
+    }
+  }
+
+  for (const op of (operacionesDiarias || [])) {
+    if (!op) continue;
+    if (fincaId && (op.fincaId || op.finca_id) !== fincaId) continue;
+    if (!enRango(op.fecha)) continue;
+    const acc = String(op.accion || op.modulo || '').toLowerCase();
+    const coincide =
+      tipoTrabajo === 'cualquiera' ||
+      (tipoTrabajo === 'pesajes' && (acc === 'pesajes' || acc === 'pesaje' || acc === 'destete' || acc === 'destetes')) ||
+      (tipoTrabajo === 'leche' && (acc === 'pesaje_leche' || acc === 'leche' || acc === 'lecheria')) ||
+      (tipoTrabajo === 'palpaciones' && (acc === 'palpacion' || acc === 'palpaciones')) ||
+      (tipoTrabajo === 'servicios' && (acc === 'servicios' || acc === 'servicio'));
+    if (coincide) {
+      marcarTrabajado(op.animalId, op.tag || op.animalTag);
+      if (op.madreTag) marcarTrabajado(null, op.madreTag);
+      if (op.criaTag) marcarTrabajado(null, op.criaTag);
+    }
+  }
+
+  if (tipoTrabajo === 'servicios' || tipoTrabajo === 'cualquiera') {
+    for (const s of (servicios || [])) {
+      if (!s) continue;
+      if (fincaId && (s.fincaId || s.finca_id) !== fincaId) continue;
+      if (enRango(s.fecha)) {
+        marcarTrabajado(s.animalId, s.tag || s.animalTag);
+      }
+    }
+  }
+
+  // También inspeccionar historialEventos internos de cada ejemplar (para palpaciones/leche/destetes)
+  for (const a of inventarioEsperado) {
+    if (!Array.isArray(a.historialEventos)) continue;
+    for (const ev of a.historialEventos) {
+      if (!ev || !enRango(ev.fecha)) continue;
+      const t = String(ev.tipo || '').toLowerCase();
+      const coincideEv =
+        tipoTrabajo === 'cualquiera' ||
+        (tipoTrabajo === 'pesajes' && (t === 'pesaje' || t === 'destete')) ||
+        (tipoTrabajo === 'leche' && (t === 'pesaje_leche' || t === 'leche')) ||
+        (tipoTrabajo === 'palpaciones' && t === 'palpacion');
+      if (coincideEv) {
+        marcarTrabajado(a.id, a.identificacionTag || a.numero);
+      }
+    }
+  }
+
+  // 3. Separar Trabajados vs NO Trabajados (Faltantes)
+  const trabajados = [];
+  const faltantes = [];
+  const dtRef = parsearFechaObjeto(hastaStr);
+
+  for (const a of inventarioEsperado) {
+    const tagUpper = String(a.identificacionTag || a.numero || '').trim().toUpperCase();
+    const fueTrabajado = (a.id && idsTrabajados.has(String(a.id))) || (tagUpper && tagsTrabajados.has(tagUpper));
+    if (fueTrabajado) {
+      trabajados.push(a);
+    } else {
+      const fechaUlt = a.fechaUltimoPesaje || a.ultimoPesajeFecha || a.fechaUltimoParto || '';
+      let diasSinTrabajar = null;
+      if (fechaUlt) {
+        const dtU = parsearFechaObjeto(fechaUlt);
+        if (!isNaN(dtU.getTime()) && !isNaN(dtRef.getTime())) {
+          diasSinTrabajar = Math.max(0, Math.round((dtRef.getTime() - dtU.getTime()) / 86400000));
+        }
+      }
+      faltantes.push({
+        ...a,
+        tag: a.identificacionTag || a.numero || '',
+        fechaUltimoTrabajoPrevio: fechaUlt || null,
+        diasSinTrabajar
+      });
+    }
+  }
+
+  // Ordenar faltantes por Lote y luego por Arete para facilitar recorrido en potrero
+  faltantes.sort((x, y) => {
+    const lComp = String(x.lote || 'General').localeCompare(String(y.lote || 'General'), 'es');
+    if (lComp !== 0) return lComp;
+    return String(x.tag || '').localeCompare(String(y.tag || ''), 'es', { numeric: true });
+  });
+
+  // Agrupar faltantes por lote / potrero
+  const lotesMap = new Map();
+  for (const f of faltantes) {
+    const loteNombre = (f.lote || 'General').trim();
+    lotesMap.set(loteNombre, (lotesMap.get(loteNombre) || 0) + 1);
+  }
+  const resumenPorLote = Array.from(lotesMap.entries())
+    .map(([lote, cantidad]) => ({ lote, cantidad }))
+    .sort((a, b) => b.cantidad - a.cantidad);
+
+  const totalSistema = inventarioEsperado.length;
+  const totalTrabajados = trabajados.length;
+  const totalFaltantes = faltantes.length;
+  const porcentajeCobertura = totalSistema > 0
+    ? Number(((totalTrabajados / totalSistema) * 100).toFixed(1))
+    : 0;
+
+  return {
+    fincaId,
+    fincaNombre,
+    tipoTrabajo,
+    fechaDesde: desdeStr,
+    fechaHasta: hastaStr,
+    totalSistema,
+    totalTrabajados,
+    totalFaltantes,
+    porcentajeCobertura,
+    trabajados,
+    faltantes,
+    resumenPorLote
   };
 }
 
@@ -1206,6 +2548,7 @@ class SupabaseSyncService {
       tenantFromUbic = matchTenant[1].trim();
       rawUbicacion = matchTenant[2];
     }
+    const numOrdRow = Number(row.numero_ordenos ?? row.numeroOrdenos) === 2 ? 2 : 1;
     return {
       id: row.id,
       empresaId: tenantFromUbic || row.empresa_id || null,
@@ -1213,8 +2556,11 @@ class SupabaseSyncService {
       nombre: row.nombre,
       ubicacion: rawUbicacion,
       areaHa: Number(row.area_ha || 0),
+      hectareas: Number(row.area_ha || row.hectareas || 0),
       precioLecheLitro: Number(row.precio_leche_litro || 2450),
-      precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900)
+      precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900),
+      numeroOrdenos: numOrdRow,
+      tipoOrdeno: numOrdRow === 2 ? 'doble_ordeno' : 'un_ordeno'
     };
   }
 
@@ -1387,7 +2733,7 @@ class SupabaseSyncService {
           if (f && f.id) {
             if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
             if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
-              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
             }
           }
         });
@@ -1918,9 +3264,9 @@ class SupabaseSyncService {
         if (det.fincasOrdenosMap && typeof det.fincasOrdenosMap === 'object') {
           fincas.forEach(f => {
             if (det.fincasOrdenosMap[f.id] !== undefined) {
-              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 1 ? 1 : 2;
+              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 2 ? 2 : 1;
               f.numeroOrdenos = numOrd;
-              f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+              f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
             }
           });
         }
@@ -9476,6 +10822,7 @@ class PanelAlertas {
 
 
 
+
 const RAZAS_REFERENCIA_GANADERA = [
   'Simmental',
   'Brahman',
@@ -9503,6 +10850,42 @@ const RAZAS_REFERENCIA_GANADERA = [
 ];
 
 const CATALOGO_INFORMES_GANADEROS = [
+  {
+    id: 'utilidad_finca',
+    nombre: 'Informe de Utilidad Integral por Finca',
+    subtitulo: 'Leche, ganancia de peso, partos (ternero), costos, diferidos y NIC 41',
+    icono: '💰',
+    fuente: 'NIC 41 / CREA / FEDEGÁN / IFCN',
+    descripcion: 'Calcula la utilidad real de cada finca: litros de leche según último pesaje (si no hay pesaje de leche entiende sin ordeño = $0), ganancia de peso de todo el ganado, partos valorizados en kg, todos los costos/gastos, cuotas de inversiones diferidas y mortalidad.',
+    config: {
+      filtroOrden: 'gdp_desc',
+      modoColumnas: 'todas',
+      agruparPor: 'ninguno',
+      filtroSexo: 'todos',
+      filtroRepro: 'todos',
+      soloEnOrdeno: false,
+      soloConPartos: false,
+      soloCandidatosDescarte: false
+    }
+  },
+  {
+    id: 'animales_no_trabajados',
+    nombre: 'Animales NO Trabajados (Faltantes en Jornada)',
+    subtitulo: 'Ej. 250 en sistema vs 200 pesados → Lista los 50 por buscar en terreno',
+    icono: '🔍',
+    fuente: 'Auditoría de Campo & Control de Hato',
+    descripcion: 'Compara el inventario activo de la finca contra los ejemplares trabajados (pesaje, leche, palpación o servicio) en una fecha o rango, generando la planilla exacta de animales faltantes para verificar la causa en terreno.',
+    config: {
+      filtroOrden: 'peso_desc',
+      modoColumnas: 'todas',
+      agruparPor: 'lote',
+      filtroSexo: 'todos',
+      filtroRepro: 'todos',
+      soloEnOrdeno: false,
+      soloConPartos: false,
+      soloCandidatosDescarte: false
+    }
+  },
   {
     id: 'explorador_libre',
     nombre: 'Explorador Libre & Cruce por Raza',
@@ -9736,12 +11119,54 @@ const DEFINICION_COLUMNAS_INFORME = [
 ];
 
 class TablaDinamica {
-  constructor({ containerId, getAnimales, getAnimalesBusqueda, getFincaActiva, onVerFicha }) {
+  constructor({
+    containerId,
+    getAnimales,
+    getAnimalesBusqueda,
+    getTodosAnimalesEmpresa,
+    getFincas,
+    getFincaActiva,
+    getPesajes,
+    getOperaciones,
+    getServicios,
+    getMovimientosContables,
+    getPagosNomina,
+    getCostosFijosMap,
+    getInversiones,
+    onCambiarFinca,
+    onVerFicha
+  }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
     this.getAnimalesBusqueda = getAnimalesBusqueda;
+    this.getTodosAnimalesEmpresa = getTodosAnimalesEmpresa || null;
+    this.getFincas = getFincas || null;
     this.getFincaActiva = getFincaActiva;
+    this.getPesajes = getPesajes || (() => []);
+    this.getOperaciones = getOperaciones || (() => []);
+    this.getServicios = getServicios || (() => []);
+    this.getMovimientosContables = getMovimientosContables || (() => []);
+    this.getPagosNomina = getPagosNomina || (() => []);
+    this.getCostosFijosMap = getCostosFijosMap || (() => ({}));
+    this.getInversiones = getInversiones || (() => []);
+    this.onCambiarFinca = onCambiarFinca || null;
     this.onVerFicha = onVerFicha;
+
+    const hoy = obtenerFechaHoyLocal();
+
+    // Estado de los 2 nuevos informes especializados (Utilidad por Finca y Animales NO Trabajados)
+    this.utilidadFincaId = 'ACTIVA'; // 'ACTIVA' | 'TODAS' | finca.id
+    this.utilidadFechaDesde = `${hoy.slice(0, 8)}01`;
+    this.utilidadFechaHasta = hoy;
+    this.utilidadPesoNacimientoKg = 30;
+
+    this.faltantesFincaId = 'ACTIVA';
+    this.faltantesTipoTrabajo = 'pesajes';
+    this.faltantesFechaDesde = '';
+    this.faltantesFechaHasta = '';
+    this.faltantesLote = 'todos';
+    this.faltantesBusqueda = '';
+    this.causasTerrenoMap = {}; // clave fincaId__tag -> causa seleccionada en campo
 
     // Estado del informe activo y filtros multicriterio
     this.informeActivoId = 'explorador_libre';
@@ -10574,6 +11999,7 @@ class TablaDinamica {
               </div>
             </div>
 
+            ${(this.informeActivoId !== 'utilidad_finca' && this.informeActivoId !== 'animales_no_trabajados') ? `
             <!-- ============================================================== -->
             <!-- 2. MOTOR DE FILTROS MULTIDIMENSIONALES Y CRUCE DE VARIABLES     -->
             <!-- ============================================================== -->
@@ -10765,8 +12191,14 @@ class TablaDinamica {
                 </div>
               </div>
             </div>
+            ` : ''}
           </div>
 
+          ${this.informeActivoId === 'utilidad_finca'
+            ? this.renderVistaUtilidadPorFinca()
+            : (this.informeActivoId === 'animales_no_trabajados'
+                ? this.renderVistaAnimalesNoTrabajados()
+                : `
           <!-- ================================================================ -->
           <!-- 3. BANNER DE ESTADÍSTICAS DEL CRUCE Y DATO ACTIVO                -->
           <!-- ================================================================ -->
@@ -10982,11 +12414,771 @@ class TablaDinamica {
               </tbody>
             </table>
           </div>
+          `)}
         </div>
       </div>
     `;
 
     this.attachEvents();
+  }
+
+  fmtCOP(val) {
+    const n = Math.round(Number(val) || 0);
+    return `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('es-CO')}`;
+  }
+
+  obtenerListaFincasDisponibles() {
+    const fincas = typeof this.getFincas === 'function' ? (this.getFincas() || []) : [];
+    if (fincas.length > 0) return fincas;
+    const activa = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : null;
+    return activa ? [activa] : [];
+  }
+
+  obtenerTodosAnimalesDisponibles() {
+    if (typeof this.getTodosAnimalesEmpresa === 'function') {
+      return this.getTodosAnimalesEmpresa() || [];
+    }
+    if (typeof this.getAnimalesBusqueda === 'function') {
+      return this.getAnimalesBusqueda() || [];
+    }
+    return typeof this.getAnimales === 'function' ? (this.getAnimales() || []) : [];
+  }
+
+  calcularDatosInformeUtilidadActual() {
+    const fincas = this.obtenerListaFincasDisponibles();
+    const fincaActiva = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : fincas[0];
+    const todosAnimales = this.obtenerTodosAnimalesDisponibles();
+    const pesajes = this.getPesajes() || [];
+    const operacionesDiarias = this.getOperaciones() || [];
+    const movimientosContables = this.getMovimientosContables() || [];
+    const pagosNomina = this.getPagosNomina() || [];
+    const costosFijosMap = this.getCostosFijosMap() || {};
+    const inversiones = this.getInversiones() || [];
+
+    const reportesPorFinca = fincas.map((f) => calcularInformeUtilidadPorFinca({
+      finca: f,
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      movimientosContables,
+      pagosNomina,
+      costosFijosFinca: costosFijosMap[f.id] || {},
+      inversiones,
+      fechaDesde: this.utilidadFechaDesde,
+      fechaHasta: this.utilidadFechaHasta,
+      pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+    }));
+
+    const targetId = this.utilidadFincaId === 'ACTIVA'
+      ? (fincaActiva?.id || fincas[0]?.id || 'TODAS')
+      : this.utilidadFincaId;
+
+    if (targetId === 'TODAS' && reportesPorFinca.length > 0) {
+      // Consolidar todas las fincas sumando rubros reales
+      const sum = (fn) => reportesPorFinca.reduce((acc, r) => acc + (Number(fn(r)) || 0), 0);
+      const areaTotal = sum((r) => r.areaHa);
+      const dias = reportesPorFinca[0].diasPeriodo || 30;
+      const ingBruto = sum((r) => r.resultados.ingresoBrutoProduccion);
+      const utNeta = sum((r) => r.resultados.utilidadNeta);
+      const totEgr = sum((r) => r.egresos.totalEgresos);
+      const uggTot = Number(sum((r) => r.carne.uggTotalesFinca).toFixed(2));
+      const anmTot = sum((r) => r.carne.animalesActivosCount);
+
+      return {
+        esConsolidado: true,
+        targetId: 'TODAS',
+        fincas,
+        reportesPorFinca,
+        principal: {
+          fincaId: 'TODAS',
+          nombreFinca: `Consolidado Empresarial (${fincas.length} Fincas)`,
+          areaHa: areaTotal,
+          fechaDesde: this.utilidadFechaDesde,
+          fechaHasta: this.utilidadFechaHasta,
+          diasPeriodo: dias,
+          precios: {
+            precioLecheLitro: Math.round(sum((r) => r.precios.precioLecheLitro) / reportesPorFinca.length),
+            precioCarneKgPie: Math.round(sum((r) => r.precios.precioCarneKgPie) / reportesPorFinca.length),
+            pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+          },
+          leche: {
+            tieneOrdeno: reportesPorFinca.some((r) => r.leche.tieneOrdeno),
+            vacasEnOrdeno: sum((r) => r.leche.vacasEnOrdeno),
+            fechaUltimoPesajeLeche: reportesPorFinca.map((r) => r.leche.fechaUltimoPesajeLeche).filter(Boolean).sort().pop() || null,
+            litrosDiariosFinca: Number(sum((r) => r.leche.litrosDiariosFinca).toFixed(1)),
+            litrosProducidosPeriodo: Number(sum((r) => r.leche.litrosProducidosPeriodo).toFixed(1)),
+            ingresoLeche: sum((r) => r.leche.ingresoLeche),
+            ventasLecheEfectivoContab: sum((r) => r.leche.ventasLecheEfectivoContab)
+          },
+          carne: {
+            animalesActivosCount: anmTot,
+            animalesConGdpDirecta: sum((r) => r.carne.animalesConGdpDirecta),
+            animalesConGdpUltimoDatoFinca: sum((r) => r.carne.animalesConGdpUltimoDatoFinca),
+            fechaUltimoPesajeFinca: reportesPorFinca.map((r) => r.carne.fechaUltimoPesajeFinca).filter(Boolean).sort().pop() || null,
+            gdpPromedioFinca: Math.round(sum((r) => r.carne.gdpPromedioFinca) / reportesPorFinca.length),
+            kilosGanadosMedidos: Number(sum((r) => r.carne.kilosGanadosMedidos).toFixed(1)),
+            kilosGanadosProyectadosUltimoDato: Number(sum((r) => r.carne.kilosGanadosProyectadosUltimoDato).toFixed(1)),
+            kilosGanadosGanado: Number(sum((r) => r.carne.kilosGanadosGanado).toFixed(1)),
+            ingresoGananciaPeso: sum((r) => r.carne.ingresoGananciaPeso),
+            pesoTotalInventarioKg: sum((r) => r.carne.pesoTotalInventarioKg),
+            uggTotalesFinca: uggTot,
+            cargaUGGPorHa: areaTotal > 0 ? Number((uggTot / areaTotal).toFixed(2)) : 0
+          },
+          partos: {
+            totalPartosPeriodo: sum((r) => r.partos.totalPartosPeriodo),
+            kilosPartosPeriodo: Number(sum((r) => r.partos.kilosPartosPeriodo).toFixed(1)),
+            ingresoPartos: sum((r) => r.partos.ingresoPartos)
+          },
+          ajustesNIC41: {
+            otrosIngresosContab: sum((r) => r.ajustesNIC41.otrosIngresosContab),
+            ventasAnimalesCount: sum((r) => r.ajustesNIC41.ventasAnimalesCount),
+            valorVentasAnimalesReal: sum((r) => r.ajustesNIC41.valorVentasAnimalesReal),
+            diferencialComercialVentas: sum((r) => r.ajustesNIC41.diferencialComercialVentas),
+            comprasGanadoReposicion: sum((r) => r.ajustesNIC41.comprasGanadoReposicion),
+            muertesCount: sum((r) => r.ajustesNIC41.muertesCount),
+            kilosPerdidosMortalidad: Number(sum((r) => r.ajustesNIC41.kilosPerdidosMortalidad).toFixed(1)),
+            perdidaMortalidadCOP: sum((r) => r.ajustesNIC41.perdidaMortalidadCOP),
+            vientresCriticosAbiertos: sum((r) => r.ajustesNIC41.vientresCriticosAbiertos),
+            lucroCesanteDiasAbiertos: sum((r) => r.ajustesNIC41.lucroCesanteDiasAbiertos)
+          },
+          egresos: {
+            costosDirectos: sum((r) => r.egresos.costosDirectos),
+            gastosAdmin: sum((r) => r.egresos.gastosAdmin),
+            nomina: sum((r) => r.egresos.nomina),
+            egresosOperativosSinDiferidos: sum((r) => r.egresos.egresosOperativosSinDiferidos),
+            cuotaInversionesDiferidas: sum((r) => r.egresos.cuotaInversionesDiferidas),
+            perdidaMortalidadCOP: sum((r) => r.egresos.perdidaMortalidadCOP),
+            totalEgresos: totEgr
+          },
+          resultados: {
+            ingresoBrutoProduccion: ingBruto,
+            ebitdaGanadero: sum((r) => r.resultados.ebitdaGanadero),
+            utilidadNeta: utNeta,
+            margenNetoPct: ingBruto > 0 ? Number(((utNeta / ingBruto) * 100).toFixed(1)) : 0,
+            roiOperativoPct: totEgr > 0 ? Number(((utNeta / totEgr) * 100).toFixed(1)) : 0,
+            utilidadPorHa: areaTotal > 0 ? Math.round(utNeta / areaTotal) : 0,
+            utilidadAnualizadaPorHa: areaTotal > 0 ? Math.round((utNeta * (365 / dias)) / areaTotal) : 0,
+            utilidadPorCabeza: anmTot > 0 ? Math.round(utNeta / anmTot) : 0,
+            utilidadPorUGG: uggTot > 0 ? Math.round(utNeta / uggTot) : 0,
+            kilosTotalesCarneProducidos: Number(sum((r) => r.resultados.kilosTotalesCarneProducidos).toFixed(1)),
+            costoUnitarioKgCarne: reportesPorFinca[0]?.resultados.costoUnitarioKgCarne || 0,
+            costoUnitarioLitroLeche: reportesPorFinca[0]?.resultados.costoUnitarioLitroLeche || 0,
+            puntoEquilibrioKgCarne: Number(sum((r) => r.resultados.puntoEquilibrioKgCarne).toFixed(1)),
+            flujoCajaLiquido: sum((r) => r.resultados.flujoCajaLiquido)
+          }
+        }
+      };
+    }
+
+    const repElegido = reportesPorFinca.find((r) => r.fincaId === targetId) || reportesPorFinca[0] || calcularInformeUtilidadPorFinca({
+      finca: fincaActiva || { id: 'FIN-1', nombre: 'Finca Activa', areaHa: 100, precioLecheLitro: 2450, precioCarneKgPie: 8900 },
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      movimientosContables,
+      pagosNomina,
+      fechaDesde: this.utilidadFechaDesde,
+      fechaHasta: this.utilidadFechaHasta,
+      pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+    });
+
+    return {
+      esConsolidado: false,
+      targetId: repElegido.fincaId,
+      fincas,
+      reportesPorFinca,
+      principal: repElegido
+    };
+  }
+
+  renderVistaUtilidadPorFinca() {
+    const data = this.calcularDatosInformeUtilidadActual();
+    const r = data.principal;
+    const fincas = data.fincas;
+
+    return `
+      <div class="p-4 sm:p-6 space-y-5 bg-slate-50/70">
+        <!-- CONTROLES DEL INFORME DE UTILIDAD POR FINCA -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+          <div>
+            <label for="sel-utilidad-finca" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🏡 Finca a Evaluar:</label>
+            <select id="sel-utilidad-finca" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+              <option value="TODAS" ${data.targetId === 'TODAS' ? 'selected' : ''}>🌐 Todas las Fincas (Consolidado)</option>
+              ${fincas.map((f) => `
+                <option value="${f.id}" ${data.targetId === f.id ? 'selected' : ''}>🏡 ${f.nombre} (${f.areaHa || f.hectareas || 0} Ha)</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label for="in-utilidad-desde" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Desde Fecha:</label>
+            <input type="date" id="in-utilidad-desde" value="${this.utilidadFechaDesde}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div>
+            <label for="in-utilidad-hasta" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Hasta Fecha (${r.diasPeriodo} días):</label>
+            <input type="date" id="in-utilidad-hasta" value="${this.utilidadFechaHasta}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div>
+            <label for="in-utilidad-peso-nac" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🍼 Peso Base Ternero al Nacer (kg):</label>
+            <input type="number" id="in-utilidad-peso-nac" value="${this.utilidadPesoNacimientoKg}" min="10" max="70" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div class="flex items-end gap-1.5 flex-wrap">
+            <button type="button" data-rango-util="MES" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold cursor-pointer">Mes Actual</button>
+            <button type="button" data-rango-util="30D" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold cursor-pointer">30 Días</button>
+            <button type="button" data-rango-util="ANIO" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold cursor-pointer">Año</button>
+          </div>
+        </div>
+
+        <!-- 4 TARJETAS PRINCIPALES DE UTILIDAD -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- LECHE -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">🥛 Producción de Leche</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.leche.tieneOrdeno ? 'bg-sky-100 text-sky-900 border border-sky-300' : 'bg-slate-100 text-slate-700 border border-slate-300'}">
+                ${r.leche.tieneOrdeno ? `${r.leche.vacasEnOrdeno} en ordeño` : 'Sin Ordeño'}
+              </span>
+            </div>
+            <div class="text-2xl font-black text-slate-800 bovi-kpi-value">${this.fmtCOP(r.leche.ingresoLeche)}</div>
+            <div class="text-[11px] text-slate-600">
+              ${r.leche.tieneOrdeno
+                ? `<strong>${r.leche.litrosProducidosPeriodo} L</strong> (${r.leche.litrosDiariosFinca} L/d × $${r.precios.precioLecheLitro.toLocaleString('es-CO')}/L • Últ. pesaje: ${formatearFecha(r.leche.fechaUltimoPesajeLeche, 'Vigente')})`
+                : 'Sin pesajes de leche registrados en esta finca (se asume sin ordeño = $0).'}
+            </div>
+          </div>
+
+          <!-- GANANCIA DE PESO + PARTOS -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">⚖️ Ganancia Peso + Partos</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                +$${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg
+              </span>
+            </div>
+            <div class="text-2xl font-black text-emerald-700 bovi-kpi-value">${this.fmtCOP(r.carne.ingresoGananciaPeso + r.partos.ingresoPartos)}</div>
+            <div class="text-[11px] text-slate-600">
+              Ganado: <strong>+${r.carne.kilosGanadosGanado} kg</strong> (${this.fmtCOP(r.carne.ingresoGananciaPeso)}) • Partos (${r.partos.totalPartosPeriodo}): <strong>+${r.partos.kilosPartosPeriodo} kg</strong> (${this.fmtCOP(r.partos.ingresoPartos)})
+            </div>
+          </div>
+
+          <!-- COSTOS, GASTOS, NÓMINA Y DIFERIDOS -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">🧾 Costos, Gastos & Diferidos</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                Egresos + NIC 41
+              </span>
+            </div>
+            <div class="text-2xl font-black text-rose-700 bovi-kpi-value">${this.fmtCOP(r.egresos.totalEgresos)}</div>
+            <div class="text-[11px] text-slate-600">
+              Operación + Nómina: <strong>${this.fmtCOP(r.egresos.egresosOperativosSinDiferidos)}</strong> • Cuota Inversión: <strong>${this.fmtCOP(r.egresos.cuotaInversionesDiferidas)}</strong>
+            </div>
+          </div>
+
+          <!-- UTILIDAD NETA REAL -->
+          <div class="bg-white p-4 rounded-2xl border-2 ${r.resultados.utilidadNeta >= 0 ? 'border-emerald-400' : 'border-rose-400'} shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-700">💰 Utilidad Neta Finca</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${r.resultados.utilidadNeta >= 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
+                Margen ${r.resultados.margenNetoPct}%
+              </span>
+            </div>
+            <div class="text-2xl font-black ${r.resultados.utilidadNeta >= 0 ? 'text-emerald-700' : 'text-rose-700'} bovi-kpi-value">${this.fmtCOP(r.resultados.utilidadNeta)}</div>
+            <div class="text-[11px] text-slate-600">
+              Por Ha: <strong>${this.fmtCOP(r.resultados.utilidadPorHa)}/Ha</strong> • Anualizada: <strong>${this.fmtCOP(r.resultados.utilidadAnualizadaPorHa)}/Ha/año</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- DESGLOSE TÉCNICO Y ESTÁNDARES MUNDIALES (NIC 41 / CREA / FEDEGÁN) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 text-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+              <h3 class="font-black text-sm text-slate-800">📊 Estado de Utilidad Económica & Biológica — ${r.nombreFinca}</h3>
+              <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">NIC 41 / CREA</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-sky-50/70">
+              <span><strong>(+) Producción de Leche</strong> ${r.leche.tieneOrdeno ? `(${r.leche.litrosProducidosPeriodo} L según último pesaje)` : '(Sin pesaje de leche → Sin ordeño)'}</span>
+              <span class="font-bold text-slate-800 font-mono">${this.fmtCOP(r.leche.ingresoLeche)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-emerald-50/70">
+              <span><strong>(+) Ganancia de Peso del Ganado</strong> (${r.carne.kilosGanadosGanado} kg en ${r.carne.animalesActivosCount} cab • Últ. pesaje finca: ${formatearFecha(r.carne.fechaUltimoPesajeFinca, 'Base inventario')})</span>
+              <span class="font-bold text-emerald-800 font-mono">${this.fmtCOP(r.carne.ingresoGananciaPeso)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-emerald-50/40">
+              <span><strong>(+) Nacimientos / Partos</strong> (${r.partos.totalPartosPeriodo} crías nacidas = ${r.partos.kilosPartosPeriodo} kg × $${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg)</span>
+              <span class="font-bold text-emerald-800 font-mono">${this.fmtCOP(r.partos.ingresoPartos)}</span>
+            </div>
+
+            ${(r.ajustesNIC41.otrosIngresosContab !== 0 || r.ajustesNIC41.diferencialComercialVentas !== 0) ? `
+              <div class="flex justify-between py-1.5 px-2.5">
+                <span>(+) Otros Ingresos Operativos y Diferencial Comercial en Ventas (${r.ajustesNIC41.ventasAnimalesCount} ventas)</span>
+                <span class="font-bold text-slate-800 font-mono">${this.fmtCOP(r.ajustesNIC41.otrosIngresosContab + r.ajustesNIC41.diferencialComercialVentas)}</span>
+              </div>
+            ` : ''}
+
+            <div class="flex justify-between py-2 px-3 rounded-xl bg-slate-100 font-black text-slate-800">
+              <span>(=) INGRESO BRUTO TOTAL GENERADO POR LA FINCA</span>
+              <span class="font-mono">${this.fmtCOP(r.resultados.ingresoBrutoProduccion)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Costos Directos (Sanidad, Sal/Suplementos, Potreros, Insumos)</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.costosDirectos)}</span>
+            </div>
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Gastos Fijos y Administrativos</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.gastosAdmin)}</span>
+            </div>
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Nómina, Jornales, Seguridad Social y Prestaciones</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.nomina)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+              <span>(=) EBITDA GANADERO (Utilidad Operativa antes de Inversiones y Mortalidad)</span>
+              <span class="font-mono ${r.resultados.ebitdaGanadero >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${this.fmtCOP(r.resultados.ebitdaGanadero)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-purple-900">
+              <span>(-) Cuota Diferida de Inversiones en el Período (Amortización mensual CAPEX)</span>
+              <span class="font-bold font-mono">-${this.fmtCOP(r.egresos.cuotaInversionesDiferidas)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-rose-800">
+              <span>(-) Siniestralidad / Mortalidad Biológica NIC 41 (${r.ajustesNIC41.muertesCount} bajas = ${r.ajustesNIC41.kilosPerdidosMortalidad} kg)</span>
+              <span class="font-bold font-mono">-${this.fmtCOP(r.egresos.perdidaMortalidadCOP)}</span>
+            </div>
+
+            <div class="flex justify-between py-2.5 px-3 rounded-xl border-2 ${r.resultados.utilidadNeta >= 0 ? 'bg-emerald-50 border-emerald-400 text-emerald-950' : 'bg-rose-50 border-rose-400 text-rose-950'} font-black text-sm">
+              <span>(=) UTILIDAD NETA INTEGRAL DE LA FINCA</span>
+              <span class="font-mono">${this.fmtCOP(r.resultados.utilidadNeta)}</span>
+            </div>
+          </div>
+
+          <!-- VARIABLES EXPERTAS DE NIVEL MUNDIAL -->
+          <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+            <h3 class="font-black text-sm text-slate-800 pb-2 border-b border-slate-200">
+              🌍 Indicadores Expertos Internacionales (Benchmarking)
+            </h3>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Costo producir 1 kg carne</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${this.fmtCOP(r.resultados.costoUnitarioKgCarne)}/kg</strong>
+                <span class="text-[10px] text-slate-600 block">Venta ref: $${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Costo producir 1 L leche</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.leche.tieneOrdeno ? `${this.fmtCOP(r.resultados.costoUnitarioLitroLeche)}/L` : 'N/A (Sin ordeño)'}</strong>
+                <span class="text-[10px] text-slate-600 block">${r.leche.tieneOrdeno ? `Venta ref: $${r.precios.precioLecheLitro.toLocaleString('es-CO')}/L` : 'Predio de Cría/Ceba'}</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Carga Animal (UGG/Ha)</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.carne.cargaUGGPorHa} UGG/Ha</strong>
+                <span class="text-[10px] text-slate-600 block">${r.carne.uggTotalesFinca} UGG totales en ${r.areaHa} Ha</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Punto de Equilibrio</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.resultados.puntoEquilibrioKgCarne} kg</strong>
+                <span class="text-[10px] text-slate-600 block">Kilos necesarios para cubrir costos</span>
+              </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+              <div class="font-black text-amber-950 flex items-center justify-between">
+                <span>⏳ Costo Oculto por Días Abiertos (>120d)</span>
+                <span class="font-mono">${this.fmtCOP(r.ajustesNIC41.lucroCesanteDiasAbiertos)}</span>
+              </div>
+              <p class="text-[11px] text-amber-900">
+                <strong>${r.ajustesNIC41.vientresCriticosAbiertos} hembras abiertas</strong> superan los 120 días posparto (estándar DairyComp 305 / FEDEGÁN). Preñarlas a tiempo recupera este potencial productivo.
+              </p>
+            </div>
+
+            <div class="p-3 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between">
+              <div>
+                <div class="font-bold text-blue-950">💵 Flujo de Caja en Efectivo del Período</div>
+                <span class="text-[10px] text-blue-800">Conciliación de efectivo real cobrado vs pagado</span>
+              </div>
+              <strong class="font-mono text-sm font-black text-blue-950">${this.fmtCOP(r.resultados.flujoCajaLiquido)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLA COMPARATIVA MULTI-FINCA -->
+        ${data.reportesPorFinca.length > 1 ? `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-200 font-black text-xs uppercase tracking-wider text-slate-800">
+              🏡 Comparativa de Rentabilidad y Utilidad por Finca
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead class="bg-slate-100 text-[10px] uppercase font-black text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th class="p-3">Finca</th>
+                    <th class="p-3 text-center">Ordeño / Leche</th>
+                    <th class="p-3 text-right">Ingreso Leche</th>
+                    <th class="p-3 text-right">Ganancia Peso + Partos</th>
+                    <th class="p-3 text-right">Egresos + Diferidos</th>
+                    <th class="p-3 text-right">Utilidad Neta</th>
+                    <th class="p-3 text-right">Utilidad / Ha</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${data.reportesPorFinca.map((rf) => `
+                    <tr class="hover:bg-slate-50">
+                      <td class="p-3 font-bold text-slate-800">🏡 ${rf.nombreFinca} <span class="text-[10px] text-slate-600">(${rf.carne.animalesActivosCount} cab • ${rf.areaHa} Ha)</span></td>
+                      <td class="p-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${rf.leche.tieneOrdeno ? 'bg-sky-100 text-sky-900' : 'bg-slate-100 text-slate-600'}">
+                          ${rf.leche.tieneOrdeno ? `${rf.leche.litrosDiariosFinca} L/d` : 'Sin ordeño'}
+                        </span>
+                      </td>
+                      <td class="p-3 text-right font-mono">${this.fmtCOP(rf.leche.ingresoLeche)}</td>
+                      <td class="p-3 text-right font-mono text-emerald-700 font-bold">${this.fmtCOP(rf.carne.ingresoGananciaPeso + rf.partos.ingresoPartos)}</td>
+                      <td class="p-3 text-right font-mono text-rose-700">-${this.fmtCOP(rf.egresos.totalEgresos)}</td>
+                      <td class="p-3 text-right font-mono font-black ${rf.resultados.utilidadNeta >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${this.fmtCOP(rf.resultados.utilidadNeta)}</td>
+                      <td class="p-3 text-right font-mono font-bold">${this.fmtCOP(rf.resultados.utilidadPorHa)}/Ha</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  calcularDatosFaltantesActual() {
+    const fincas = this.obtenerListaFincasDisponibles();
+    const fincaActiva = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : fincas[0];
+    const targetFincaId = this.faltantesFincaId === 'ACTIVA'
+      ? (fincaActiva?.id || fincas[0]?.id || '')
+      : this.faltantesFincaId;
+    const fincaObj = fincas.find((f) => f.id === targetFincaId) || fincaActiva || { id: targetFincaId, nombre: 'Predio' };
+
+    const todosAnimales = this.obtenerTodosAnimalesDisponibles();
+    const pesajes = this.getPesajes() || [];
+    const operacionesDiarias = this.getOperaciones() || [];
+    const servicios = this.getServicios() || [];
+
+    const jornadas = detectarJornadasTrabajoFinca({
+      fincaId: targetFincaId,
+      pesajes,
+      operacionesDiarias,
+      servicios,
+      tipoTrabajo: this.faltantesTipoTrabajo
+    });
+
+    const hoy = obtenerFechaHoyLocal();
+    const fechaDesde = this.faltantesFechaDesde || (jornadas[0]?.fecha || hoy);
+    const fechaHasta = this.faltantesFechaHasta || fechaDesde;
+
+    const resultado = calcularAnimalesNoTrabajados({
+      fincaId: targetFincaId,
+      fincaNombre: fincaObj.nombre || 'Predio',
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      servicios,
+      tipoTrabajo: this.faltantesTipoTrabajo,
+      fechaDesde,
+      fechaHasta,
+      filtroLote: this.faltantesLote
+    });
+
+    // Lotes únicos de la finca para selector
+    const lotesFinca = Array.from(
+      new Set(
+        todosAnimales
+          .filter((a) => a && (!targetFincaId || (a.fincaId || a.finca_id) === targetFincaId) && (a.estadoVida || a.estado || 'activo') === 'activo')
+          .map((a) => (a.lote || 'General').trim())
+          .filter(Boolean)
+      )
+    ).sort();
+
+    return {
+      fincas,
+      fincaObj,
+      targetFincaId,
+      jornadas,
+      lotesFinca,
+      fechaDesde,
+      fechaHasta,
+      resultado
+    };
+  }
+
+  renderVistaAnimalesNoTrabajados() {
+    const ctx = this.calcularDatosFaltantesActual();
+    const res = ctx.resultado;
+
+    let faltantesVisibles = res.faltantes;
+    if (this.faltantesBusqueda && this.faltantesBusqueda.trim()) {
+      const q = this.faltantesBusqueda.trim().toLowerCase();
+      faltantesVisibles = faltantesVisibles.filter((a) =>
+        String(a.tag || '').toLowerCase().includes(q) ||
+        String(a.nombreAlias || a.nombre || '').toLowerCase().includes(q) ||
+        String(a.lote || '').toLowerCase().includes(q) ||
+        String(a.categoria || '').toLowerCase().includes(q)
+      );
+    }
+
+    const causasOpciones = [
+      'Pendiente buscar en potrero',
+      'Quedó en otro potrero / monte',
+      'Parida escondida con cría',
+      'Enferma / Cojera en potrero',
+      'Saltó cerca a lote vecino',
+      'Vendida / Trasladada sin descargar',
+      'Muerte en campo no reportada',
+      'Extraviada / Faltante físico'
+    ];
+
+    return `
+      <div class="p-4 sm:p-6 space-y-5 bg-slate-50/70">
+        <!-- FILTROS DE AUDITORÍA DE JORNADA (ANIMALES NO TRABAJADOS) -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label for="sel-faltantes-finca" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🏡 Finca Trabajada:</label>
+              <select id="sel-faltantes-finca" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                ${ctx.fincas.map((f) => `
+                  <option value="${f.id}" ${ctx.targetFincaId === f.id ? 'selected' : ''}>🏡 ${f.nombre}</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div>
+              <label for="sel-faltantes-tipo" class="block font-black text-slate-700 uppercase text-[10px] mb-1">⚡ Tipo de Trabajo:</label>
+              <select id="sel-faltantes-tipo" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                <option value="pesajes" ${this.faltantesTipoTrabajo === 'pesajes' ? 'selected' : ''}>⚖️ Pesaje de Ganado</option>
+                <option value="leche" ${this.faltantesTipoTrabajo === 'leche' ? 'selected' : ''}>🥛 Pesaje / Control de Leche</option>
+                <option value="palpaciones" ${this.faltantesTipoTrabajo === 'palpaciones' ? 'selected' : ''}>✋ Palpación Reproductiva</option>
+                <option value="servicios" ${this.faltantesTipoTrabajo === 'servicios' ? 'selected' : ''}>🧬 Servicios IA / Monta</option>
+                <option value="cualquiera" ${this.faltantesTipoTrabajo === 'cualquiera' ? 'selected' : ''}>🌐 Cualquier Trabajo</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="in-faltantes-desde" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Desde Fecha Trabajo:</label>
+              <input type="date" id="in-faltantes-desde" value="${ctx.fechaDesde}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="in-faltantes-hasta" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Hasta Fecha Trabajo:</label>
+              <input type="date" id="in-faltantes-hasta" value="${ctx.fechaHasta}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="sel-faltantes-lote" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📍 Lote / Potrero:</label>
+              <select id="sel-faltantes-lote" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                <option value="todos" ${this.faltantesLote === 'todos' ? 'selected' : ''}>Todos los Lotes de la Finca</option>
+                ${ctx.lotesFinca.map((l) => `<option value="${l}" ${this.faltantesLote === l ? 'selected' : ''}>📍 ${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          ${ctx.jornadas.length > 0 ? `
+            <div class="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+              <span class="text-[10px] font-black uppercase text-slate-600">📌 Jornadas recientes detectadas en ${ctx.fincaObj.nombre}:</span>
+              ${ctx.jornadas.slice(0, 6).map((j) => `
+                <button type="button" data-jornada-fecha="${j.fecha}" class="btn-elegir-jornada-detectada px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
+                  ctx.fechaDesde === j.fecha && ctx.fechaHasta === j.fecha
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                    : 'bg-slate-50 hover:bg-emerald-50 text-slate-700 border-slate-300'
+                }">
+                  📅 ${formatearFecha(j.fecha)} (${j.cantidadAnimales} trabajados)
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 4 TARJETAS DE CONCILIACIÓN DE CAMPO -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-slate-600 block">🏷️ Total Activos en Sistema</span>
+            <div class="text-2xl font-black text-slate-800 mt-1 bovi-kpi-value">${res.totalSistema} animales</div>
+            <span class="text-[11px] text-slate-600">Inventario esperado en ${ctx.fincaObj.nombre}</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-emerald-800 block">✅ Animales Sí Trabajados</span>
+            <div class="text-2xl font-black text-emerald-700 mt-1 bovi-kpi-value">${res.totalTrabajados} animales</div>
+            <span class="text-[11px] text-emerald-800 font-bold">Cobertura: ${res.porcentajeCobertura}% del hato</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border-2 border-rose-300 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-rose-800 block">🚨 Animales NO Trabajados (Faltantes)</span>
+            <div class="text-2xl font-black text-rose-700 mt-1 bovi-kpi-value">${res.totalFaltantes} animales</div>
+            <span class="text-[11px] text-rose-800 font-bold">Pendientes de verificar causa en terreno</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-amber-900 block">📍 Distribución por Lote</span>
+            <div class="text-xs font-bold text-slate-800 mt-1.5 space-y-0.5 max-h-14 overflow-y-auto">
+              ${res.resumenPorLote.length > 0
+                ? res.resumenPorLote.slice(0, 3).map((g) => `<div>• ${g.lote}: <strong class="text-rose-700">${g.cantidad} faltantes</strong></div>`).join('')
+                : '<span class="text-emerald-700">¡100% del ganado trabajado!</span>'}
+            </div>
+          </div>
+        </div>
+
+        <!-- BARRA DE BÚSQUEDA E IMPRESIÓN DE PLANILLA DE BÚSQUEDA EN TERRENO -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="font-black text-sm text-slate-800">
+                📋 Listado de Animales Faltantes para Verificación en Terreno (${faltantesVisibles.length})
+              </h3>
+              <p class="text-xs text-slate-600">
+                Lleva o imprime este listado al potrero para ubicar cada ejemplar que no pasó por báscula/manga y registrar la causa.
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                id="in-buscar-dentro-faltantes"
+                value="${this.faltantesBusqueda}"
+                placeholder="Buscar arete, nombre o lote..."
+                class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800"
+              />
+              <button type="button" id="btn-imprimir-planilla-faltantes" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5">
+                <span>🖨️</span> Imprimir Planilla de Campo
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-100 uppercase text-[10px] font-black text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="p-3 w-10 text-center">#</th>
+                  <th class="p-3">Arete / Nº</th>
+                  <th class="p-3">Nombre & Especie</th>
+                  <th class="p-3">Categoría & Sexo</th>
+                  <th class="p-3">📍 Lote Registrado</th>
+                  <th class="p-3 text-right">Último Peso</th>
+                  <th class="p-3">Último Trabajo Previo</th>
+                  <th class="p-3">Causa / Hallazgo en Terreno</th>
+                  <th class="p-3 text-center">Ficha</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${faltantesVisibles.length > 0 ? faltantesVisibles.map((a, idx) => {
+                  const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+                  const causaActual = this.causasTerrenoMap[claveCausa] || causasOpciones[0];
+                  return `
+                    <tr class="hover:bg-rose-50/40 transition">
+                      <td class="p-3 text-center font-mono text-slate-600">${idx + 1}</td>
+                      <td class="p-3 font-black font-mono text-slate-800 text-sm">${a.tag}</td>
+                      <td class="p-3">
+                        <div class="font-bold text-slate-800">${a.nombreAlias || a.nombre || 'Sin Alias'}</div>
+                        <div class="text-[10px] text-slate-600">${(a.especie || 'bovino') === 'bufalino' ? '🦬 Bufalino' : '🐂 Vacuno'} • ${a.raza || 'Común'}</div>
+                      </td>
+                      <td class="p-3 text-slate-700 font-semibold">${a.categoria || 'General'} (${(a.sexo || 'hembra') === 'macho' ? '♂️' : '♀️'})</td>
+                      <td class="p-3">
+                        <span class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-950 border border-amber-300 font-bold text-[11px]">
+                          📍 ${a.lote || 'General'}
+                        </span>
+                      </td>
+                      <td class="p-3 text-right font-mono font-bold text-slate-800">
+                        ${a.ultimoPesoKg ? `${a.ultimoPesoKg} kg` : 'Sin peso'}
+                      </td>
+                      <td class="p-3 font-mono text-[11px] text-slate-600">
+                        ${a.fechaUltimoTrabajoPrevio ? `${formatearFecha(a.fechaUltimoTrabajoPrevio)} (${a.diasSinTrabajar ?? 0}d atrás)` : 'Sin registro previo'}
+                      </td>
+                      <td class="p-3">
+                        <select data-causa-clave="${claveCausa}" class="sel-causa-faltante-terreno px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-[11px] text-slate-800 cursor-pointer">
+                          ${causasOpciones.map((opC) => `<option value="${opC}" ${causaActual === opC ? 'selected' : ''}>${opC}</option>`).join('')}
+                        </select>
+                      </td>
+                      <td class="p-3 text-center">
+                        ${a.id ? `
+                          <button type="button" data-action="ver-ficha-animal" data-id="${a.id}" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-800 text-[10px] font-bold rounded-lg cursor-pointer">
+                            🔍 Ficha
+                          </button>
+                        ` : '—'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('') : `
+                  <tr>
+                    <td colspan="9" class="p-10 text-center text-emerald-800 font-bold">
+                      🎉 ¡Excelente! No hay animales faltantes sin trabajar para los criterios seleccionados (${res.totalTrabajados} de ${res.totalSistema} trabajados).
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  imprimirPlanillaFaltantesTerreno() {
+    if (typeof window === 'undefined') return;
+    const ctx = this.calcularDatosFaltantesActual();
+    const res = ctx.resultado;
+    const filasHtml = res.faltantes.map((a, i) => {
+      const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+      const causa = this.causasTerrenoMap[claveCausa] || '';
+      return `
+        <tr>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;">${i + 1}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;font-weight:bold;font-family:monospace;font-size:13px;">${a.tag}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.nombreAlias || a.nombre || ''}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.categoria || ''}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;font-weight:bold;">${a.lote || 'General'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${a.ultimoPesoKg ? `${a.ultimoPesoKg} kg` : '-'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.fechaUltimoTrabajoPrevio ? formatearFecha(a.fechaUltimoTrabajoPrevio) : '-'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;min-width:190px;">${causa === 'Pendiente buscar en potrero' ? '' : causa}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const w = window.open('', '_blank', 'width=980,height=720');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Planilla de Animales NO Trabajados - ${ctx.fincaObj.nombre}</title></head>
+      <body style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;">
+        <h2 style="margin:0 0 6px 0;">GANADERO AD — Planilla de Búsqueda en Terreno (Animales NO Trabajados)</h2>
+        <p style="margin:0 0 12px 0;font-size:13px;">
+          <strong>Finca:</strong> ${ctx.fincaObj.nombre} &nbsp;|&nbsp;
+          <strong>Trabajo:</strong> ${this.faltantesTipoTrabajo.toUpperCase()} &nbsp;|&nbsp;
+          <strong>Jornada:</strong> ${formatearFecha(ctx.fechaDesde)} al ${formatearFecha(ctx.fechaHasta)} &nbsp;|&nbsp;
+          <strong>En Sistema:</strong> ${res.totalSistema} &nbsp;|&nbsp;
+          <strong>Trabajados:</strong> ${res.totalTrabajados} &nbsp;|&nbsp;
+          <strong>Faltantes:</strong> ${res.totalFaltantes}
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:#f1f5f9;">
+              <th style="border:1px solid #cbd5e1;padding:6px;">#</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Arete / Nº</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Nombre</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Categoría</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Lote / Potrero</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Últ. Peso</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Últ. Trabajo</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Causa Encontrada en Terreno</th>
+            </tr>
+          </thead>
+          <tbody>${filasHtml}</tbody>
+        </table>
+        <script>window.onload = function(){ window.print(); };<\/script>
+      </body></html>`);
+    w.document.close();
   }
 
   obtenerEtiquetaDimension(dim) {
@@ -11190,6 +13382,95 @@ class TablaDinamica {
   }
 
   exportarInformeActualExcel() {
+    const fechaHoyArchivo = obtenerFechaHoyLocal();
+
+    if (this.informeActivoId === 'utilidad_finca') {
+      const data = this.calcularDatosInformeUtilidadActual();
+      const r = data.principal;
+      const filasPyG = [
+        { Concepto: 'Finca / Alcance', Valor: r.nombreFinca },
+        { Concepto: 'Período Analizado', Valor: `${r.fechaDesde} a ${r.fechaHasta} (${r.diasPeriodo} días)` },
+        { Concepto: 'Tiene Ordeño Activo', Valor: r.leche.tieneOrdeno ? 'SÍ' : 'NO (Sin pesajes de leche registrados)' },
+        { Concepto: 'Litros de Leche del Período', Valor: r.leche.litrosProducidosPeriodo },
+        { Concepto: '(+) Ingreso por Leche ($ COP)', Valor: r.leche.ingresoLeche },
+        { Concepto: 'Kilos Ganados por el Ganado (kg)', Valor: r.carne.kilosGanadosGanado },
+        { Concepto: '(+) Ingreso por Ganancia de Peso ($ COP)', Valor: r.carne.ingresoGananciaPeso },
+        { Concepto: 'Partos / Terneros Nacidos (kg)', Valor: `${r.partos.totalPartosPeriodo} partos (${r.partos.kilosPartosPeriodo} kg)` },
+        { Concepto: '(+) Ingreso por Partos ($ COP)', Valor: r.partos.ingresoPartos },
+        { Concepto: '(=) Ingreso Bruto Total ($ COP)', Valor: r.resultados.ingresoBrutoProduccion },
+        { Concepto: '(-) Costos Directos ($ COP)', Valor: r.egresos.costosDirectos },
+        { Concepto: '(-) Gastos Administrativos ($ COP)', Valor: r.egresos.gastosAdmin },
+        { Concepto: '(-) Nómina y Seguridad Social ($ COP)', Valor: r.egresos.nomina },
+        { Concepto: '(=) EBITDA Ganadero ($ COP)', Valor: r.resultados.ebitdaGanadero },
+        { Concepto: '(-) Cuota Mensual Inversiones Diferidas ($ COP)', Valor: r.egresos.cuotaInversionesDiferidas },
+        { Concepto: '(-) Pérdida por Mortalidad NIC 41 ($ COP)', Valor: r.egresos.perdidaMortalidadCOP },
+        { Concepto: '(=) UTILIDAD NETA DE LA FINCA ($ COP)', Valor: r.resultados.utilidadNeta },
+        { Concepto: 'Margen Neto (%)', Valor: `${r.resultados.margenNetoPct}%` },
+        { Concepto: 'Utilidad por Hectárea ($/Ha)', Valor: r.resultados.utilidadPorHa }
+      ];
+      if (typeof XLSX !== 'undefined' && XLSX.utils) {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPyG), 'Utilidad_Finca');
+        if (data.reportesPorFinca.length > 0) {
+          const filasComp = data.reportesPorFinca.map((rf) => ({
+            Finca: rf.nombreFinca,
+            Hectareas: rf.areaHa,
+            Animales_Activos: rf.carne.animalesActivosCount,
+            Ordeno: rf.leche.tieneOrdeno ? 'Sí' : 'Sin ordeño',
+            Litros_Periodo: rf.leche.litrosProducidosPeriodo,
+            Ingreso_Leche_COP: rf.leche.ingresoLeche,
+            Kg_Ganancia_Ganado: rf.carne.kilosGanadosGanado,
+            Ingreso_Ganancia_Peso_COP: rf.carne.ingresoGananciaPeso,
+            Partos_Kg: rf.partos.kilosPartosPeriodo,
+            Ingreso_Partos_COP: rf.partos.ingresoPartos,
+            Egresos_Totales_COP: rf.egresos.totalEgresos,
+            Utilidad_Neta_COP: rf.resultados.utilidadNeta,
+            Utilidad_Por_Ha_COP: rf.resultados.utilidadPorHa
+          }));
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasComp), 'Comparativa_Fincas');
+        }
+        const nombreArchivo = `Utilidad_Por_Finca_${fechaHoyArchivo}.xlsx`;
+        if (typeof XLSX.writeFile === 'function') XLSX.writeFile(wb, nombreArchivo);
+        return { ok: true, total: filasPyG.length, nombreArchivo };
+      }
+      return { ok: true, total: filasPyG.length, filas: filasPyG };
+    }
+
+    if (this.informeActivoId === 'animales_no_trabajados') {
+      const ctx = this.calcularDatosFaltantesActual();
+      const res = ctx.resultado;
+      const filasFaltantes = res.faltantes.map((a, idx) => {
+        const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+        return {
+          Item: idx + 1,
+          Finca: ctx.fincaObj.nombre,
+          Arete_Animal: a.tag,
+          Nombre_Alias: a.nombreAlias || a.nombre || '',
+          Especie: a.especie || 'bovino',
+          Raza: a.raza || 'Común',
+          Categoria: a.categoria || '',
+          Sexo: a.sexo || 'hembra',
+          Lote_Registrado: a.lote || 'General',
+          Ultimo_Peso_Kg: a.ultimoPesoKg || '',
+          Fecha_Ultimo_Trabajo: a.fechaUltimoTrabajoPrevio || '',
+          Dias_Sin_Trabajar: a.diasSinTrabajar ?? '',
+          Causa_En_Terreno: this.causasTerrenoMap[claveCausa] || 'Pendiente verificar en terreno'
+        };
+      });
+      if (typeof XLSX !== 'undefined' && XLSX.utils) {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.json_to_sheet(filasFaltantes.length > 0 ? filasFaltantes : [{ Mensaje: '100% de animales trabajados, 0 faltantes' }]),
+          'Animales_No_Trabajados'
+        );
+        const nombreArchivo = `Animales_No_Trabajados_${ctx.fincaObj.nombre}_${fechaHoyArchivo}.xlsx`;
+        if (typeof XLSX.writeFile === 'function') XLSX.writeFile(wb, nombreArchivo);
+        return { ok: true, total: filasFaltantes.length, nombreArchivo };
+      }
+      return { ok: true, total: filasFaltantes.length, filas: filasFaltantes };
+    }
+
     const animales = this.obtenerAnimalesFiltradosYOrdenados();
     const resumenGrupos = this.calcularResumenAgrupado(animales, this.agruparPor);
     const informeActual = CATALOGO_INFORMES_GANADEROS.find((i) => i.id === this.informeActivoId) || CATALOGO_INFORMES_GANADEROS[0];
@@ -11406,6 +13687,140 @@ class TablaDinamica {
     });
 
     this.enlazarEventosTabla();
+    this.enlazarEventosInformesEspeciales();
+  }
+
+  enlazarEventosInformesEspeciales() {
+    if (!this.container) return;
+
+    // Eventos Informe Utilidad por Finca
+    const selUtilFinca = this.container.querySelector('#sel-utilidad-finca');
+    if (selUtilFinca) {
+      selUtilFinca.addEventListener('change', (e) => {
+        this.utilidadFincaId = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilDesde = this.container.querySelector('#in-utilidad-desde');
+    if (inUtilDesde) {
+      inUtilDesde.addEventListener('change', (e) => {
+        this.utilidadFechaDesde = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilHasta = this.container.querySelector('#in-utilidad-hasta');
+    if (inUtilHasta) {
+      inUtilHasta.addEventListener('change', (e) => {
+        this.utilidadFechaHasta = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilPesoNac = this.container.querySelector('#in-utilidad-peso-nac');
+    if (inUtilPesoNac) {
+      inUtilPesoNac.addEventListener('change', (e) => {
+        this.utilidadPesoNacimientoKg = Math.max(10, Number(e.target.value) || 30);
+        this.render();
+      });
+    }
+    this.container.querySelectorAll('.btn-rango-utilidad').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const tipo = e.currentTarget.getAttribute('data-rango-util');
+        const hoy = obtenerFechaHoyLocal();
+        this.utilidadFechaHasta = hoy;
+        if (tipo === 'MES') {
+          this.utilidadFechaDesde = `${hoy.slice(0, 8)}01`;
+        } else if (tipo === '30D') {
+          const d = new Date();
+          d.setDate(d.getDate() - 29);
+          this.utilidadFechaDesde = obtenerFechaHoyLocal(d);
+        } else if (tipo === 'ANIO') {
+          this.utilidadFechaDesde = `${hoy.slice(0, 4)}-01-01`;
+        }
+        this.render();
+      });
+    });
+
+    // Eventos Informe Animales NO Trabajados
+    const selFaltFinca = this.container.querySelector('#sel-faltantes-finca');
+    if (selFaltFinca) {
+      selFaltFinca.addEventListener('change', (e) => {
+        this.faltantesFincaId = e.target.value;
+        this.faltantesFechaDesde = '';
+        this.faltantesFechaHasta = '';
+        this.faltantesLote = 'todos';
+        this.render();
+      });
+    }
+    const selFaltTipo = this.container.querySelector('#sel-faltantes-tipo');
+    if (selFaltTipo) {
+      selFaltTipo.addEventListener('change', (e) => {
+        this.faltantesTipoTrabajo = e.target.value;
+        this.faltantesFechaDesde = '';
+        this.faltantesFechaHasta = '';
+        this.render();
+      });
+    }
+    const inFaltDesde = this.container.querySelector('#in-faltantes-desde');
+    if (inFaltDesde) {
+      inFaltDesde.addEventListener('change', (e) => {
+        this.faltantesFechaDesde = e.target.value;
+        if (!this.faltantesFechaHasta || this.faltantesFechaHasta < e.target.value) {
+          this.faltantesFechaHasta = e.target.value;
+        }
+        this.render();
+      });
+    }
+    const inFaltHasta = this.container.querySelector('#in-faltantes-hasta');
+    if (inFaltHasta) {
+      inFaltHasta.addEventListener('change', (e) => {
+        this.faltantesFechaHasta = e.target.value;
+        this.render();
+      });
+    }
+    const selFaltLote = this.container.querySelector('#sel-faltantes-lote');
+    if (selFaltLote) {
+      selFaltLote.addEventListener('change', (e) => {
+        this.faltantesLote = e.target.value;
+        this.render();
+      });
+    }
+    this.container.querySelectorAll('.btn-elegir-jornada-detectada').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const f = e.currentTarget.getAttribute('data-jornada-fecha');
+        if (f) {
+          this.faltantesFechaDesde = f;
+          this.faltantesFechaHasta = f;
+          this.render();
+        }
+      });
+    });
+    const inBusqFalt = this.container.querySelector('#in-buscar-dentro-faltantes');
+    if (inBusqFalt) {
+      inBusqFalt.addEventListener('input', (e) => {
+        this.faltantesBusqueda = e.target.value;
+        this.render();
+        const refoc = this.container.querySelector('#in-buscar-dentro-faltantes');
+        if (refoc && typeof refoc.focus === 'function') {
+          refoc.focus();
+          if (typeof refoc.setSelectionRange === 'function') {
+            const len = refoc.value.length;
+            refoc.setSelectionRange(len, len);
+          }
+        }
+      });
+    }
+    this.container.querySelectorAll('.sel-causa-faltante-terreno').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const k = e.currentTarget.getAttribute('data-causa-clave');
+        if (k) {
+          this.causasTerrenoMap[k] = e.currentTarget.value;
+        }
+      });
+    });
+    const btnPrintFalt = this.container.querySelector('#btn-imprimir-planilla-faltantes');
+    if (btnPrintFalt) {
+      btnPrintFalt.addEventListener('click', () => this.imprimirPlanillaFaltantesTerreno());
+    }
   }
 
   enlazarEventosTabla() {
@@ -14147,16 +16562,16 @@ class ModuloAdmin {
                                 <div class="text-[10px] text-slate-600 mt-2.5 font-mono flex flex-wrap justify-between items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                   <span>Leche: <strong>$${f.precioLecheLitro || 2450}/L</strong></span>
                                   <span>Carne: <strong>$${f.precioCarneKgPie || 8900}/kg</strong></span>
-                                  <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
-                                    ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? '🥛 Un Ordeño (1 Casilla)' : '🥛🥛 Doble Ordeño (2 Casillas)'}
+                                  <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+                                    ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? '🥛 Un Ordeño (1 Casilla)' : '🥛🥛 Doble Ordeño (2 Casillas)'}
                                   </span>
                                 </div>
                                 ${!esConsultor ? `
                                 <div class="mt-2 flex items-center justify-between gap-2 bg-emerald-50/60 px-2.5 py-1.5 rounded-xl border border-emerald-200 text-[11px]">
-                                  <label class="font-bold text-emerald-950 whitespace-nowrap">🥛 Ordeño Finca:</label>
+                                  <label class="font-bold text-emerald-950 whitespace-nowrap">🥛 Ordeños al día:</label>
                                   <select class="select-ordeno-finca-card flex-1 px-2 py-1 rounded-lg border border-emerald-300 bg-white font-bold text-emerald-950 outline-none cursor-pointer" data-finca-id="${f.id}">
-                                    <option value="1" ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla)</option>
-                                    <option value="2" ${(Number(f.numeroOrdenos) !== 1 && f.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas)</option>
+                                    <option value="1" ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? 'selected' : ''}>🥛 1 Ordeño al día (Por defecto)</option>
+                                    <option value="2" ${(Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno') ? 'selected' : ''}>🥛🥛 2 Ordeños al día (Mañana y Tarde)</option>
                                   </select>
                                 </div>
                                 ` : ''}
@@ -14617,10 +17032,10 @@ class ModuloAdmin {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-700 mb-1">🥛 Modalidad de Ordeño en la Finca:</label>
+                  <label class="block font-bold text-slate-700 mb-1">🥛 Cantidad de Ordeños al Día en la Finca:</label>
                   <select id="input-numero-ordenos" ${esConsultor ? 'disabled' : ''} class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none focus:border-purple-600 bg-white">
-                    <option value="1" ${(Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla en Pesaje de Leche)</option>
-                    <option value="2" ${(Number(finca.numeroOrdenos) !== 1 && finca.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas: Mañana y Tarde)</option>
+                    <option value="1" ${(Number(finca.numeroOrdenos) !== 2 && finca.tipoOrdeno !== 'doble_ordeno') ? 'selected' : ''}>🥛 1 Ordeño al día (Por defecto — 1 Casilla)</option>
+                    <option value="2" ${(Number(finca.numeroOrdenos) === 2 || finca.tipoOrdeno === 'doble_ordeno') ? 'selected' : ''}>🥛🥛 2 Ordeños al día (2 Casillas: Mañana y Tarde)</option>
                   </select>
                 </div>
 
@@ -15553,10 +17968,10 @@ class ModuloAdmin {
             </div>
 
             <div class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-              <label class="block font-black text-emerald-950 mb-1">🥛 Modalidad de Ordeño en la Finca *:</label>
+              <label class="block font-black text-emerald-950 mb-1">🥛 Cantidad de Ordeños al Día en la Finca *:</label>
               <select id="finca-numero-ordenos" class="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white outline-none font-bold text-emerald-950 focus:border-emerald-600">
-                <option value="1">🥛 Un Ordeño Diario (1 Casilla en Pesaje de Leche)</option>
-                <option value="2" selected>🥛🥛 Doble Ordeño Diario (2 Casillas: Turno Mañana y Tarde)</option>
+                <option value="1" selected>🥛 1 Ordeño Diario (Por defecto — 1 Casilla en Pesaje de Leche)</option>
+                <option value="2">🥛🥛 2 Ordeños Diarios (2 Casillas: Turno Mañana y Tarde)</option>
               </select>
             </div>
 
@@ -16381,8 +18796,8 @@ END $$;
         const ubicacion = document.getElementById('finca-ubicacion')?.value.trim() || 'Colombia';
         const leche = parseFloat(document.getElementById('finca-precio-leche')?.value) || 2450;
         const carne = parseFloat(document.getElementById('finca-precio-carne')?.value) || 8900;
-        const numeroOrdenos = parseInt(document.getElementById('finca-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
-        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
+        const numeroOrdenos = parseInt(document.getElementById('finca-numero-ordenos')?.value || '1', 10) === 2 ? 2 : 1;
+        const tipoOrdeno = numeroOrdenos === 2 ? 'doble_ordeno' : 'un_ordeno';
 
         if (!nombre || isNaN(area) || area <= 0) {
           alert('Por favor ingresa un nombre válido y un área en hectáreas mayor a cero.');
@@ -16411,7 +18826,7 @@ END $$;
     this.container.querySelectorAll('.select-ordeno-finca-card').forEach((sel) => {
       sel.addEventListener('change', (e) => {
         const fid = e.currentTarget.getAttribute('data-finca-id');
-        const numOrd = parseInt(e.currentTarget.value || '2', 10) === 1 ? 1 : 2;
+        const numOrd = parseInt(e.currentTarget.value || '1', 10) === 2 ? 2 : 1;
         if (this.onActualizarOrdenoFinca) {
           this.onActualizarOrdenoFinca(fid, numOrd);
         } else if (this.onActualizarPrecios) {
@@ -16420,7 +18835,7 @@ END $$;
             leche: fincaItem?.precioLecheLitro || 2450,
             carne: fincaItem?.precioCarneKgPie || 8900,
             numeroOrdenos: numOrd,
-            tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+            tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
             fincaId: fid
           });
         }
@@ -17147,8 +19562,8 @@ END $$;
         const targetFincaId = inputL?.getAttribute('data-finca-id') || this.fincaFinanzasSeleccionada;
         const leche = parseFloat(inputL?.value) || 2450;
         const carne = parseFloat(document.getElementById('input-carne')?.value) || 8900;
-        const numeroOrdenos = parseInt(document.getElementById('input-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
-        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
+        const numeroOrdenos = parseInt(document.getElementById('input-numero-ordenos')?.value || '1', 10) === 2 ? 2 : 1;
+        const tipoOrdeno = numeroOrdenos === 2 ? 'doble_ordeno' : 'un_ordeno';
         if (this.onActualizarPrecios) {
           this.onActualizarPrecios({ leche, carne, numeroOrdenos, tipoOrdeno, fincaId: targetFincaId });
         }
@@ -24739,6 +27154,9 @@ class ModuloNutricion {
  *  3. Nómina, Seguridad Social (EPS, AFP, ARL, Caja) y Prestaciones (Prima, Cesantías, Intereses, Vacaciones)
  */
 
+
+
+
 const CATEGORIAS_CONTABILIDAD = {
   ingreso: [
     'Venta de ganado (novillos, destetos, descarte)',
@@ -24760,6 +27178,15 @@ const CATEGORIAS_CONTABILIDAD = {
     'Honorarios profesionales',
     'Mantenimiento de vehículos/maquinaria',
     'Varios'
+  ],
+  inversion_diferida: [
+    'Infraestructura ganadera (corrales, manga, báscula, cercas)',
+    'Maquinaria y equipos (tractor, picapasto, guadaña, tanque frío)',
+    'Establecimiento / renovación de pasturas y silvopastoril',
+    'Acueductos ganaderos, pozos y sistemas de riego',
+    'Mejoramiento genético (toros reproductores, embriones)',
+    'Construcciones, bodegas y energía solar',
+    'Otra inversión diferida'
   ],
   nomina: [
     'Nómina, Seguridad Social y Prestaciones'
@@ -24877,6 +27304,7 @@ function calcularLiquidacionNomina({
  */
 function calcularResumenContableFinca({
   movimientos = [],
+  inversiones = [],
   pagosNomina = [],
   animales = [],
   fincas = [],
@@ -24892,12 +27320,12 @@ function calcularResumenContableFinca({
     return esConsolidado ? true : itemFincaId === fincaFiltroId;
   };
 
+  const hoyLocalIso = obtenerFechaHoyLocal();
   const cumplePeriodo = (fechaStr) => {
     if (!periodoFiltro || periodoFiltro === 'ALL' || !fechaStr) return true;
     const f = String(fechaStr).slice(0, 10);
-    const hoy = new Date();
-    const mesActualPrefix = hoy.toISOString().slice(0, 7);
-    const anioActualPrefix = hoy.toISOString().slice(0, 4);
+    const mesActualPrefix = hoyLocalIso.slice(0, 7);
+    const anioActualPrefix = hoyLocalIso.slice(0, 4);
 
     if (periodoFiltro === 'MES_ACTUAL') {
       return f.startsWith(mesActualPrefix);
@@ -24908,7 +27336,7 @@ function calcularResumenContableFinca({
     if (periodoFiltro === 'ULTIMOS_90') {
       const lim = new Date();
       lim.setDate(lim.getDate() - 90);
-      return f >= lim.toISOString().slice(0, 10);
+      return f >= obtenerFechaHoyLocal(lim);
     }
     if (/^\d{4}-\d{2}$/.test(periodoFiltro)) {
       return f.startsWith(periodoFiltro);
@@ -24920,7 +27348,13 @@ function calcularResumenContableFinca({
   const movsFiltrados = (movimientos || []).filter((m) => {
     if (!m) return false;
     const fid = m.fincaId || m.finca_id;
-    return perteneceAFinca(fid) && cumplePeriodo(m.fecha);
+    if (!perteneceAFinca(fid)) return false;
+    // Las inversiones diferidas activas se incluyen aunque su compra haya sido en meses anteriores
+    if (String(m.tipo || '').toLowerCase() === 'inversion_diferida') {
+      const calcInv = calcularAmortizacionInversionEnPeriodo(m, { periodoFiltro, fechaReferencia: hoyLocalIso });
+      return calcInv.impactoPeriodo > 0 || cumplePeriodo(m.fecha);
+    }
+    return cumplePeriodo(m.fecha);
   });
 
   // Asegurar que pagos de nómina que no tengan aún su espejo en movimientos se contabilicen sin duplicar
@@ -24937,10 +27371,56 @@ function calcularResumenContableFinca({
   let totalCostosDirectos = 0;
   let totalGastosAdmin = 0;
   let totalNominaSeguridadSocial = 0;
+  let totalCuotaInversionesDiferidas = 0;
+  let totalCapexInvertido = 0;
+  let totalSaldoPorDiferir = 0;
   let cuentasPorPagar = 0;
   let cuentasPorCobrar = 0;
 
   const porCategoriaMap = new Map();
+  const inversionesDiferidasMap = new Map();
+
+  for (const m of (movimientos || [])) {
+    if (!m || String(m.tipo || '').toLowerCase() !== 'inversion_diferida') continue;
+    const fid = m.fincaId || m.finca_id;
+    if (!perteneceAFinca(fid)) continue;
+    inversionesDiferidasMap.set(m.id, m);
+  }
+  for (const inv of (inversiones || [])) {
+    if (!inv) continue;
+    const fid = inv.fincaId || inv.finca_id;
+    if (!perteneceAFinca(fid)) continue;
+    const key = inv.movimientoContableId || inv.id;
+    if (!inversionesDiferidasMap.has(key)) {
+      inversionesDiferidasMap.set(key, {
+        ...inv,
+        tipo: 'inversion_diferida',
+        concepto: inv.concepto || inv.nombreInversion || inv.descripcion || 'Inversión Diferida',
+        monto: Number(inv.monto ?? inv.montoTotalInversion ?? inv.montoTotal ?? 0),
+        plazoMeses: Math.max(1, parseInt(inv.plazoMeses ?? inv.plazoMesesDiferido ?? 1, 10) || 1),
+        fecha: inv.fecha || inv.fechaInicio || hoyLocalIso
+      });
+    }
+  }
+
+  const inversionesDiferidasDetalle = [];
+  for (const inv of inversionesDiferidasMap.values()) {
+    const calc = calcularAmortizacionInversionEnPeriodo(inv, {
+      periodoFiltro,
+      fechaReferencia: hoyLocalIso
+    });
+    totalCapexInvertido += calc.montoTotal;
+    totalSaldoPorDiferir += calc.saldoPorDiferir;
+    if (calc.impactoPeriodo > 0) {
+      totalCuotaInversionesDiferidas += calc.impactoPeriodo;
+      const catInv = 'Inversiones Diferidas (Cuota)';
+      porCategoriaMap.set(catInv, (porCategoriaMap.get(catInv) || 0) + calc.impactoPeriodo);
+    }
+    inversionesDiferidasDetalle.push({
+      ...inv,
+      ...calc
+    });
+  }
 
   for (const m of movsFiltrados) {
     const monto = Math.max(0, Number(m.monto) || 0);
@@ -24965,6 +27445,10 @@ function calcularResumenContableFinca({
         cuentasPorPagar += monto;
       }
       porCategoriaMap.set(cat, (porCategoriaMap.get(cat) || 0) + monto);
+    } else if (tipo === 'inversion_diferida') {
+      if ((estado.includes('pagar') || estado.includes('pendiente')) && cumplePeriodo(m.fecha)) {
+        cuentasPorPagar += monto;
+      }
     } else if (tipo === 'nomina') {
       totalNominaSeguridadSocial += monto;
       if (estado.includes('pagar') || estado.includes('pendiente')) {
@@ -24983,7 +27467,7 @@ function calcularResumenContableFinca({
   }
 
   const totalCostosOperativos = totalCostosDirectos + totalGastosAdmin;
-  const totalEgresos = totalCostosOperativos + totalNominaSeguridadSocial;
+  const totalEgresos = totalCostosOperativos + totalNominaSeguridadSocial + totalCuotaInversionesDiferidas;
   const utilidadBruta = totalIngresos - totalCostosDirectos;
   const utilidadNeta = totalIngresos - totalEgresos;
   const margenNetoPct = totalIngresos > 0
@@ -25052,8 +27536,21 @@ function calcularResumenContableFinca({
     const monto = Math.max(0, Number(m.monto) || 0);
     if (m.tipo === 'ingreso') {
       bucket.ingresos += monto;
-    } else {
+    } else if (m.tipo !== 'inversion_diferida') {
       bucket.egresos += monto;
+    }
+  }
+
+  // Sumar a cada mes de la serie únicamente la cuota diferida mensual activa de cada inversión
+  for (const inv of inversionesDiferidasDetalle) {
+    for (const [ym, bucket] of mesesMap.entries()) {
+      const calcMes = calcularAmortizacionInversionEnPeriodo(inv, {
+        periodoFiltro: ym,
+        fechaReferencia: hoyLocalIso
+      });
+      if (calcMes.impactoPeriodo > 0) {
+        bucket.egresos += calcMes.impactoPeriodo;
+      }
     }
   }
 
@@ -25069,6 +27566,10 @@ function calcularResumenContableFinca({
     totalGastosAdmin,
     totalCostosOperativos,
     totalNominaSeguridadSocial,
+    totalCuotaInversionesDiferidas,
+    totalCapexInvertido,
+    totalSaldoPorDiferir,
+    inversionesDiferidasDetalle,
     totalEgresos,
     utilidadBruta,
     utilidadNeta,
@@ -25093,6 +27594,7 @@ class ModuloContabilidad {
     getFincaActiva,
     getAnimales,
     getMovimientos,
+    getInversiones,
     getTrabajadores,
     getPagosNomina,
     getRol,
@@ -25109,6 +27611,7 @@ class ModuloContabilidad {
     this.getFincaActiva = getFincaActiva || (() => null);
     this.getAnimales = getAnimales || (() => []);
     this.getMovimientos = getMovimientos || (() => []);
+    this.getInversiones = getInversiones || (() => []);
     this.getTrabajadores = getTrabajadores || (() => []);
     this.getPagosNomina = getPagosNomina || (() => []);
     this.getRol = getRol || (() => 'administrador');
@@ -25157,6 +27660,7 @@ class ModuloContabilidad {
     const fincas = this.getFincas() || [];
     const animales = this.getAnimales() || [];
     const movimientos = this.getMovimientos() || [];
+    const inversiones = this.getInversiones() || [];
     const trabajadores = this.getTrabajadores() || [];
     const pagosNomina = this.getPagosNomina() || [];
     const rol = (this.getRol() || 'administrador').toLowerCase();
@@ -25177,6 +27681,7 @@ class ModuloContabilidad {
 
     const resumen = calcularResumenContableFinca({
       movimientos,
+      inversiones,
       pagosNomina,
       animales,
       fincas,
@@ -25205,6 +27710,7 @@ class ModuloContabilidad {
 
     const mostrarDashboard = this.subvistaActiva === 'integral' || this.subvistaActiva === 'dashboard';
     const mostrarMovimientos = this.subvistaActiva === 'integral' || this.subvistaActiva === 'movimientos';
+    const mostrarInversiones = this.subvistaActiva === 'integral' || this.subvistaActiva === 'inversiones';
     const mostrarNomina = this.subvistaActiva === 'integral' || this.subvistaActiva === 'nomina';
 
     this.container.innerHTML = `
@@ -25330,6 +27836,17 @@ class ModuloContabilidad {
               }"
             >
               <span>🧾 Ingresos, Costos Directos & Gastos (${resumen.movimientosFiltrados.length})</span>
+            </button>
+            <button
+              type="button"
+              data-subvista="inversiones"
+              class="btn-subvista-contab px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                this.subvistaActiva === 'inversiones'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }"
+            >
+              <span>🏗️ Inversiones Diferidas (${resumen.inversionesDiferidasDetalle.length})</span>
             </button>
             <button
               type="button"
@@ -25482,6 +27999,16 @@ class ModuloContabilidad {
         }) : ''}
 
         <!-- ================================================================== -->
+        <!-- SECCIÓN 2.5: SUBMÓDULO DE INVERSIONES DIFERIDAS EN MESES           -->
+        <!-- ================================================================== -->
+        ${mostrarInversiones ? this.renderSeccionInversionesDiferidas({
+          fincas,
+          fincaDefaultForm,
+          resumen,
+          esSoloConsulta
+        }) : ''}
+
+        <!-- ================================================================== -->
         <!-- SECCIÓN 3: SUBMÓDULO DE NÓMINA, SEGURIDAD SOCIAL Y PRESTACIONES    -->
         <!-- ================================================================== -->
         ${mostrarNomina ? this.renderSeccionNomina({
@@ -25567,6 +28094,11 @@ class ModuloContabilidad {
               <div class="flex items-center justify-between px-2.5 py-2 text-slate-700">
                 <span>(-) Nómina, Seguridad Social (EPS/AFP/ARL) y Prestaciones</span>
                 <span class="font-bold text-blue-700 bovi-kpi-value">-${formatearMonedaCOP(resumen.totalNominaSeguridadSocial)}</span>
+              </div>
+
+              <div class="flex items-center justify-between px-2.5 py-2 text-slate-700 bg-purple-50/70 rounded-xl border border-purple-200/70">
+                <span>(-) Cuota Diferida de Inversiones (${resumen.inversionesDiferidasDetalle.length} activas)</span>
+                <span class="font-bold text-purple-800 bovi-kpi-value">-${formatearMonedaCOP(resumen.totalCuotaInversionesDiferidas)}</span>
               </div>
             </div>
           </div>
@@ -25742,6 +28274,7 @@ class ModuloContabilidad {
                 <option value="ingreso" ${this.tipoMovimientoForm === 'ingreso' ? 'selected' : ''}>🟢 Ingreso Agropecuario</option>
                 <option value="costo_directo" ${this.tipoMovimientoForm === 'costo_directo' ? 'selected' : ''}>🟡 Costo Directo (Producción)</option>
                 <option value="gasto_admin" ${this.tipoMovimientoForm === 'gasto_admin' ? 'selected' : ''}>🔴 Gasto Fijo / Administrativo</option>
+                <option value="inversion_diferida" ${this.tipoMovimientoForm === 'inversion_diferida' ? 'selected' : ''}>🏗️ Inversión Diferida (Diferir en Meses)</option>
               </select>
             </div>
 
@@ -25817,6 +28350,25 @@ class ModuloContabilidad {
               />
             </div>
 
+            <div id="box-contab-plazo-diferido" class="sm:col-span-2 lg:col-span-3 p-3 rounded-xl bg-purple-50 border border-purple-200 ${this.tipoMovimientoForm === 'inversion_diferida' ? '' : 'hidden'}">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div>
+                  <label for="contab-mov-plazo-meses" class="block font-bold text-purple-950 mb-1">⏱️ Tiempo a Diferir (Meses) *</label>
+                  <input
+                    type="number"
+                    id="contab-mov-plazo-meses"
+                    value="12"
+                    min="1"
+                    max="240"
+                    class="w-full px-3 py-1.5 rounded-xl border border-purple-300 bg-white font-black text-purple-950"
+                  />
+                </div>
+                <div id="preview-cuota-diferida-contab" class="text-[11px] text-purple-900 font-semibold">
+                  El costo total se distribuirá mensualmente para que no entre todo en un solo mes.
+                </div>
+              </div>
+            </div>
+
             <div class="sm:col-span-2 lg:col-span-3 flex items-end">
               <button
                 type="submit"
@@ -25828,6 +28380,157 @@ class ModuloContabilidad {
             </div>
           </form>
         `}
+      </div>
+    `;
+  }
+
+  renderSeccionInversionesDiferidas({ fincas, fincaDefaultForm, resumen, esSoloConsulta }) {
+    const hoyIso = obtenerFechaHoyLocal();
+    const catsInv = CATEGORIAS_CONTABILIDAD.inversion_diferida || [];
+    const listaInvs = resumen.inversionesDiferidasDetalle || [];
+
+    return `
+      <div class="bovi-agrotech-card bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200">
+          <div>
+            <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+              <span>🏗️ Registro y Control de Inversiones Diferidas en el Tiempo</span>
+            </h3>
+            <p class="text-xs text-slate-600 mt-0.5">
+              Registra inversiones de infraestructura, equipos, pasturas o genética e indica el <strong>número de meses a diferir</strong> para que el costo se reparta mensualmente y no golpee todo en un solo mes.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="px-3 py-1 rounded-xl bg-purple-50 border border-purple-200 font-bold text-purple-900">
+              Total Invertido: ${formatearMonedaCOP(resumen.totalCapexInvertido)}
+            </span>
+            <span class="px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-900">
+              Cuota Período: ${formatearMonedaCOP(resumen.totalCuotaInversionesDiferidas)}
+            </span>
+            <span class="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 font-bold text-amber-900">
+              Saldo por Diferir: ${formatearMonedaCOP(resumen.totalSaldoPorDiferir)}
+            </span>
+          </div>
+        </div>
+
+        ${!esSoloConsulta ? `
+          <form id="form-contabilidad-inversion-rapida" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 text-xs p-4 rounded-2xl bg-slate-50 border border-slate-200">
+            <div>
+              <label for="inv-contab-fecha" class="block font-bold text-slate-700 mb-1">Fecha Inversión *</label>
+              <input type="date" id="inv-contab-fecha" value="${hoyIso}" required class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="inv-contab-finca" class="block font-bold text-slate-700 mb-1">Finca Asignada *</label>
+              <select id="inv-contab-finca" required class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+                ${fincas.map((f) => `
+                  <option value="${this.escape(f.id)}" ${f.id === fincaDefaultForm ? 'selected' : ''}>${this.escape(f.nombre)}</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="lg:col-span-2">
+              <label for="inv-contab-categoria" class="block font-bold text-slate-700 mb-1">Rubro de Inversión *</label>
+              <select id="inv-contab-categoria" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+                ${catsInv.map((c) => `<option value="${this.escape(c)}">${this.escape(c)}</option>`).join('')}
+              </select>
+            </div>
+
+            <div>
+              <label for="inv-contab-monto" class="block font-bold text-slate-700 mb-1">Monto Total ($ COP) *</label>
+              <input type="number" id="inv-contab-monto" required min="1" step="any" placeholder="Ej. 12000000" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-black text-slate-800 bovi-kpi-value" />
+            </div>
+
+            <div>
+              <label for="inv-contab-plazo" class="block font-bold text-purple-900 mb-1">⏱️ Meses a Diferir *</label>
+              <input type="number" id="inv-contab-plazo" required value="12" min="1" max="240" class="w-full px-3 py-2 rounded-xl border-2 border-purple-400 bg-white font-black text-purple-950 text-center" />
+            </div>
+
+            <div class="sm:col-span-2 lg:col-span-3">
+              <label for="inv-contab-concepto" class="block font-bold text-slate-700 mb-1">Descripción de la Inversión *</label>
+              <input type="text" id="inv-contab-concepto" required placeholder="Ej. Construcción corral de manejo, compra picapasto, renovación 15 Ha Brachiaria..." class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="inv-contab-tercero" class="block font-bold text-slate-700 mb-1">Proveedor / Contratista</label>
+              <input type="text" id="inv-contab-tercero" placeholder="Ej. Casa Toro / Ferretería..." class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div class="sm:col-span-2 flex flex-col justify-end gap-1.5">
+              <div id="inv-contab-cuota-preview" class="text-[11px] font-bold text-purple-900 bg-purple-100/70 px-3 py-1 rounded-lg border border-purple-200">
+                Cuota mensual estimada: $0 / mes
+              </div>
+              <button type="submit" id="btn-guardar-inversion-diferida" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-sm">
+                + Registrar Inversión Diferida
+              </button>
+            </div>
+          </form>
+        ` : ''}
+
+        <!-- CRONOGRAMA DE INVERSIONES DIFERIDAS -->
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 uppercase text-[10px] font-black text-slate-700 border-b border-slate-200">
+              <tr>
+                <th class="p-3">Inicio → Fin</th>
+                <th class="p-3">Finca</th>
+                <th class="p-3">Inversión & Rubro</th>
+                <th class="p-3 text-right">Monto Total</th>
+                <th class="p-3 text-center">Tiempo Diferido</th>
+                <th class="p-3 text-right">Cuota / Mes</th>
+                <th class="p-3 text-right">Saldo por Diferir</th>
+                <th class="p-3 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${listaInvs.length > 0 ? listaInvs.map((inv) => {
+                const fObj = fincas.find((f) => f.id === (inv.fincaId || inv.finca_id));
+                return `
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
+                      <div>${this.escape(inv.mesInicio)} → ${this.escape(inv.mesFin)}</div>
+                      <div class="text-[10px] text-slate-600">Mes ${inv.mesesTranscurridos} de ${inv.plazoMeses} (${inv.porcentajeAvance}%)</div>
+                    </td>
+                    <td class="p-3 font-bold text-slate-800 whitespace-nowrap">
+                      🏡 ${this.escape(fObj ? fObj.nombre : (inv.fincaNombre || inv.fincaId))}
+                    </td>
+                    <td class="p-3">
+                      <div class="font-bold text-slate-800">${this.escape(inv.concepto)}</div>
+                      <div class="text-[11px] text-slate-600">${this.escape(inv.categoria || 'Inversión')}</div>
+                    </td>
+                    <td class="p-3 text-right font-bold text-slate-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.montoTotal)}
+                    </td>
+                    <td class="p-3 text-center whitespace-nowrap">
+                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                        ${inv.plazoMeses} ${inv.plazoMeses === 1 ? 'mes' : 'meses'}
+                      </span>
+                    </td>
+                    <td class="p-3 text-right font-black text-purple-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.cuotaMensual)}/mes
+                    </td>
+                    <td class="p-3 text-right font-bold text-amber-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.saldoPorDiferir)}
+                    </td>
+                    <td class="p-3 text-center">
+                      ${!esSoloConsulta && inv.id ? `
+                        <button type="button" data-eliminar-movimiento="${this.escape(inv.id)}" class="btn-eliminar-movimiento-contab px-2 py-1 rounded-lg text-rose-700 hover:bg-rose-50 font-bold cursor-pointer" title="Eliminar inversión diferida">
+                          🗑️
+                        </button>
+                      ` : '—'}
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
+                <tr>
+                  <td colspan="8" class="p-6 text-center text-slate-600">
+                    No hay inversiones diferidas registradas en este filtro. Usa el formulario superior para registrar una inversión y diferirla por meses.
+                  </td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+        </div>
       </div>
     `;
   }
@@ -26198,9 +28901,13 @@ class ModuloContabilidad {
       return true;
     });
 
-    const getBadgeTipo = (tipo) => {
+    const getBadgeTipo = (tipo, mov = null) => {
       if (tipo === 'ingreso') return { clase: 'bovi-badge-ingreso', label: 'Ingreso' };
       if (tipo === 'costo_directo') return { clase: 'bovi-badge-costo', label: 'Costo Directo' };
+      if (tipo === 'inversion_diferida') {
+        const meses = Math.max(1, parseInt(mov?.plazoMeses ?? mov?.plazoMesesDiferido ?? 12, 10) || 12);
+        return { clase: 'bovi-badge-info', label: `Inversión (${meses}m)` };
+      }
       if (tipo === 'nomina') return { clase: 'bovi-badge-nomina', label: 'Nómina & Ley' };
       return { clase: 'bovi-badge-gasto', label: 'Gasto Admin' };
     };
@@ -26230,6 +28937,7 @@ class ModuloContabilidad {
               <option value="ingreso" ${this.filtroTablaTipo === 'ingreso' ? 'selected' : ''}>Ingresos</option>
               <option value="costo_directo" ${this.filtroTablaTipo === 'costo_directo' ? 'selected' : ''}>Costos Directos</option>
               <option value="gasto_admin" ${this.filtroTablaTipo === 'gasto_admin' ? 'selected' : ''}>Gastos Admin</option>
+              <option value="inversion_diferida" ${this.filtroTablaTipo === 'inversion_diferida' ? 'selected' : ''}>Inversiones Diferidas</option>
               <option value="nomina" ${this.filtroTablaTipo === 'nomina' ? 'selected' : ''}>Nómina y Seg. Social</option>
             </select>
             <select id="select-filtro-tabla-estado" class="px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800">
@@ -26257,8 +28965,11 @@ class ModuloContabilidad {
             <tbody class="divide-y divide-slate-200">
               ${listaFiltrada.length > 0 ? listaFiltrada.map((m) => {
                 const fincaObj = fincas.find((f) => f.id === (m.fincaId || m.finca_id));
-                const badge = getBadgeTipo(m.tipo);
+                const badge = getBadgeTipo(m.tipo, m);
                 const esIngreso = m.tipo === 'ingreso';
+                const esInversionDif = m.tipo === 'inversion_diferida';
+                const plazoInv = esInversionDif ? Math.max(1, parseInt(m.plazoMeses ?? m.plazoMesesDiferido ?? 12, 10) || 12) : 1;
+                const cuotaInv = esInversionDif ? Math.round((Number(m.monto) || 0) / plazoInv) : 0;
                 const esPendiente = String(m.estado || '').toLowerCase().includes('pagar') || String(m.estado || '').toLowerCase().includes('pendient');
 
                 return `
@@ -26274,7 +28985,7 @@ class ModuloContabilidad {
                     </td>
                     <td class="p-3.5">
                       <div class="font-bold text-slate-800">${this.escape(m.concepto)}</div>
-                      <div class="text-[11px] text-slate-600">${this.escape(m.categoria)}</div>
+                      <div class="text-[11px] text-slate-600">${this.escape(m.categoria)}${esInversionDif ? ` • Cuota mensual: <strong>${formatearMonedaCOP(cuotaInv)}/mes</strong>` : ''}</div>
                     </td>
                     <td class="p-3.5 font-semibold text-slate-700">${this.escape(m.tercero || '—')}</td>
                     <td class="p-3.5 whitespace-nowrap">
@@ -26358,9 +29069,28 @@ class ModuloContabilidad {
       };
     });
 
-    // 4. Cambio dinámico de categorías al cambiar Tipo de Movimiento
+    // 4. Cambio dinámico de categorías y plazo diferido al cambiar Tipo de Movimiento
     const selTipoMov = this.container.querySelector('#contab-mov-tipo');
     const selCatMov = this.container.querySelector('#contab-mov-categoria');
+    const boxPlazoDif = this.container.querySelector('#box-contab-plazo-diferido');
+    const inpMontoMov = this.container.querySelector('#contab-mov-monto');
+    const inpPlazoMov = this.container.querySelector('#contab-mov-plazo-meses');
+    const prevCuotaMov = this.container.querySelector('#preview-cuota-diferida-contab');
+
+    const actualizarPreviewCuotaMov = () => {
+      if (!prevCuotaMov) return;
+      const mVal = Math.max(0, Number(inpMontoMov?.value || 0));
+      const pVal = Math.max(1, parseInt(inpPlazoMov?.value || '12', 10) || 12);
+      if (mVal > 0) {
+        prevCuotaMov.innerHTML = `Cuota mensual diferida: <strong>${formatearMonedaCOP(Math.round(mVal / pVal))} / mes</strong> durante <strong>${pVal} ${pVal === 1 ? 'mes' : 'meses'}</strong>.`;
+      } else {
+        prevCuotaMov.textContent = 'El costo total se distribuirá mensualmente para que no entre todo en un solo mes.';
+      }
+    };
+
+    if (inpMontoMov) inpMontoMov.oninput = actualizarPreviewCuotaMov;
+    if (inpPlazoMov) inpPlazoMov.oninput = actualizarPreviewCuotaMov;
+
     if (selTipoMov && selCatMov) {
       selTipoMov.onchange = (e) => {
         this.tipoMovimientoForm = e.target.value || 'costo_directo';
@@ -26368,10 +29098,14 @@ class ModuloContabilidad {
         selCatMov.innerHTML = cats
           .map((c) => `<option value="${this.escape(c)}">${this.escape(c)}</option>`)
           .join('');
+        if (boxPlazoDif && boxPlazoDif.classList) {
+          boxPlazoDif.classList.toggle('hidden', this.tipoMovimientoForm !== 'inversion_diferida');
+        }
+        actualizarPreviewCuotaMov();
       };
     }
 
-    // 5. Guardar nuevo Movimiento Contable (Ingreso / Costo Directo / Gasto Administrativo)
+    // 5. Guardar nuevo Movimiento Contable (Ingreso / Costo Directo / Gasto Administrativo / Inversión Diferida)
     const formMov = this.container.querySelector('#form-contabilidad-movimiento');
     if (formMov) {
       formMov.onsubmit = (e) => {
@@ -26385,6 +29119,9 @@ class ModuloContabilidad {
         const metodoPago = this.container.querySelector('#contab-mov-metodo')?.value || 'Transferencia Bancaria';
         const estado = this.container.querySelector('#contab-mov-estado')?.value || 'Pagado';
         const monto = Number(this.container.querySelector('#contab-mov-monto')?.value || 0);
+        const plazoMeses = tipo === 'inversion_diferida'
+          ? Math.max(1, parseInt(this.container.querySelector('#contab-mov-plazo-meses')?.value || '12', 10) || 12)
+          : undefined;
 
         if (!fincaId) {
           if (typeof alert !== 'undefined') alert('Por favor selecciona la finca asignada al registro contable.');
@@ -26406,7 +29143,65 @@ class ModuloContabilidad {
             tercero,
             metodoPago,
             estado,
-            monto
+            monto,
+            ...(plazoMeses ? {
+              plazoMeses,
+              plazoMesesDiferido: plazoMeses,
+              cuotaMensual: Math.round(monto / plazoMeses)
+            } : {})
+          });
+        }
+        this.render();
+      };
+    }
+
+    // 5.5. Formulario directo de Inversiones Diferidas
+    const inpInvMonto = this.container.querySelector('#inv-contab-monto');
+    const inpInvPlazo = this.container.querySelector('#inv-contab-plazo');
+    const prevInvCuota = this.container.querySelector('#inv-contab-cuota-preview');
+    const actualizarPreviewInversionRapida = () => {
+      if (!prevInvCuota) return;
+      const m = Math.max(0, Number(inpInvMonto?.value || 0));
+      const p = Math.max(1, parseInt(inpInvPlazo?.value || '12', 10) || 12);
+      prevInvCuota.textContent = m > 0
+        ? `Cuota mensual diferida: ${formatearMonedaCOP(Math.round(m / p))} / mes (${p} ${p === 1 ? 'mes' : 'meses'})`
+        : 'Cuota mensual estimada: $0 / mes';
+    };
+    if (inpInvMonto) inpInvMonto.oninput = actualizarPreviewInversionRapida;
+    if (inpInvPlazo) inpInvPlazo.oninput = actualizarPreviewInversionRapida;
+
+    const formInvRapida = this.container.querySelector('#form-contabilidad-inversion-rapida');
+    if (formInvRapida) {
+      formInvRapida.onsubmit = (e) => {
+        e.preventDefault();
+        const fecha = this.container.querySelector('#inv-contab-fecha')?.value || obtenerFechaHoyLocal();
+        const fincaId = this.container.querySelector('#inv-contab-finca')?.value;
+        const categoria = this.container.querySelector('#inv-contab-categoria')?.value || 'Infraestructura ganadera';
+        const monto = Number(this.container.querySelector('#inv-contab-monto')?.value || 0);
+        const plazoMeses = Math.max(1, parseInt(this.container.querySelector('#inv-contab-plazo')?.value || '12', 10) || 12);
+        const concepto = (this.container.querySelector('#inv-contab-concepto')?.value || '').trim();
+        const tercero = (this.container.querySelector('#inv-contab-tercero')?.value || '').trim();
+
+        if (!fincaId || !concepto || monto <= 0) {
+          if (typeof alert !== 'undefined') alert('Completa la finca, descripción, monto total y meses a diferir de la inversión.');
+          return;
+        }
+
+        if (typeof this.onGuardarMovimiento === 'function') {
+          this.onGuardarMovimiento({
+            fecha,
+            fincaId,
+            finca_id: fincaId,
+            tipo: 'inversion_diferida',
+            categoria,
+            concepto,
+            tercero,
+            metodoPago: 'Transferencia Bancaria',
+            estado: 'Pagado',
+            monto,
+            plazoMeses,
+            plazoMesesDiferido: plazoMeses,
+            cuotaMensual: Math.round(monto / plazoMeses)
           });
         }
         this.render();
@@ -26752,7 +29547,8 @@ class ModuloContabilidad {
 /**
  * GANADERO AD - INGRESO MASIVO RÁPIDO EN CAMPO (FLUJO UNO A UNO EN MANGA/BÁSCULA)
  * Permite buscar/digitar el número del animal uno a uno, cargar sus antecedentes,
- * registrar la medición con auditoría de IA y acumular la sesión de trabajo.
+ * saltar directamente al dato de pesaje con Enter (usando la fecha única superior de jornada),
+ * alertar si el animal ya fue ingresado en el mismo trabajo y operar 100% sin conexión.
  */
 
 
@@ -26760,13 +29556,33 @@ class ModuloContabilidad {
 
 
 class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, onGuardarRegistroIndividual, getAnimales, getLotes, getFincaActiva, onActualizarOrdenoFinca, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
-    this.container = document.getElementById(containerId);
+  constructor({
+    containerId,
+    onGuardarRegistros,
+    onGuardarRegistroIndividual,
+    getAnimales,
+    getLotes,
+    getFincaActiva,
+    getPesajes,
+    getOperaciones,
+    getEstadoOffline,
+    onAbrirModoOffline,
+    onActualizarOrdenoFinca,
+    onTrasladarAFinca,
+    onReactivarAnimal,
+    onExtraerAnimal,
+    onVerFicha
+  }) {
+    this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
     this.onGuardarRegistros = onGuardarRegistros;
     this.onGuardarRegistroIndividual = onGuardarRegistroIndividual || null;
     this.getAnimales = getAnimales;
     this.getLotes = getLotes;
     this.getFincaActiva = getFincaActiva || null;
+    this.getPesajes = getPesajes || null;
+    this.getOperaciones = getOperaciones || null;
+    this.getEstadoOffline = getEstadoOffline || null;
+    this.onAbrirModoOffline = onAbrirModoOffline || null;
     this.onActualizarOrdenoFinca = onActualizarOrdenoFinca || null;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
@@ -26775,15 +29591,169 @@ class CuadriculaMasiva {
     this.moduloActivo = 'pesajes'; // 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destetes' | 'extracciones'
     this.loteFiltro = 'todos';
     this.animalSeleccionado = null;
-    this.fechaJornada = new Date().toISOString().split('T')[0];
+
+    const hoyLocal = obtenerFechaHoyLocal();
+    this.fechaJornada = hoyLocal;
+    this._diaBaseSistema = hoyLocal;
+
     this.registrosSesion = []; // Acumulador de la sesión de trabajo en campo
     this.campoEnfocadoActual = '#input-tag-manga';
   }
 
+  /**
+   * Garantiza que si la aplicación quedó abierta de días anteriores (ej. 12 de noviembre)
+   * y hoy es un nuevo día sin sesión pendiente, la fecha avance automáticamente al día real actual.
+   */
+  asegurarFechaSistemaActualizada() {
+    const hoyReal = obtenerFechaHoyLocal();
+    if (hoyReal !== this._diaBaseSistema) {
+      if (this.fechaJornada === this._diaBaseSistema && this.registrosSesion.length === 0) {
+        this.fechaJornada = hoyReal;
+      }
+      this._diaBaseSistema = hoyReal;
+    }
+    if (!this.fechaJornada) {
+      this.fechaJornada = hoyReal;
+    }
+    return this.fechaJornada;
+  }
+
+  /**
+   * Determina si la finca activa trabaja con 1 solo ordeño al día (por defecto = true / 1 ordeño),
+   * salvo que en Administración de la finca se haya configurado manualmente Doble Ordeño (2).
+   */
   esUnSoloOrdeno() {
     const finca = this.getFincaActiva ? this.getFincaActiva() : null;
-    if (!finca) return false;
-    return Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' || Number(finca.ordenos) === 1;
+    if (!finca) return true;
+    if (
+      Number(finca.numeroOrdenos) === 2 ||
+      finca.tipoOrdeno === 'doble_ordeno' ||
+      Number(finca.ordenos) === 2
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Verifica si un ejemplar ya fue ingresado en este mismo trabajo (misma sesión o misma fecha + módulo en la finca).
+   */
+  verificarAnimalYaIngresadoEnTrabajo(animal, fechaObjetivo = null, moduloObjetivo = null) {
+    if (!animal) return { yaIngresado: false };
+
+    const tagUpper = String(animal.identificacionTag || animal.numero || animal.tag || '').trim().toUpperCase();
+    const animalId = animal.id || null;
+    if (!tagUpper && !animalId) return { yaIngresado: false };
+
+    const fecha = fechaObjetivo || this.fechaJornada || obtenerFechaHoyLocal();
+    const modulo = moduloObjetivo || this.moduloActivo || 'pesajes';
+    const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+    const fincaId = fincaAct?.id || animal.fincaId || null;
+
+    // 1. Revisar en la planilla de la sesión actual en pantalla
+    const idxSesion = (this.registrosSesion || []).findIndex((r) => {
+      if (!r || r.modulo !== modulo) return false;
+      const fReg = r.fecha || this.fechaJornada;
+      if (fReg !== fecha) return false;
+      const coincideId = animalId && r.animalId && r.animalId === animalId;
+      const coincideTag = tagUpper && String(r.tag || '').trim().toUpperCase() === tagUpper;
+      return Boolean(coincideId || coincideTag);
+    });
+
+    if (idxSesion >= 0) {
+      const regPrev = this.registrosSesion[idxSesion];
+      let detallePrevio = `Fecha ${formatearFecha(fecha)}`;
+      if (modulo === 'pesajes' && regPrev.pesoNuevo) detallePrevio = `Peso registrado: ${regPrev.pesoNuevo} kg`;
+      else if (modulo === 'leche' && regPrev.totalLitros !== undefined) detallePrevio = `Leche registrada: ${regPrev.totalLitros} L`;
+      else if (modulo === 'palpaciones' && regPrev.resultado) detallePrevio = `Diagnóstico: ${regPrev.resultado}`;
+      else if (modulo === 'partos' && regPrev.tagCria) detallePrevio = `Parto cría: ${regPrev.tagCria}`;
+      else if (modulo === 'destetes' && regPrev.pesoDestete) detallePrevio = `Destete: ${regPrev.pesoDestete} kg`;
+
+      return {
+        yaIngresado: true,
+        origen: 'sesion',
+        indiceSesion: idxSesion,
+        detallePrevio,
+        registroPrevio: regPrev
+      };
+    }
+
+    // 2. Revisar en los registros ya guardados de la misma finca en esa misma fecha de trabajo
+    if (modulo === 'pesajes' && typeof this.getPesajes === 'function') {
+      const pesajesGuardados = this.getPesajes() || [];
+      const pesPrev = pesajesGuardados.find((p) => {
+        if (!p) return false;
+        if (fincaId && p.fincaId && p.fincaId !== fincaId) return false;
+        if (String(p.fecha || '').slice(0, 10) !== fecha) return false;
+        const pTag = String(p.tag || p.animalTag || '').trim().toUpperCase();
+        return (animalId && p.animalId === animalId) || (tagUpper && pTag === tagUpper);
+      });
+      if (pesPrev) {
+        return {
+          yaIngresado: true,
+          origen: 'base_datos',
+          indiceSesion: -1,
+          detallePrevio: `Peso ya guardado hoy (${formatearFecha(fecha)}): ${pesPrev.pesoNuevo ?? pesPrev.peso ?? ''} kg`,
+          registroPrevio: pesPrev
+        };
+      }
+    }
+
+    if (typeof this.getOperaciones === 'function') {
+      const mapaAcciones = {
+        pesajes: ['pesajes', 'pesaje'],
+        palpaciones: ['palpacion', 'palpaciones'],
+        leche: ['pesaje_leche', 'leche'],
+        partos: ['partos', 'parto'],
+        destetes: ['destete', 'destetes'],
+        extracciones: ['extracciones', 'extraccion', 'baja', 'venta'],
+        servicios: ['servicios', 'servicio']
+      };
+      const accionesBuscadas = mapaAcciones[modulo] || [modulo];
+      const ops = this.getOperaciones() || [];
+      const opPrev = ops.find((op) => {
+        if (!op) return false;
+        if (fincaId && op.fincaId && op.fincaId !== fincaId) return false;
+        if (String(op.fecha || '').slice(0, 10) !== fecha) return false;
+        const acc = String(op.accion || op.modulo || '').toLowerCase();
+        if (!accionesBuscadas.includes(acc)) return false;
+        const oTag = String(op.tag || op.animalTag || '').trim().toUpperCase();
+        return (animalId && op.animalId === animalId) || (tagUpper && oTag === tagUpper);
+      });
+      if (opPrev) {
+        return {
+          yaIngresado: true,
+          origen: 'base_datos',
+          indiceSesion: -1,
+          detallePrevio: opPrev.detalle || `Registrado el ${formatearFecha(fecha)}`,
+          registroPrevio: opPrev
+        };
+      }
+    }
+
+    return { yaIngresado: false };
+  }
+
+  emitirAlertaSonoraDuplicado() {
+    try {
+      const AudioCtx = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      osc.frequency.setValueAtTime(390, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.28);
+      setTimeout(() => { try { ctx.close(); } catch (_e) {} }, 350);
+    } catch (_err) {
+      // Silencioso en entornos sin audio o pruebas unitarias
+    }
   }
 
   resolverRelacionDestete(animal) {
@@ -26864,38 +29834,41 @@ class CuadriculaMasiva {
     };
   }
 
+  /**
+   * Define el orden de campos al presionar Enter (salta directo al pesaje/dato sin pasar por fecha).
+   */
   obtenerSelectoresNavegablesModulo() {
     if (!this.animalSeleccionado || this.animalSeleccionado._estaEnOtraFinca) return [];
 
     if (this.moduloActivo === 'pesajes') {
-      return ['#form-peso-fecha', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas'];
+      return ['#form-nuevo-peso', '#form-condicion', '#form-peso-notas'];
     } else if (this.moduloActivo === 'palpaciones') {
       const diagEl = this.container ? this.container.querySelector('#form-diagnostico') : null;
       const diagVal = diagEl && diagEl.value ? diagEl.value : 'Preñada';
       if (diagVal === 'Preñada') {
-        return ['#form-palp-fecha', '#form-diagnostico', '#form-dias-preñez', '#form-estructura-ovario'];
+        return ['#form-diagnostico', '#form-dias-preñez', '#form-estructura-ovario'];
       }
-      return ['#form-palp-fecha', '#form-diagnostico', '#form-estructura-ovario'];
+      return ['#form-diagnostico', '#form-estructura-ovario'];
     } else if (this.moduloActivo === 'leche') {
       if (this.esUnSoloOrdeno()) {
-        return ['#form-leche-fecha', '#form-leche-am', '#form-leche-notas'];
+        return ['#form-leche-am', '#form-leche-notas'];
       }
-      return ['#form-leche-fecha', '#form-leche-am', '#form-leche-pm', '#form-leche-notas'];
+      return ['#form-leche-am', '#form-leche-pm', '#form-leche-notas'];
     } else if (this.moduloActivo === 'partos') {
-      return ['#form-parto-fecha', '#form-parto-sexo', '#form-parto-peso', '#form-parto-tag-cria', '#form-parto-tipo'];
+      return ['#form-parto-sexo', '#form-parto-peso', '#form-parto-tag-cria', '#form-parto-tipo'];
     } else if (this.moduloActivo === 'destetes') {
       const rel = this.resolverRelacionDestete(this.animalSeleccionado);
       const selectorRel = rel.esVacaSeleccionada ? '#form-destete-cria-tag' : '#form-destete-madre-tag';
-      return ['#form-destete-fecha', selectorRel, '#form-destete-peso-madre', '#form-destete-peso', '#form-destete-lote', '#form-destete-obs'];
+      return [selectorRel, '#form-destete-peso-madre', '#form-destete-peso', '#form-destete-lote', '#form-destete-obs'];
     } else if (this.moduloActivo === 'extracciones') {
       const motEl = this.container ? this.container.querySelector('#form-extraer-motivo') : null;
       const motVal = motEl && motEl.value ? motEl.value : 'Venta';
       if (motVal === 'Venta') {
-        return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-comprador', '#form-extraer-valor', '#form-extraer-peso', '#form-extraer-obs'];
+        return ['#form-extraer-motivo', '#form-extraer-comprador', '#form-extraer-valor', '#form-extraer-peso', '#form-extraer-obs'];
       }
-      return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-causa', '#form-extraer-obs'];
+      return ['#form-extraer-motivo', '#form-extraer-causa', '#form-extraer-obs'];
     } else if (this.moduloActivo === 'servicios') {
-      return ['#form-srv-fecha', '#form-srv-tipo', '#form-srv-reproductor', '#form-srv-tecnico', '#form-srv-protocolo'];
+      return ['#form-srv-tipo', '#form-srv-reproductor', '#form-srv-tecnico', '#form-srv-protocolo'];
     }
     return [];
   }
@@ -26909,6 +29882,9 @@ class CuadriculaMasiva {
       const el = this.container.querySelector(primerSelector);
       if (el && typeof el.focus === 'function') {
         el.focus();
+        if (typeof el.select === 'function' && el.tagName === 'INPUT' && el.type !== 'date') {
+          el.select();
+        }
       }
       setTimeout(() => {
         if (this.animalSeleccionado && this.container && typeof this.container.querySelector === 'function') {
@@ -26968,8 +29944,19 @@ class CuadriculaMasiva {
   }
 
   cargarFilasDesdeInventario() {
-    // Si la vista está visible, refrescar los datos desde el inventario del predio activo
-    if (this.container && !this.container.classList.contains('hidden')) {
+    this.asegurarFechaSistemaActualizada();
+    // Si el usuario tiene un animal cargado en pantalla o está editando un control (como la fecha), no re-renderizar encima
+    if (this.animalSeleccionado) return;
+    if (
+      typeof document !== 'undefined' &&
+      document.activeElement &&
+      this.container &&
+      typeof this.container.contains === 'function' &&
+      this.container.contains(document.activeElement)
+    ) {
+      return;
+    }
+    if (this.container && (!this.container.classList || !this.container.classList.contains('hidden'))) {
       this.render();
     }
   }
@@ -27006,17 +29993,22 @@ class CuadriculaMasiva {
   seleccionarAnimal(tag) {
     const animal = this.buscarAnimalPorTag(tag);
     this.animalSeleccionado = animal;
+    if (animal && !animal._estaEnOtraFinca) {
+      const checkDup = this.verificarAnimalYaIngresadoEnTrabajo(animal);
+      if (checkDup.yaIngresado) {
+        this.emitirAlertaSonoraDuplicado();
+      }
+    }
     this.renderFormularioIngreso();
   }
 
   render() {
     if (!this.container) return;
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
+    this.asegurarFechaSistemaActualizada();
     const lotes = this.getLotes ? this.getLotes() : [];
-    const todosAnimales = (this.getAnimales ? this.getAnimales() : []).filter(
-      (a) => a.estadoVida === 'activo' || a.estado === 'activo'
-    );
+    const infoOffline = this.getEstadoOffline ? this.getEstadoOffline() : null;
 
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
@@ -27027,29 +30019,43 @@ class CuadriculaMasiva {
               <span>📋</span> Cuadrícula Masiva: Ingreso de Campo en Báscula / Brete
               <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 border border-emerald-400/30">Modo Uno a Uno</span>
             </h2>
-            <p class="text-xs text-slate-600 mt-0.5">Ingresa el número de cada animal individualmente al pasar por la manga.</p>
+            <p class="text-xs text-slate-600 mt-0.5">Selecciona la fecha de trabajo arriba; al digitar el animal y presionar Enter pasarás directo al pesaje.</p>
           </div>
 
-          <!-- Controles superiores: Fecha en que se hace el trabajo, Ordeños de la Finca y Filtro rápido de Lote -->
+          <!-- Controles superiores: Fecha única de trabajo (sin ordeño aquí; ordeños vive en Administración por finca), Lote y Modo Sin Conexión -->
           <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-600 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
-              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha en que se hace el trabajo (pesajes, palpaciones, partos, destetes...)" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:border-emerald-400">
+            <div class="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-xl shadow-sm">
+              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-700 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
+              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha única en que se realiza la jornada de trabajo" class="bg-white border border-emerald-500/60 text-emerald-800 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/30">
+              <button type="button" id="btn-fecha-hoy-manga" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black cursor-pointer transition" title="Poner la fecha de hoy (${formatearFecha(hoy)})">
+                Hoy
+              </button>
             </div>
-            <div class="flex items-center gap-1.5 bg-slate-800/90 border border-sky-700/80 px-3 py-1.5 rounded-xl shadow-inner" title="Configura si esta finca hace 1 Ordeño (1 casilla) o Doble Ordeño (2 casillas)">
-              <span class="text-xs font-bold text-sky-700 whitespace-nowrap">🥛 Ordeño Finca:</span>
-              <select id="select-ordeno-manga-header" class="bg-slate-900 border border-sky-600 text-sky-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer">
-                <option value="1" ${this.esUnSoloOrdeno() ? 'selected' : ''}>1 Ordeño (1 Casilla)</option>
-                <option value="2" ${!this.esUnSoloOrdeno() ? 'selected' : ''}>Doble Ordeño (2 Casillas)</option>
-              </select>
-            </div>
-            <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <span class="text-xs font-bold text-slate-600 whitespace-nowrap">📍 Lote:</span>
-              <select id="select-filtro-lote" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none w-32 md:w-36">
+            <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-3 py-1.5 rounded-xl shadow-sm">
+              <span class="text-xs font-bold text-slate-700 whitespace-nowrap">📍 Lote:</span>
+              <select id="select-filtro-lote" class="bg-white border border-slate-300 text-emerald-800 font-bold text-xs rounded-lg px-2 py-1 outline-none w-32 md:w-36 cursor-pointer">
                 <option value="todos" ${this.loteFiltro === 'todos' ? 'selected' : ''}>Todos los Lotes</option>
                 ${lotes.map((l) => `<option value="${l}" ${this.loteFiltro === l ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
             </div>
+            ${this.onAbrirModoOffline ? `
+              <button type="button" id="btn-offline-manga" class="px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                infoOffline && !infoOffline.online
+                  ? 'bg-amber-100 border-amber-400 text-amber-900'
+                  : (infoOffline && infoOffline.pendientesCount > 0
+                      ? 'bg-sky-100 border-sky-400 text-sky-900'
+                      : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700')
+              }" title="Descargar inventario para trabajar sin conexión o sincronizar cambios pendientes">
+                <span>${infoOffline && !infoOffline.online ? '🟠' : '📶'}</span>
+                <span>${
+                  infoOffline && !infoOffline.online
+                    ? `Sin Red (${infoOffline.pendientesCount || 0} guardados)`
+                    : (infoOffline && infoOffline.pendientesCount > 0
+                        ? `Enviar ${infoOffline.pendientesCount} Pendientes`
+                        : 'Trabajar Sin Red')
+                }</span>
+              </button>
+            ` : ''}
           </div>
         </div>
 
@@ -27153,7 +30159,7 @@ class CuadriculaMasiva {
                   <tr>
                     <td colspan="7" class="p-8 text-center text-slate-600">
                       <span class="text-2xl block mb-1">🎯</span>
-                      Digite el primer animal arriba para cargarlo y registrar su medición.
+                      Digite el primer animal arriba para cargarlo y pasar directo al pesaje con Enter.
                     </td>
                   </tr>
                 `}
@@ -27177,38 +30183,17 @@ class CuadriculaMasiva {
       let vistaPreviaModulo = '';
       if (this.moduloActivo === 'leche') {
         vistaPreviaModulo = `
-          <div class="mt-3 p-3.5 bg-sky-50/90 rounded-xl border border-sky-200 text-left space-y-2.5">
+          <div class="mt-3 p-3.5 bg-sky-50/90 rounded-xl border border-sky-200 text-left space-y-2">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <span class="text-xs font-black text-sky-950 flex items-center gap-1.5">
-                  🥛 Configuración de Ordeño para "${nombreFinca}":
+                  🥛 Modalidad activa en "${nombreFinca}": ${esUnOrd ? 'Un Ordeño (1 Casilla)' : 'Doble Ordeño (2 Casillas)'}
                 </span>
-                <p class="text-[11px] text-sky-800">Elige si esta finca trabaja con 1 sola casilla o 2 casillas al pesar leche:</p>
+                <p class="text-[11px] text-sky-800">La cantidad de ordeños al día se configura por finca en el módulo de <strong>Administración</strong> (por defecto: 1 ordeño).</p>
               </div>
-              <div class="flex items-center gap-1.5">
-                <button type="button" data-ordenos="1" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
-                  🥛 Un Ordeño (1 Casilla)
-                </button>
-                <button type="button" data-ordenos="2" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${!esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
-                  🥛🥛 Doble Ordeño (2 Casillas)
-                </button>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 ${esUnOrd ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2 pt-1 opacity-85">
-              <div class="p-2 bg-white rounded-lg border border-sky-200 text-[11px]">
-                <span class="font-bold text-slate-600 block">1. Fecha (Enter)</span>
-                <span class="font-mono font-black text-slate-800">📅 Fecha Pesaje Leche</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
-                <span class="font-bold text-sky-700 block">2. ${esUnOrd ? 'Casilla Única (Enter)' : 'Primera Casilla (Enter)'}</span>
-                <span class="font-mono font-black text-sky-900">${esUnOrd ? '🥛 Litros del Ordeño (L)' : '🌅 Ordeño Mañana AM (L)'}</span>
-              </div>
-              ${!esUnOrd ? `
-                <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
-                  <span class="font-bold text-sky-700 block">3. Segunda Casilla (Enter)</span>
-                  <span class="font-mono font-black text-sky-900">🌆 Ordeño Tarde PM (L)</span>
-                </div>
-              ` : ''}
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-black ${esUnOrd ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+                ${esUnOrd ? '1 Ordeño Diario' : '2 Ordeños Diarios'}
+              </span>
             </div>
           </div>
         `;
@@ -27219,26 +30204,8 @@ class CuadriculaMasiva {
               🌾 Formato de Destete Activo (Madre ↔ Cría + Doble Pesaje):
             </div>
             <p class="text-[11px] text-amber-900">
-              Al digitar el número de la cría (o de la madre) y presionar <strong>Enter</strong>, el sistema solicitará en orden:
+              Al digitar el número de la cría (o de la madre) y presionar <strong>Enter</strong>, el sistema solicitará directamente la relación Madre ↔ Cría y los pesos sin repetir la fecha.
             </p>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
-                <span class="font-bold text-amber-700 block">Paso 1 (Enter)</span>
-                <span class="font-black text-slate-800">📅 Fecha del Destete</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
-                <span class="font-bold text-amber-700 block">Paso 2 (Enter)</span>
-                <span class="font-black text-slate-800">🔗 Relación Madre ↔ Cría</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-amber-400 text-[11px]">
-                <span class="font-bold text-amber-800 block">Paso 3 (Enter)</span>
-                <span class="font-black text-amber-950">🐄 Peso de la Vaca (kg)</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-emerald-400 text-[11px]">
-                <span class="font-bold text-emerald-800 block">Paso 4 (Enter)</span>
-                <span class="font-black text-emerald-950">🐮 Peso del Ternero (kg)</span>
-              </div>
-            </div>
           </div>
         `;
       }
@@ -27256,7 +30223,35 @@ class CuadriculaMasiva {
     const a = this.animalSeleccionado;
     const especie = a.especie || 'bovino';
     const tag = a.identificacionTag || a.numero;
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
+    const fechaTrabajoActiva = this.fechaJornada || hoy;
+    const estadoDuplicado = !a._estaEnOtraFinca
+      ? this.verificarAnimalYaIngresadoEnTrabajo(a, fechaTrabajoActiva, this.moduloActivo)
+      : { yaIngresado: false };
+
+    const nombresModulos = {
+      pesajes: 'Pesajes',
+      palpaciones: 'Palpaciones',
+      leche: 'Control de Leche',
+      partos: 'Partos',
+      destetes: 'Destetes',
+      extracciones: 'Extracciones',
+      servicios: 'Servicios'
+    };
+
+    const bannerDuplicadoHtml = estadoDuplicado.yaIngresado ? `
+      <div id="alerta-animal-repetido-trabajo" class="p-3.5 rounded-xl bg-amber-100 border-2 border-amber-400 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+        <span class="text-lg shrink-0">⚠️</span>
+        <div>
+          <div class="font-black text-amber-950 uppercase tracking-wide">
+            Animal ya ingresado en este mismo trabajo (${nombresModulos[this.moduloActivo] || this.moduloActivo} • ${formatearFecha(fechaTrabajoActiva)})
+          </div>
+          <p class="mt-0.5 text-amber-900 font-semibold">
+            El ejemplar <strong>${tag}</strong> ya cuenta con registro en esta jornada (${estadoDuplicado.detallePrevio}). Si continúas y guardas, actualizarás ese registro.
+          </p>
+        </div>
+      </div>
+    ` : '';
 
     let inputsModulo = '';
 
@@ -27264,16 +30259,11 @@ class CuadriculaMasiva {
       const pesoPrev = a.ultimoPesoKg || a.pesoActual || 0;
       const fechaPrev = a.fechaUltimoPesaje || a.ultimoPesajeFecha || '';
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
-            <input type="date" id="form-peso-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            <span class="text-[10px] text-slate-600 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
-          </div>
-
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Nuevo Peso en Báscula (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
+            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" autofocus placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
+            <span class="text-[10px] text-slate-600 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
             <div id="live-gdp-indicator" class="text-xs font-bold mt-1 text-slate-600"></div>
           </div>
 
@@ -27296,15 +30286,10 @@ class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'palpaciones') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se palpó (Trabajo):</label>
-            <input type="date" id="form-palp-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Diagnóstico:</label>
-            <select id="form-diagnostico" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <select id="form-diagnostico" autofocus class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="Preñada" selected>🟢 Preñada (Gestante)</option>
               <option value="Vacía">🔴 Vacía (Abierta)</option>
               <option value="Sospechosa">🟡 Sospechosa</option>
@@ -27334,14 +30319,10 @@ class CuadriculaMasiva {
               ${unOrdeno ? 'Un Ordeño (1 Casilla)' : 'Doble Ordeño (2 Casillas)'}
             </span>
           </div>
-          <div class="grid grid-cols-1 ${unOrdeno ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de pesaje de leche (Trabajo):</label>
-              <input type="date" id="form-leche-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
+          <div class="grid grid-cols-1 ${unOrdeno ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3">
             <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">${unOrdeno ? 'Pesaje Único de Leche (L):' : 'Turno Mañana (L):'}</label>
-              <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border-2 border-emerald-400 bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" autofocus placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border-2 border-emerald-400 bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
             ${unOrdeno ? '' : `
             <div>
@@ -27358,21 +30339,17 @@ class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'partos') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que parió (Trabajo):</label>
-            <input type="date" id="form-parto-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Sexo Cría:</label>
-            <select id="form-parto-sexo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <select id="form-parto-sexo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="hembra">♀️ Hembra</option>
               <option value="macho">♂️ Macho</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Peso Cría (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="32" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="30" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Tag Cría Generado:</label>
@@ -27416,22 +30393,17 @@ class CuadriculaMasiva {
           <datalist id="datalist-crias-destete">${opcionesCrias}</datalist>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se destetó (Trabajo):</label>
-              <input type="date" id="form-destete-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
-
             ${rel.esVacaSeleccionada ? `
               <div>
                 <input type="hidden" id="form-destete-madre-tag" value="${rel.madreTag}">
                 <label class="block text-xs font-bold text-slate-800 mb-1">🍼 No. Ternero / Cría (Hijo de ${rel.madreTag}):</label>
-                <input type="text" id="form-destete-cria-tag" list="datalist-crias-destete" value="${rel.criaTag}" placeholder="Ej. CRIA-${rel.madreTag}" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <input type="text" id="form-destete-cria-tag" autofocus list="datalist-crias-destete" value="${rel.criaTag}" placeholder="Ej. CRIA-${rel.madreTag}" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
               </div>
             ` : `
               <div>
                 <input type="hidden" id="form-destete-cria-tag" value="${rel.criaTag}">
                 <label class="block text-xs font-bold text-slate-800 mb-1">🐄 No. Vaca / Madre (Madre de ${rel.criaTag}):</label>
-                <input type="text" id="form-destete-madre-tag" list="datalist-madres-destete" value="${rel.madreTag}" placeholder="Ej. BV-104 (No. Madre)" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <input type="text" id="form-destete-madre-tag" autofocus list="datalist-madres-destete" value="${rel.madreTag}" placeholder="Ej. BV-104 (No. Madre)" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
               </div>
             `}
 
@@ -27450,7 +30422,7 @@ class CuadriculaMasiva {
               <input type="text" id="form-destete-lote" value="Lote Levante" placeholder="Ej. Lote Levante" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
 
-            <div>
+            <div class="sm:col-span-2">
               <label class="block text-xs font-bold text-slate-800 mb-1">📝 Observaciones:</label>
               <input type="text" id="form-destete-obs" placeholder="Vacunación al destete, estado..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
@@ -27470,12 +30442,8 @@ class CuadriculaMasiva {
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de Extracción (Trabajo):</label>
-              <input type="date" id="form-extraer-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
-            </div>
-            <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">Motivo de Extracción:</label>
-              <select id="form-extraer-motivo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white outline-none focus:ring-2 focus:ring-rose-500">
+              <select id="form-extraer-motivo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white outline-none focus:ring-2 focus:ring-rose-500">
                 <option value="Venta" selected>💰 Venta Comercial</option>
                 <option value="Muerte">☠️ Muerte</option>
                 <option value="Descarte">⚠️ Descarte / Sacrificio</option>
@@ -27506,14 +30474,10 @@ class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'servicios') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-indigo-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se sirvió (Trabajo):</label>
-            <input type="date" id="form-srv-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-indigo-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Modalidad:</label>
-            <select id="form-srv-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="form-srv-tipo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="inseminacion_artificial" selected>💉 Inseminación Artificial</option>
               <option value="transferencia_embriones">🔬 Transf. Embriones</option>
               <option value="monta_natural">🐂 Servicio con Toro</option>
@@ -27549,7 +30513,7 @@ class CuadriculaMasiva {
                 <span class="text-xs text-slate-600">• ${a.raza}</span>
                 <span class="text-xs text-slate-600">• ${a.categoria}</span>
               </div>
-              <div class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5">
+              <div class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5 flex-wrap">
                 <span class="px-2 py-0.2 rounded text-[10px] font-bold ${especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                   ${especie === 'bufalino' ? '🦬 Especie Bufalina' : '🐂 Especie Vacuna'}
                 </span>
@@ -27570,7 +30534,7 @@ class CuadriculaMasiva {
                 <span>🚪</span> Extraer Animal
               </button>
             ` : ''}
-            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-600 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
+            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-600 hover:text-slate-800 text-xs font-bold p-1 cursor-pointer">
               ✕ Cancelar
             </button>
           </div>
@@ -27604,6 +30568,9 @@ class CuadriculaMasiva {
             </div>
           </div>
         ` : `
+          <!-- ALERTA SI EL ANIMAL YA FUE INGRESADO EN ESTE MISMO TRABAJO -->
+          ${bannerDuplicadoHtml}
+
           <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
           ${inputsModulo}
 
@@ -27622,7 +30589,7 @@ class CuadriculaMasiva {
   }
 
   renderFormularioIngreso() {
-    const cont = this.container.querySelector('#contenedor-formulario-animal');
+    const cont = this.container ? this.container.querySelector('#contenedor-formulario-animal') : null;
     if (cont) {
       cont.innerHTML = this.obtenerHtmlFormularioIngreso();
     }
@@ -27630,56 +30597,38 @@ class CuadriculaMasiva {
   }
 
   attachEventsFormulario() {
-    if (this.container && typeof this.container.querySelectorAll === 'function') {
-      this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
-        if (typeof btn.addEventListener === 'function' && !btn._ordenoBound) {
-          btn._ordenoBound = true;
-          btn.addEventListener('click', (e) => {
-            const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
-            const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-            if (fincaAct) {
-              fincaAct.numeroOrdenos = numOrd;
-              fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-              if (this.onActualizarOrdenoFinca) {
-                this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-              }
-            }
-            this.render();
-          });
-        }
-      });
-    }
-
+    if (!this.container) return;
     const a = this.animalSeleccionado;
     if (!a) return;
 
-    // Cálculo dinámico de GDP en vivo mientras escribe peso o cambia fecha
+    // Cálculo dinámico de GDP en vivo mientras escribe el peso usando la fecha superior del trabajo
     const inputPeso = this.container.querySelector('#form-nuevo-peso');
-    const inputFechaPeso = this.container.querySelector('#form-peso-fecha');
     const gdpIndicador = this.container.querySelector('#live-gdp-indicator');
     const alertaIa = this.container.querySelector('#alerta-ia-manga');
 
     const recalcularLiveGDP = () => {
       const pNum = parseFloat(inputPeso?.value);
-      const fPes = inputFechaPeso?.value || this.fechaJornada || new Date().toISOString().split('T')[0];
+      const fPes = this.fechaJornada || obtenerFechaHoyLocal();
 
-      if (!isNaN(pNum) && pNum > 0) {
-        const res = calcularGDPEjemplar({ animal: a, pesoActual: pNum, fechaPesaje: fPes });
-        if (res && res.gdp !== null) {
-          let color = 'text-emerald-700 font-bold';
-          if (res.gdp < 300) color = 'text-rose-600 font-black';
-          else if (res.gdp < 600) color = 'text-amber-600 font-bold';
+      if (gdpIndicador) {
+        if (!isNaN(pNum) && pNum > 0) {
+          const res = calcularGDPEjemplar({ animal: a, pesoActual: pNum, fechaPesaje: fPes });
+          if (res && res.gdp !== null) {
+            let color = 'text-emerald-700 font-bold';
+            if (res.gdp < 300) color = 'text-rose-600 font-black';
+            else if (res.gdp < 600) color = 'text-amber-600 font-bold';
 
-          const detalleOrigen = res.origen === 'nacimiento'
-            ? `🌱 Desde nacimiento (${res.dias} días de vida, peso base ${res.pesoBase || 0} kg)`
-            : `⚖️ En ${res.dias} días contra pesaje anterior de ${res.pesoBase} kg`;
+            const detalleOrigen = res.origen === 'nacimiento'
+              ? `🌱 Desde nacimiento (${res.dias} días de vida, peso base ${res.pesoBase || 0} kg)`
+              : `⚖️ En ${res.dias} días contra pesaje anterior de ${res.pesoBase} kg`;
 
-          gdpIndicador.innerHTML = `GDP (${fPes}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-600 block">${detalleOrigen}</span>`;
+            gdpIndicador.innerHTML = `GDP (${formatearFecha(fPes)}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-600 block">${detalleOrigen}</span>`;
+          } else {
+            gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-600">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
+          }
         } else {
-          gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-600">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
+          gdpIndicador.innerHTML = '';
         }
-      } else {
-        gdpIndicador.innerHTML = '';
       }
 
       // Auditar IA
@@ -27698,11 +30647,9 @@ class CuadriculaMasiva {
       }
     };
 
+    this._recalcularLiveGDPActivo = recalcularLiveGDP;
     if (inputPeso) {
       inputPeso.addEventListener('input', recalcularLiveGDP);
-    }
-    if (inputFechaPeso) {
-      inputFechaPeso.addEventListener('change', recalcularLiveGDP);
     }
 
     // Autocompletar peso previo cuando se digite la Madre o Cría en Destetes
@@ -27731,19 +30678,6 @@ class CuadriculaMasiva {
         }
       });
     }
-
-    // Sincronizar fecha de trabajo desde el formulario hacia la jornada general
-    const inputsFechaForm = this.container.querySelectorAll('#form-peso-fecha, #form-palp-fecha, #form-leche-fecha, #form-parto-fecha, #form-destete-fecha, #form-extraer-fecha, #form-srv-fecha');
-    inputsFechaForm.forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        const val = e.target.value;
-        if (val) {
-          this.fechaJornada = val;
-          const inHdr = this.container.querySelector('#input-fecha-jornada-manga');
-          if (inHdr && inHdr.value !== val) inHdr.value = val;
-        }
-      });
-    });
 
     // Toggle de campos según motivo de extracción (Venta vs Muerte/Descarte)
     const selectMotivoExtraer = this.container.querySelector('#form-extraer-motivo');
@@ -27846,12 +30780,13 @@ class CuadriculaMasiva {
       }
     });
 
-    // Posicionar cursor automáticamente en el primer campo (Fecha) al seleccionar el animal
+    // Posicionar cursor automáticamente en el primer campo de captura (ej. Nuevo Peso en Báscula) al seleccionar el animal
     this.enfocarPrimerCampoFormulario();
 
-    // Tecla Enter secuencial: avanza por fecha y demás campos y al final guarda y regresa al buscador
+    // Tecla Enter secuencial: avanza directo por el peso/datos y al final guarda y regresa al buscador
     const contForm = this.container.querySelector('#contenedor-formulario-animal');
-    if (contForm) {
+    if (contForm && !contForm._enterListenerBound) {
+      contForm._enterListenerBound = true;
       contForm.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -27867,33 +30802,46 @@ class CuadriculaMasiva {
     if (!a) return false;
 
     if (a._estaEnOtraFinca) {
-      alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      if (typeof alert === 'function') {
+        alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      }
       return false;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const tag = a.identificacionTag || a.numero;
 
-    // Extraer fecha explícita del formulario según el módulo activo (o usa la fecha de la jornada)
-    let fechaEvento = this.fechaJornada || hoy;
+    // Tomar siempre la fecha única superior de la jornada
+    const inHdrFecha = this.container ? this.container.querySelector('#input-fecha-jornada-manga') : null;
+    const fechaEvento = (inHdrFecha && inHdrFecha.value) ? inHdrFecha.value : (this.fechaJornada || hoy);
+    this.fechaJornada = fechaEvento;
+
+    // Validar primero los campos obligatorios antes de preguntar por duplicado
     if (this.moduloActivo === 'pesajes') {
-      fechaEvento = this.container.querySelector('#form-peso-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'palpaciones') {
-      fechaEvento = this.container.querySelector('#form-palp-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'leche') {
-      fechaEvento = this.container.querySelector('#form-leche-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'partos') {
-      fechaEvento = this.container.querySelector('#form-parto-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'destetes') {
-      fechaEvento = this.container.querySelector('#form-destete-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'extracciones') {
-      fechaEvento = this.container.querySelector('#form-extraer-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'servicios') {
-      fechaEvento = this.container.querySelector('#form-srv-fecha')?.value || fechaEvento;
+      const pInput = this.container.querySelector('#form-nuevo-peso');
+      const pesoVal = parseFloat(pInput?.value);
+      if (isNaN(pesoVal) || pesoVal <= 0) {
+        if (typeof alert === 'function') alert('Ingrese un peso válido.');
+        return false;
+      }
     }
 
-    // Recordar la fecha seleccionada para los siguientes registros de la jornada
-    this.fechaJornada = fechaEvento;
+    // Verificar si este animal ya fue ingresado en este mismo trabajo y avisar al operador
+    const checkDuplicado = this.verificarAnimalYaIngresadoEnTrabajo(a, fechaEvento, this.moduloActivo);
+    if (checkDuplicado.yaIngresado) {
+      if (typeof confirm === 'function') {
+        const deseaReemplazar = confirm(
+          `⚠️ AVISO: El animal "${tag}" YA FUE INGRESADO en este mismo trabajo (${checkDuplicado.detallePrevio}).\n\n¿Deseas actualizar/reemplazar el registro anterior?\n(Presiona Cancelar si digitaste este número por error)`
+        );
+        if (!deseaReemplazar) {
+          return false;
+        }
+      }
+      // Si ya estaba en la planilla de sesión actual, remover la fila previa para no duplicarla
+      if (checkDuplicado.indiceSesion >= 0) {
+        this.registrosSesion.splice(checkDuplicado.indiceSesion, 1);
+      }
+    }
 
     const registro = {
       animalId: a.id,
@@ -27907,10 +30855,6 @@ class CuadriculaMasiva {
     if (this.moduloActivo === 'pesajes') {
       const pInput = this.container.querySelector('#form-nuevo-peso');
       const peso = parseFloat(pInput?.value);
-      if (isNaN(peso) || peso <= 0) {
-        alert('Ingrese un peso válido.');
-        return false;
-      }
       const pPrev = a.ultimoPesoKg || a.pesoActual || 0;
       const gdpRes = calcularGDPEjemplar({ animal: a, pesoActual: peso, fechaPesaje: fechaEvento });
 
@@ -27939,7 +30883,7 @@ class CuadriculaMasiva {
     } else if (this.moduloActivo === 'partos') {
       registro.fechaParto = fechaEvento;
       registro.sexoCria = this.container.querySelector('#form-parto-sexo')?.value || 'hembra';
-      registro.pesoCria = parseFloat(this.container.querySelector('#form-parto-peso')?.value) || 32;
+      registro.pesoCria = parseFloat(this.container.querySelector('#form-parto-peso')?.value) || 30;
       registro.tagCria = this.container.querySelector('#form-parto-tag-cria')?.value || `CRIA-${tag}`;
       registro.tipoParto = this.container.querySelector('#form-parto-tipo')?.value || 'Normal';
     } else if (this.moduloActivo === 'destetes') {
@@ -28101,25 +31045,45 @@ class CuadriculaMasiva {
   }
 
   attachEvents() {
-    // Sincronizador de fecha de trabajo (sólo la cabecera superior)
+    if (!this.container) return;
+
+    // Fecha única de trabajo (sin re-renderizar todo el DOM mientras el usuario elige o escribe la fecha)
     const inFechaJornada = this.container.querySelector('#input-fecha-jornada-manga');
-
     const sincronizarFecha = (nuevaFecha) => {
-      if (!nuevaFecha) return;
+      if (!nuevaFecha || !/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) return;
       this.fechaJornada = nuevaFecha;
-      if (inFechaJornada && inFechaJornada.value !== nuevaFecha) inFechaJornada.value = nuevaFecha;
-
-      const formDateInputs = this.container.querySelectorAll('#form-peso-fecha, #form-palp-fecha, #form-leche-fecha, #form-parto-fecha, #form-destete-fecha, #form-extraer-fecha, #form-srv-fecha');
-      formDateInputs.forEach(inp => {
-        if (inp.value !== nuevaFecha) {
-          inp.value = nuevaFecha;
-          inp.dispatchEvent(new Event('change'));
-        }
-      });
+      if (typeof this._recalcularLiveGDPActivo === 'function') {
+        this._recalcularLiveGDPActivo();
+      }
     };
 
     if (inFechaJornada) {
+      inFechaJornada.addEventListener('input', (e) => sincronizarFecha(e.target.value));
       inFechaJornada.addEventListener('change', (e) => sincronizarFecha(e.target.value));
+    }
+
+    const btnFechaHoy = this.container.querySelector('#btn-fecha-hoy-manga');
+    if (btnFechaHoy) {
+      btnFechaHoy.addEventListener('click', () => {
+        const hoyActual = obtenerFechaHoyLocal();
+        this.fechaJornada = hoyActual;
+        this._diaBaseSistema = hoyActual;
+        if (inFechaJornada) inFechaJornada.value = hoyActual;
+        if (typeof this._recalcularLiveGDPActivo === 'function') {
+          this._recalcularLiveGDPActivo();
+        }
+      });
+    }
+
+    const btnOfflineManga = this.container.querySelector('#btn-offline-manga');
+    if (btnOfflineManga && this.onAbrirModoOffline) {
+      btnOfflineManga.addEventListener('click', () => this.onAbrirModoOffline());
+    }
+
+    // Filtro rápido de lote
+    const selLote = this.container.querySelector('#select-filtro-lote');
+    if (selLote) {
+      selLote.addEventListener('change', (e) => this.setLoteFiltro(e.target.value));
     }
 
     // Botón para aplicar fecha activa a todos los registros de la sesión actual
@@ -28127,15 +31091,15 @@ class CuadriculaMasiva {
     if (btnAplicarFechaSesion) {
       btnAplicarFechaSesion.addEventListener('click', () => {
         if (this.registrosSesion.length === 0) return;
-        const fechaActiva = this.fechaJornada || new Date().toISOString().split('T')[0];
-        this.registrosSesion.forEach(reg => {
+        const fechaActiva = this.fechaJornada || obtenerFechaHoyLocal();
+        this.registrosSesion.forEach((reg) => {
           reg.fecha = fechaActiva;
           if (reg.modulo === 'partos') reg.fechaParto = fechaActiva;
           if (reg.modulo === 'destetes') reg.fechaDestete = fechaActiva;
           if (reg.modulo === 'extracciones') reg.fechaExtraccion = fechaActiva;
           if (reg.modulo === 'servicios') reg.fechaServicio = fechaActiva;
           if (reg.modulo === 'pesajes' && reg.pesoNuevo) {
-            const a = this.getAnimales ? this.getAnimales().find(item => item.id === reg.animalId || item.identificacionTag === reg.tag) : null;
+            const a = this.getAnimales ? this.getAnimales().find((item) => item.id === reg.animalId || item.identificacionTag === reg.tag) : null;
             if (a) {
               const gdpRes = calcularGDPEjemplar({ animal: a, pesoActual: reg.pesoNuevo, fechaPesaje: fechaActiva });
               if (gdpRes) {
@@ -28147,48 +31111,15 @@ class CuadriculaMasiva {
           }
         });
         this.render();
-        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
+        if (typeof alert === 'function') {
+          alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
+        }
       });
     }
 
     // Cambio de módulo
     this.container.querySelectorAll('.btn-grid-mod').forEach((btn) => {
       btn.addEventListener('click', (e) => this.setModulo(e.currentTarget.getAttribute('data-mod')));
-    });
-
-    // Selector rápido de 1 Ordeño / Doble Ordeño en cabecera de Cuadrícula Masiva
-    const selOrdenoHeader = this.container.querySelector('#select-ordeno-manga-header');
-    if (selOrdenoHeader && typeof selOrdenoHeader.addEventListener === 'function') {
-      selOrdenoHeader.addEventListener('change', (e) => {
-        const numOrd = parseInt(e.target.value, 10) === 1 ? 1 : 2;
-        const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-        if (fincaAct) {
-          fincaAct.numeroOrdenos = numOrd;
-          fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-          if (this.onActualizarOrdenoFinca) {
-            this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-          }
-        }
-        this.render();
-      });
-    }
-
-    // Botones rápidos de 1 Ordeño / Doble Ordeño en la vista previa de Control Leche
-    this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
-      if (typeof btn.addEventListener === 'function') {
-        btn.addEventListener('click', (e) => {
-          const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
-          const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-          if (fincaAct) {
-            fincaAct.numeroOrdenos = numOrd;
-            fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-            if (this.onActualizarOrdenoFinca) {
-              this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-            }
-          }
-          this.render();
-        });
-      }
     });
 
     // Búsqueda en manga
@@ -28236,7 +31167,7 @@ class CuadriculaMasiva {
     if (inTag) {
       conectarAutosuggestAnimales({
         inputElement: inTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => (this.getAnimales ? this.getAnimales() : []),
         onSeleccionar: (animal) => {
           this.seleccionarAnimal(animal.identificacionTag);
         },
@@ -28312,6 +31243,7 @@ class CuadriculaMasiva {
 
 
 
+
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -28333,6 +31265,7 @@ class BoviTrackApp {
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
     this.online = (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') ? navigator.onLine : true;
+    this.offlineManager = new OfflineFieldManager();
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
@@ -28721,6 +31654,9 @@ class BoviTrackApp {
 
   guardarEstado() {
     this.persistirEstadoSeguro();
+    if (this.offlineManager && this.state) {
+      this.offlineManager.guardarSnapshotInventario(this.state).catch(() => {});
+    }
     if (typeof localStorage !== 'undefined') {
       // Mantener sincronizada la empresaActivaId dentro de la sesión autenticada
       // para que una recarga de página nunca revierta a una empresa anterior
@@ -28738,6 +31674,13 @@ class BoviTrackApp {
       }
     }
     this.actualizarContadorAlertas();
+    this.actualizarIndicadoresOfflineUI();
+    if (!this.online) {
+      this._syncPendiente = true;
+      if (this.state) this.state._hayCambiosOfflinePendientes = true;
+      this.persistirEstadoSeguro();
+      return;
+    }
     this.sincronizarConSupabaseDebounced();
   }
 
@@ -28774,6 +31717,15 @@ class BoviTrackApp {
       this.actualizarBadgeConexion('guardando');
       const res = await this.supabase.subirDatosASupabase(this.state);
       if (res.ok) {
+        if (this.offlineManager && this.state) {
+          const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          this.persistirEstadoSeguro();
+          this.offlineManager.guardarSnapshotInventario(this.state).catch(() => {});
+          if (enviados > 0) {
+            this.mostrarNotificacionToast(`✅ ${enviados} registro(s) guardados en dispositivo enviados a la base de datos.`, 'success');
+          }
+        }
+        this.actualizarIndicadoresOfflineUI();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         console.warn('Advertencia en subida Supabase:', res.error);
@@ -28933,7 +31885,7 @@ class BoviTrackApp {
 
         const numOrdFinal = (protegerPrecios && local && local.numeroOrdenos !== undefined)
           ? Number(local.numeroOrdenos)
-          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 2);
+          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 1);
 
         return {
           ...fCloud,
@@ -28944,8 +31896,8 @@ class BoviTrackApp {
           precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
             ? local.precioCarneKgPie
             : fCloud.precioCarneKgPie,
-          numeroOrdenos: numOrdFinal === 1 ? 1 : 2,
-          tipoOrdeno: numOrdFinal === 1 ? 'un_ordeno' : 'doble_ordeno',
+          numeroOrdenos: numOrdFinal === 2 ? 2 : 1,
+          tipoOrdeno: numOrdFinal === 2 ? 'doble_ordeno' : 'un_ordeno',
           lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
             ? local.lotes
             : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
@@ -29110,20 +32062,11 @@ class BoviTrackApp {
         const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || getClaveFincaTag(a)));
         const cloudTags = new Set(animalesValidosCloud.map((a) => getClaveFincaTag(a)));
 
-        // Preservar ejemplares locales ÚNICAMENTE si fueron creados o modificados en esta sesión recientemente (últimos 10 min)
-        // ¡NUNCA resucitar ejemplares viejos de localStorage que ya fueron purgados en la nube!
+        // Preservar ejemplares locales modificados o creados offline o recientemente
+        // ¡Y proteger los animales existentes que fueron pesados/editados sin conexión para no pisar sus datos!
         const modLocales = this.state._animalesModificadosLocalmente || {};
+        const pendOffline = this.state._animalesPendientesSync || {};
         const ahora = Date.now();
-        const localesPendientes = actuales.filter((a) => {
-          if (!a) return false;
-          const kId = a.id || getClaveFincaTag(a);
-          const kTag = getClaveFincaTag(a);
-          if (cloudIds.has(kId) || cloudTags.has(kTag)) return false;
-          const mod = modLocales[a.id] || modLocales[kTag];
-          const esModReciente = mod && (ahora - (mod.timestamp || 0) < 600000);
-          const esCreadoReciente = a.creadoEn && (ahora - new Date(a.creadoEn).getTime() < 600000);
-          return esModReciente || esCreadoReciente;
-        });
 
         const anmLocalesMap = new Map();
         actuales.forEach((a) => {
@@ -29131,7 +32074,35 @@ class BoviTrackApp {
           if (a.id) anmLocalesMap.set(a.id, a);
           anmLocalesMap.set(getClaveFincaTag(a), a);
         });
-        const listaFinalAnimales = [...animalesValidosCloud, ...localesPendientes];
+
+        const animalesCloudFusionados = animalesValidosCloud.map((aCloud) => {
+          const kTag = getClaveFincaTag(aCloud);
+          const tienePendienteOffline = Boolean(
+            (aCloud.id && pendOffline[aCloud.id]) || pendOffline[kTag]
+          );
+          if (!tienePendienteOffline) return aCloud;
+          const aLoc = (aCloud.id && anmLocalesMap.get(aCloud.id)) || anmLocalesMap.get(kTag);
+          if (!aLoc) return aCloud;
+          return {
+            ...aCloud,
+            ...aLoc,
+            id: aLoc.id || aCloud.id
+          };
+        });
+
+        const localesPendientes = actuales.filter((a) => {
+          if (!a) return false;
+          const kId = a.id || getClaveFincaTag(a);
+          const kTag = getClaveFincaTag(a);
+          if (cloudIds.has(kId) || cloudTags.has(kTag)) return false;
+          const tienePendOffline = Boolean((a.id && pendOffline[a.id]) || pendOffline[kTag]);
+          const mod = modLocales[a.id] || modLocales[kTag];
+          const esModReciente = mod && (ahora - (mod.timestamp || 0) < 600000);
+          const esCreadoReciente = a.creadoEn && (ahora - new Date(a.creadoEn).getTime() < 600000);
+          return tienePendOffline || esModReciente || esCreadoReciente;
+        });
+
+        const listaFinalAnimales = [...animalesCloudFusionados, ...localesPendientes];
 
         let anmCambiaron = (this.state.animales || []).length !== listaFinalAnimales.length;
         if (!anmCambiaron) {
@@ -29400,6 +32371,17 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
+      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar, subirlos ANTES de descargar
+      if (this.state._hayCambiosOfflinePendientes || (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)) {
+        const pushPend = await this.supabase.subirDatosASupabase(this.state);
+        if (pushPend && pushPend.ok && this.offlineManager) {
+          const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          if (enviados > 0) {
+            this.mostrarNotificacionToast(`☁️ ¡Conexión recuperada! ${enviados} registro(s) enviados a la base de datos.`, 'success');
+          }
+        }
+      }
+
       const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
         this.online = true;
@@ -29407,7 +32389,11 @@ class BoviTrackApp {
         this.integrarDatosSupabase(res.datos);
         this.getFincaActiva();
         this.persistirEstadoSeguro();
+        if (this.offlineManager) {
+          this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() }).catch(() => {});
+        }
         this.actualizarHeader();
+        this.actualizarIndicadoresOfflineUI();
         if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
           this.compCuadricula.cargarFilasDesdeInventario();
         }
@@ -29548,11 +32534,36 @@ class BoviTrackApp {
 
     this._syncEnCurso = true;
     try {
+      const esSuperAdmin = this.state?.usuarioActual?.rol === 'superadmin';
+      const fincasPermitidas = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa().map((f) => f.id) : [];
+      const tenantContext = this.state?.usuarioActual ? {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        rol: this.state.usuarioActual.rol || null,
+        usuario: this.state.usuarioActual.usuario || null,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      } : null;
+
       const pushRes = await this.supabase.subirDatosASupabase(this.state);
-      const pullRes = await this.supabase.descargarDatosDeSupabase(8000);
+      if (pushRes.ok && this.offlineManager && this.state) {
+        const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
+        if (cantEnviados > 0) {
+          this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+        }
+      }
+
+      const pullRes = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (pullRes.ok && pullRes.datos) {
         this.integrarDatosSupabase(pullRes.datos);
+        this.persistirEstadoSeguro();
+        if (this.offlineManager && this.state) {
+          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() });
+        }
       }
+
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
 
       if (pushRes.ok) {
         if (!silencioso) this.mostrarNotificacionToast('✅ ¡Sincronización con Supabase exitosa!', 'success');
@@ -30226,13 +33237,266 @@ class BoviTrackApp {
     window.addEventListener('online', () => {
       this.online = true;
       this.actualizarBadgeConexion();
+      this.actualizarIndicadoresOfflineUI();
       this.sincronizarManualConSupabase(true);
     });
 
     window.addEventListener('offline', () => {
       this.online = false;
       this.actualizarBadgeConexion();
+      this.actualizarIndicadoresOfflineUI();
+      this.mostrarNotificacionToast('🟠 Modo Sin Conexión activo: Puedes seguir trabajando con el inventario local; los datos se enviarán al recuperar red.', 'warn');
     });
+
+    // Restaurar respaldo completo de IndexedDB si localStorage móvil estaba vacío o truncado
+    if (this.offlineManager) {
+      this.offlineManager.cargarSnapshotInventario().then((snap) => {
+        if (!snap || !snap.state) return;
+        const localVacio = !Array.isArray(this.state?.animales) || this.state.animales.length === 0;
+        if (localVacio && Array.isArray(snap.state.animales) && snap.state.animales.length > 0) {
+          this.state = {
+            ...snap.state,
+            usuarioActual: this.state?.usuarioActual || snap.state.usuarioActual
+          };
+          this.migrarEstadoMultiTenant(this.state);
+          this.actualizarHeader();
+          this.refrescarVistas();
+        } else if (snap.meta && this.state && !this.state._offlineMeta) {
+          this.state._offlineMeta = snap.meta;
+        }
+        this.actualizarIndicadoresOfflineUI();
+      }).catch(() => {});
+    }
+  }
+
+  obtenerEstadoModoOffline() {
+    if (!this.offlineManager) {
+      return {
+        online: Boolean(this.online),
+        listoParaOffline: false,
+        fincasLocales: 0,
+        animalesLocales: 0,
+        pesajesLocales: 0,
+        pendientesCount: 0,
+        hayCambiosPendientes: false,
+        colaPendiente: []
+      };
+    }
+    const fincasPerm = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : (this.state?.fincas || []);
+    return this.offlineManager.obtenerResumenOffline(this.state, this.online, fincasPerm);
+  }
+
+  actualizarIndicadoresOfflineUI() {
+    if (typeof document === 'undefined') return;
+    const info = this.obtenerEstadoModoOffline();
+
+    const btnHdr = document.getElementById('btn-modo-offline-header');
+    const txtHdr = document.getElementById('texto-modo-offline-header');
+    const icoHdr = document.getElementById('icono-modo-offline-header');
+    const badgeHdr = document.getElementById('badge-cola-offline-header');
+    const lblDrop = document.getElementById('label-offline-dropdown');
+    const banner = document.getElementById('banner-modo-offline-activo');
+
+    if (icoHdr) icoHdr.textContent = !info.online ? '🟠' : (info.pendientesCount > 0 ? '☁️' : '📶');
+    if (txtHdr) {
+      txtHdr.textContent = !info.online
+        ? 'Sin Red'
+        : (info.pendientesCount > 0 ? 'Sincronizar' : 'Modo Campo');
+    }
+    if (badgeHdr && badgeHdr.classList) {
+      badgeHdr.textContent = String(info.pendientesCount);
+      badgeHdr.classList.toggle('hidden', info.pendientesCount === 0);
+    }
+    if (btnHdr) {
+      btnHdr.title = !info.online
+        ? `Modo Sin Conexión Activo (${info.animalesLocales} animales en equipo • ${info.pendientesCount} cambios pendientes por subir)`
+        : `Modo Trabajo Sin Conexión (${info.animalesLocales} animales listos • Clic para descargar inventario o enviar cambios)`;
+    }
+    if (lblDrop) {
+      lblDrop.textContent = !info.online
+        ? `Offline (${info.pendientesCount})`
+        : (info.pendientesCount > 0 ? `${info.pendientesCount} pend.` : `${info.animalesLocales} anim.`);
+    }
+    if (banner && banner.classList) {
+      if (!info.online) {
+        banner.classList.remove('hidden');
+        banner.innerHTML = `🟠 <strong>Modo Sin Conexión Activo:</strong> Trabajando con <strong>${info.animalesLocales} animales</strong> descargados en este dispositivo. Cambios por enviar al volver la red: <strong>${info.pendientesCount}</strong>. <button type="button" id="btn-ver-cola-banner-offline" class="underline ml-2 font-black cursor-pointer">Ver detalles</button>`;
+        const bVer = document.getElementById('btn-ver-cola-banner-offline');
+        if (bVer) bVer.onclick = () => this.abrirModalModoOffline();
+      } else if (info.pendientesCount > 0) {
+        banner.classList.remove('hidden');
+        banner.innerHTML = `☁️ <strong>Conexión disponible:</strong> Tienes <strong>${info.pendientesCount} registro(s)</strong> guardados localmente listos para enviar a la base de datos. <button type="button" id="btn-enviar-ahora-banner-offline" class="ml-2 px-2.5 py-0.5 rounded-lg bg-emerald-700 text-white font-black cursor-pointer">Enviar Ahora</button>`;
+        const bEnv = document.getElementById('btn-enviar-ahora-banner-offline');
+        if (bEnv) bEnv.onclick = () => this.sincronizarManualConSupabase(false);
+      } else {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+      }
+    }
+  }
+
+  async prepararModoSinConexion() {
+    if (!this.online) {
+      const resLocal = await this.offlineManager.guardarSnapshotInventario(this.state);
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
+      this.mostrarNotificacionToast('ℹ️ Ya estás sin señal; se aseguró el inventario actual en la memoria del dispositivo.', 'info');
+      return resLocal;
+    }
+
+    this.mostrarNotificacionToast('📥 Descargando inventario completo para trabajar sin conexión...', 'info');
+    this.actualizarBadgeConexion('descargando');
+
+    try {
+      // 1. Si había pendientes locales, enviarlos primero para no perder nada
+      if (this.state?._hayCambiosOfflinePendientes && this.supabase?.estaConfigurado()) {
+        const pushPrev = await this.supabase.subirDatosASupabase(this.state);
+        if (pushPrev && pushPrev.ok) {
+          this.offlineManager.limpiarColaSincronizada(this.state);
+        }
+      }
+
+      // 2. Descargar inventario completo de la empresa activa desde Supabase
+      if (this.supabase && this.supabase.estaConfigurado() && this.state?.usuarioActual) {
+        const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+        const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+        const tenantContext = {
+          empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+          esSuperAdmin,
+          rol: this.state.usuarioActual.rol || null,
+          usuario: this.state.usuarioActual.usuario || null,
+          fincasIds: fincasPermitidas,
+          token: this._tokenSesion || null
+        };
+        const pull = await this.supabase.descargarDatosDeSupabase(25000, tenantContext);
+        if (pull && pull.ok && pull.datos) {
+          this._descargaCompletaRealizada = true;
+          this.integrarDatosSupabase(pull.datos);
+        }
+      }
+
+      // 3. Guardar copia íntegra en IndexedDB + localStorage y calentar caché del Service Worker
+      this.persistirEstadoSeguro();
+      const snapRes = await this.offlineManager.guardarSnapshotInventario(this.state, {
+        descargadoEn: new Date().toISOString()
+      });
+      await this.offlineManager.calentarCacheServiceWorker();
+
+      const info = this.obtenerEstadoModoOffline();
+      this.actualizarBadgeConexion('sincronizado');
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
+      this.mostrarNotificacionToast(
+        `✅ Listo para trabajar sin conexión: ${info.animalesLocales} animales y ${info.fincasLocales} finca(s) guardados en este dispositivo.`,
+        'success'
+      );
+      return { ok: true, ...snapRes, resumen: info };
+    } catch (err) {
+      this.actualizarBadgeConexion('error');
+      this.mostrarNotificacionToast('⚠️ Error preparando modo sin conexión: ' + (err?.message || err), 'warn');
+      return { ok: false, error: err?.message || String(err) };
+    }
+  }
+
+  cerrarModalModoOffline() {
+    this._modalOfflineAbierto = false;
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('modal-modo-offline');
+    if (modal) modal.innerHTML = '';
+  }
+
+  abrirModalModoOffline() {
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('modal-modo-offline');
+    if (!modal) return;
+    this._modalOfflineAbierto = true;
+    const info = this.obtenerEstadoModoOffline();
+    const fechaDescTxt = info.descargadoEn
+      ? new Date(info.descargadoEn).toLocaleString('es-CO')
+      : 'Pendiente descargar';
+
+    modal.innerHTML = `
+      <div id="backdrop-modal-offline" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto">
+          <div class="bovi-module-header p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl p-2 rounded-2xl bg-emerald-100 border border-emerald-300">${info.online ? '📶' : '🟠'}</span>
+              <div>
+                <h3 class="text-base font-black text-slate-800">Modo Trabajo Sin Conexión (Corral / Potrero)</h3>
+                <p class="text-xs text-slate-600">Descarga el inventario antes de ir a campo y envía los datos al volver a tener señal.</p>
+              </div>
+            </div>
+            <button type="button" id="btn-cerrar-modal-offline" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer">✕</button>
+          </div>
+
+          <div class="p-5 space-y-4 text-xs">
+            <!-- ESTADO DE RED E INVENTARIO LOCAL -->
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="p-3 rounded-2xl border ${info.online ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-300'}">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Estado Red</span>
+                <strong class="text-sm font-black ${info.online ? 'text-emerald-800' : 'text-amber-900'}">${info.online ? '🟢 En Línea' : '🟠 Sin Señal'}</strong>
+              </div>
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Inventario Local</span>
+                <strong class="text-sm font-black text-slate-800">${info.animalesLocales} animales</strong>
+                <span class="text-[10px] text-slate-600 block">${info.fincasLocales} finca(s)</span>
+              </div>
+              <div class="p-3 rounded-2xl border ${info.pendientesCount > 0 ? 'bg-sky-50 border-sky-300' : 'bg-slate-50 border-slate-200'}">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Por Enviar</span>
+                <strong class="text-sm font-black ${info.pendientesCount > 0 ? 'text-sky-900' : 'text-slate-800'}">${info.pendientesCount} cambios</strong>
+                <span class="text-[10px] text-slate-600 block">Cola segura</span>
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="font-bold text-slate-800">📥 Última descarga en este dispositivo: <span class="font-mono text-emerald-800">${fechaDescTxt}</span></div>
+              <p class="text-[11px] text-slate-600">
+                <strong>Paso 1 (Con internet):</strong> Pulsa <em>"Descargar Datos del Inventario"</em> antes de salir hacia la finca.<br>
+                <strong>Paso 2 (Sin internet en la manga):</strong> Registra pesajes, leche, partos o palpaciones normalmente.<br>
+                <strong>Paso 3 (Al volver la red):</strong> El sistema enviará los datos automáticamente a la base de datos (o pulsa <em>"Enviar Datos Ahora"</em>).
+              </p>
+            </div>
+
+            ${info.colaPendiente.length > 0 ? `
+              <div class="border border-sky-200 bg-sky-50/50 rounded-2xl p-3 space-y-1.5">
+                <div class="font-black text-sky-950">📤 Cambios guardados en dispositivo pendientes de enviar (${info.colaPendiente.length}):</div>
+                <div class="max-h-32 overflow-y-auto space-y-1 pr-1">
+                  ${info.colaPendiente.slice(0, 20).map((it) => `
+                    <div class="text-[11px] bg-white px-2.5 py-1.5 rounded-lg border border-sky-100 flex items-center justify-between gap-2">
+                      <span class="font-semibold text-slate-800 truncate">${this.escapeHTML(it.descripcion)}</span>
+                      <span class="font-mono text-[10px] text-slate-600 shrink-0">${this.escapeHTML(it.tag || it.modulo)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <button type="button" id="btn-ejecutar-descarga-offline" class="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow transition cursor-pointer flex items-center justify-center gap-1.5">
+                <span>📥</span> Descargar Datos del Inventario
+              </button>
+              <button type="button" id="btn-ejecutar-subida-offline" ${!info.online ? 'disabled' : ''} class="py-3 px-4 rounded-2xl ${info.online ? 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} font-black text-xs shadow transition flex items-center justify-center gap-1.5">
+                <span>☁️</span> Enviar Datos a Base de Datos (${info.pendientesCount})
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const btnCerrar = document.getElementById('btn-cerrar-modal-offline');
+    const backdrop = document.getElementById('backdrop-modal-offline');
+    const btnDesc = document.getElementById('btn-ejecutar-descarga-offline');
+    const btnSubir = document.getElementById('btn-ejecutar-subida-offline');
+
+    if (btnCerrar) btnCerrar.onclick = () => this.cerrarModalModoOffline();
+    if (backdrop) {
+      backdrop.onclick = (ev) => {
+        if (ev.target === backdrop) this.cerrarModalModoOffline();
+      };
+    }
+    if (btnDesc) btnDesc.onclick = () => this.prepararModoSinConexion();
+    if (btnSubir) btnSubir.onclick = () => this.sincronizarManualConSupabase(false);
   }
 
   initTheme() {
@@ -30367,6 +33631,10 @@ class BoviTrackApp {
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       getFincaActiva: () => this.getFincaActiva(),
+      getPesajes: () => this.state.pesajes || [],
+      getOperaciones: () => this.state.operacionesDiarias || [],
+      getEstadoOffline: () => this.obtenerEstadoModoOffline(),
+      onAbrirModoOffline: () => this.abrirModalModoOffline(),
       onActualizarOrdenoFinca: (fincaId, numOrd) => this.actualizarOrdenoFinca(fincaId, numOrd),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
       onGuardarRegistroIndividual: (data) => this.guardarOperacionGrid(data),
@@ -30383,12 +33651,25 @@ class BoviTrackApp {
       onAccionZootecnica: ({ animalId, tipo }) => this.manejarAccionZootecnica(animalId, tipo)
     });
 
-    // 3. Centro de Informes & Inteligencia Ganadera (Rankings, Razas & Cruces)
+    // 3. Centro de Informes & Inteligencia Ganadera (Utilidad por Finca, Faltantes, Rankings, Razas & Cruces)
     this.compDinamica = new TablaDinamica({
       containerId: 'pantalla-dinamica',
       getAnimales: () => this.getAnimalesPredio(),
       getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
+      getTodosAnimalesEmpresa: () => {
+        const fIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+        return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
+      },
+      getFincas: () => this.getFincasEmpresa(),
       getFincaActiva: () => this.getFincaActiva(),
+      getPesajes: () => this.state.pesajes || [],
+      getOperaciones: () => this.state.operacionesDiarias || [],
+      getServicios: () => this.state.servicios || [],
+      getMovimientosContables: () => this.state.contabilidadMovimientos || [],
+      getPagosNomina: () => this.state.nominaPagos || [],
+      getCostosFijosMap: () => this.state.costosFijos || {},
+      getInversiones: () => this.state.inversiones || [],
+      onCambiarFinca: (fincaId) => this.setFincaActiva(fincaId),
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 
@@ -30639,6 +33920,10 @@ class BoviTrackApp {
         return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
       },
       getMovimientos: () => this.state.contabilidadMovimientos || [],
+      getInversiones: () => {
+        const fIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+        return (this.state.inversiones || []).filter((i) => i && fIds.has(i.fincaId));
+      },
       getTrabajadores: () => this.state.nominaTrabajadores || [],
       getPagosNomina: () => this.state.nominaPagos || [],
       getRol: () => (this.state.usuarioActual ? this.state.usuarioActual.rol : 'consultor'),
@@ -30682,7 +33967,17 @@ class BoviTrackApp {
       this.state.contabilidadMovimientos.unshift(nuevoMov);
     }
 
+    if (this.offlineManager && !this.online) {
+      this.offlineManager.registrarCambioPendiente(this.state, {
+        modulo: nuevoMov.tipo === 'inversion_diferida' ? 'inversion_diferida' : 'contabilidad',
+        fincaId,
+        fincaNombre: nuevoMov.fincaNombre,
+        descripcion: `${nuevoMov.tipo === 'inversion_diferida' ? 'Inversión Diferida' : 'Contabilidad'}: ${nuevoMov.concepto} ($${nuevoMov.monto.toLocaleString('es-CO')})`
+      });
+    }
+
     this.guardarEstado();
+    if (this.compDinamica && typeof this.compDinamica.render === 'function') this.compDinamica.render();
     return nuevoMov;
   }
 
@@ -31375,9 +34670,9 @@ class BoviTrackApp {
     if (!finca.codigo) {
       finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
     }
-    const numOrdFinca = Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+    const numOrdFinca = Number(finca.numeroOrdenos) === 2 || finca.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
     finca.numeroOrdenos = numOrdFinca;
-    finca.tipoOrdeno = numOrdFinca === 1 ? 'un_ordeno' : 'doble_ordeno';
+    finca.tipoOrdeno = numOrdFinca === 2 ? 'doble_ordeno' : 'un_ordeno';
 
     if (Array.isArray(this.state._fincasEliminadas)) {
       this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
@@ -32297,13 +35592,13 @@ class BoviTrackApp {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
     const numOrd = numeroOrdenos !== undefined
-      ? (Number(numeroOrdenos) === 1 ? 1 : 2)
-      : (tipoOrdeno === 'un_ordeno' ? 1 : (f && Number(f.numeroOrdenos) === 1 ? 1 : 2));
+      ? (Number(numeroOrdenos) === 2 ? 2 : 1)
+      : (tipoOrdeno === 'doble_ordeno' ? 2 : (f && Number(f.numeroOrdenos) === 2 ? 2 : 1));
     if (f) {
       f.precioLecheLitro = Number(leche);
       f.precioCarneKgPie = Number(carne);
       f.numeroOrdenos = numOrd;
-      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+      f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -32312,7 +35607,7 @@ class BoviTrackApp {
       precioLecheLitro: Number(leche),
       precioCarneKgPie: Number(carne),
       numeroOrdenos: numOrd,
-      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
@@ -32337,10 +35632,10 @@ class BoviTrackApp {
   async actualizarOrdenoFinca(fincaId, numeroOrdenos) {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
-    const numOrd = Number(numeroOrdenos) === 1 ? 1 : 2;
+    const numOrd = Number(numeroOrdenos) === 2 ? 2 : 1;
     if (f) {
       f.numeroOrdenos = numOrd;
-      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+      f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -32350,7 +35645,7 @@ class BoviTrackApp {
       precioLecheLitro: f ? Number(f.precioLecheLitro || 2450) : 2450,
       precioCarneKgPie: f ? Number(f.precioCarneKgPie || 8900) : 8900,
       numeroOrdenos: numOrd,
-      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
@@ -32412,7 +35707,7 @@ class BoviTrackApp {
         if (f && f.id) {
           if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
           if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
-            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
           }
         }
       });
@@ -32905,7 +36200,7 @@ class BoviTrackApp {
       return;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const registrosAProcesar = silencioso
       ? (registros || [])
       : (registros || []).filter((r) => !r._persistido);
@@ -33282,6 +36577,26 @@ class BoviTrackApp {
           fincaId: this.state.fincaActivaId,
           detalle: `Servicio reproductivo (${srv.tipo}): Reproductor ${srv.reproductor} | Protocolo: ${srv.protocolo}`,
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
+        });
+      }
+
+      // Registrar protección offline-first hasta confirmar sincronización con la base de datos
+      if (this.offlineManager) {
+        const fAct = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : null;
+        let resumenOp = `${modulo}: ${animal.identificacionTag}`;
+        if (modulo === 'pesajes' && reg.pesoNuevo) resumenOp = `Pesaje ${animal.identificacionTag}: ${reg.pesoNuevo} kg`;
+        else if (modulo === 'leche' && reg.totalLitros !== undefined) resumenOp = `Leche ${animal.identificacionTag}: ${reg.totalLitros} L`;
+        else if (modulo === 'palpaciones' && reg.resultado) resumenOp = `Palpación ${animal.identificacionTag}: ${reg.resultado}`;
+        else if (modulo === 'partos') resumenOp = `Parto ${animal.identificacionTag}`;
+        else if (modulo === 'destetes') resumenOp = `Destete ${animal.identificacionTag}`;
+
+        this.offlineManager.registrarCambioPendiente(this.state, {
+          modulo,
+          tag: animal.identificacionTag,
+          animalId: animal.id,
+          fincaId: this.state.fincaActivaId,
+          fincaNombre: fAct ? fAct.nombre : '',
+          descripcion: resumenOp
         });
       }
     });
@@ -34358,6 +37673,25 @@ class BoviTrackApp {
         this.sincronizarManualConSupabase();
       });
     }
+
+    const btnOfflineHdr = document.getElementById('btn-modo-offline-header');
+    if (btnOfflineHdr && !btnOfflineHdr._listenerAdded) {
+      btnOfflineHdr._listenerAdded = true;
+      btnOfflineHdr.addEventListener('click', () => {
+        this.abrirModalModoOffline();
+      });
+    }
+
+    const btnOfflineDrop = document.getElementById('btn-modo-offline-dropdown');
+    if (btnOfflineDrop && !btnOfflineDrop._listenerAdded) {
+      btnOfflineDrop._listenerAdded = true;
+      btnOfflineDrop.addEventListener('click', () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
+        this.abrirModalModoOffline();
+      });
+    }
+    this.actualizarIndicadoresOfflineUI();
 
     const btnBackupHeader = document.getElementById('btn-backup-excel-header');
     if (btnBackupHeader && !btnBackupHeader._listenerAdded) {

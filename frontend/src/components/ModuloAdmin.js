@@ -608,16 +608,16 @@ export class ModuloAdmin {
                                 <div class="text-[10px] text-slate-600 mt-2.5 font-mono flex flex-wrap justify-between items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                                   <span>Leche: <strong>$${f.precioLecheLitro || 2450}/L</strong></span>
                                   <span>Carne: <strong>$${f.precioCarneKgPie || 8900}/kg</strong></span>
-                                  <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
-                                    ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? '🥛 Un Ordeño (1 Casilla)' : '🥛🥛 Doble Ordeño (2 Casillas)'}
+                                  <span class="px-2 py-0.5 rounded-full font-bold ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+                                    ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? '🥛 Un Ordeño (1 Casilla)' : '🥛🥛 Doble Ordeño (2 Casillas)'}
                                   </span>
                                 </div>
                                 ${!esConsultor ? `
                                 <div class="mt-2 flex items-center justify-between gap-2 bg-emerald-50/60 px-2.5 py-1.5 rounded-xl border border-emerald-200 text-[11px]">
-                                  <label class="font-bold text-emerald-950 whitespace-nowrap">🥛 Ordeño Finca:</label>
+                                  <label class="font-bold text-emerald-950 whitespace-nowrap">🥛 Ordeños al día:</label>
                                   <select class="select-ordeno-finca-card flex-1 px-2 py-1 rounded-lg border border-emerald-300 bg-white font-bold text-emerald-950 outline-none cursor-pointer" data-finca-id="${f.id}">
-                                    <option value="1" ${(Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla)</option>
-                                    <option value="2" ${(Number(f.numeroOrdenos) !== 1 && f.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas)</option>
+                                    <option value="1" ${(Number(f.numeroOrdenos) !== 2 && f.tipoOrdeno !== 'doble_ordeno') ? 'selected' : ''}>🥛 1 Ordeño al día (Por defecto)</option>
+                                    <option value="2" ${(Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno') ? 'selected' : ''}>🥛🥛 2 Ordeños al día (Mañana y Tarde)</option>
                                   </select>
                                 </div>
                                 ` : ''}
@@ -1078,10 +1078,10 @@ export class ModuloAdmin {
                 </div>
 
                 <div>
-                  <label class="block font-bold text-slate-700 mb-1">🥛 Modalidad de Ordeño en la Finca:</label>
+                  <label class="block font-bold text-slate-700 mb-1">🥛 Cantidad de Ordeños al Día en la Finca:</label>
                   <select id="input-numero-ordenos" ${esConsultor ? 'disabled' : ''} class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none focus:border-purple-600 bg-white">
-                    <option value="1" ${(Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno') ? 'selected' : ''}>🥛 Un Ordeño (1 Casilla en Pesaje de Leche)</option>
-                    <option value="2" ${(Number(finca.numeroOrdenos) !== 1 && finca.tipoOrdeno !== 'un_ordeno') ? 'selected' : ''}>🥛🥛 Doble Ordeño (2 Casillas: Mañana y Tarde)</option>
+                    <option value="1" ${(Number(finca.numeroOrdenos) !== 2 && finca.tipoOrdeno !== 'doble_ordeno') ? 'selected' : ''}>🥛 1 Ordeño al día (Por defecto — 1 Casilla)</option>
+                    <option value="2" ${(Number(finca.numeroOrdenos) === 2 || finca.tipoOrdeno === 'doble_ordeno') ? 'selected' : ''}>🥛🥛 2 Ordeños al día (2 Casillas: Mañana y Tarde)</option>
                   </select>
                 </div>
 
@@ -2014,10 +2014,10 @@ export class ModuloAdmin {
             </div>
 
             <div class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-              <label class="block font-black text-emerald-950 mb-1">🥛 Modalidad de Ordeño en la Finca *:</label>
+              <label class="block font-black text-emerald-950 mb-1">🥛 Cantidad de Ordeños al Día en la Finca *:</label>
               <select id="finca-numero-ordenos" class="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white outline-none font-bold text-emerald-950 focus:border-emerald-600">
-                <option value="1">🥛 Un Ordeño Diario (1 Casilla en Pesaje de Leche)</option>
-                <option value="2" selected>🥛🥛 Doble Ordeño Diario (2 Casillas: Turno Mañana y Tarde)</option>
+                <option value="1" selected>🥛 1 Ordeño Diario (Por defecto — 1 Casilla en Pesaje de Leche)</option>
+                <option value="2">🥛🥛 2 Ordeños Diarios (2 Casillas: Turno Mañana y Tarde)</option>
               </select>
             </div>
 
@@ -2842,8 +2842,8 @@ END $$;
         const ubicacion = document.getElementById('finca-ubicacion')?.value.trim() || 'Colombia';
         const leche = parseFloat(document.getElementById('finca-precio-leche')?.value) || 2450;
         const carne = parseFloat(document.getElementById('finca-precio-carne')?.value) || 8900;
-        const numeroOrdenos = parseInt(document.getElementById('finca-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
-        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
+        const numeroOrdenos = parseInt(document.getElementById('finca-numero-ordenos')?.value || '1', 10) === 2 ? 2 : 1;
+        const tipoOrdeno = numeroOrdenos === 2 ? 'doble_ordeno' : 'un_ordeno';
 
         if (!nombre || isNaN(area) || area <= 0) {
           alert('Por favor ingresa un nombre válido y un área en hectáreas mayor a cero.');
@@ -2872,7 +2872,7 @@ END $$;
     this.container.querySelectorAll('.select-ordeno-finca-card').forEach((sel) => {
       sel.addEventListener('change', (e) => {
         const fid = e.currentTarget.getAttribute('data-finca-id');
-        const numOrd = parseInt(e.currentTarget.value || '2', 10) === 1 ? 1 : 2;
+        const numOrd = parseInt(e.currentTarget.value || '1', 10) === 2 ? 2 : 1;
         if (this.onActualizarOrdenoFinca) {
           this.onActualizarOrdenoFinca(fid, numOrd);
         } else if (this.onActualizarPrecios) {
@@ -2881,7 +2881,7 @@ END $$;
             leche: fincaItem?.precioLecheLitro || 2450,
             carne: fincaItem?.precioCarneKgPie || 8900,
             numeroOrdenos: numOrd,
-            tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+            tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
             fincaId: fid
           });
         }
@@ -3608,8 +3608,8 @@ END $$;
         const targetFincaId = inputL?.getAttribute('data-finca-id') || this.fincaFinanzasSeleccionada;
         const leche = parseFloat(inputL?.value) || 2450;
         const carne = parseFloat(document.getElementById('input-carne')?.value) || 8900;
-        const numeroOrdenos = parseInt(document.getElementById('input-numero-ordenos')?.value || '2', 10) === 1 ? 1 : 2;
-        const tipoOrdeno = numeroOrdenos === 1 ? 'un_ordeno' : 'doble_ordeno';
+        const numeroOrdenos = parseInt(document.getElementById('input-numero-ordenos')?.value || '1', 10) === 2 ? 2 : 1;
+        const tipoOrdeno = numeroOrdenos === 2 ? 'doble_ordeno' : 'un_ordeno';
         if (this.onActualizarPrecios) {
           this.onActualizarPrecios({ leche, carne, numeroOrdenos, tipoOrdeno, fincaId: targetFincaId });
         }

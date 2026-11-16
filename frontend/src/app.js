@@ -19,7 +19,8 @@ import { ModuloContabilidad } from './components/ModuloContabilidad.js';
 import { SupabaseSyncService } from './core/supabaseSync.js';
 import { detectarAlertasZootecnicas } from './core/auditorIA.js';
 import { ExportadorBackupService } from './core/exportadorBackup.js';
-import { calcularGDP, calcularGDPEjemplar, formatearFecha } from './core/zootecnia.js';
+import { OfflineFieldManager } from './core/offlineManager.js';
+import { calcularGDP, calcularGDPEjemplar, formatearFecha, obtenerFechaHoyLocal } from './core/zootecnia.js';
 
 export function escapeHTML(str) {
   if (str === null || str === undefined) return '';
@@ -42,6 +43,7 @@ class BoviTrackApp {
     this.state = this.cargarEstado();
     this.vistaActiva = 'animales'; // 'animales' como portada principal de la app
     this.online = (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') ? navigator.onLine : true;
+    this.offlineManager = new OfflineFieldManager();
     this.supabase = new SupabaseSyncService();
     this._syncEnCurso = false;
     this._syncPendiente = false;
@@ -430,6 +432,9 @@ class BoviTrackApp {
 
   guardarEstado() {
     this.persistirEstadoSeguro();
+    if (this.offlineManager && this.state) {
+      this.offlineManager.guardarSnapshotInventario(this.state).catch(() => {});
+    }
     if (typeof localStorage !== 'undefined') {
       // Mantener sincronizada la empresaActivaId dentro de la sesión autenticada
       // para que una recarga de página nunca revierta a una empresa anterior
@@ -447,6 +452,13 @@ class BoviTrackApp {
       }
     }
     this.actualizarContadorAlertas();
+    this.actualizarIndicadoresOfflineUI();
+    if (!this.online) {
+      this._syncPendiente = true;
+      if (this.state) this.state._hayCambiosOfflinePendientes = true;
+      this.persistirEstadoSeguro();
+      return;
+    }
     this.sincronizarConSupabaseDebounced();
   }
 
@@ -483,6 +495,15 @@ class BoviTrackApp {
       this.actualizarBadgeConexion('guardando');
       const res = await this.supabase.subirDatosASupabase(this.state);
       if (res.ok) {
+        if (this.offlineManager && this.state) {
+          const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          this.persistirEstadoSeguro();
+          this.offlineManager.guardarSnapshotInventario(this.state).catch(() => {});
+          if (enviados > 0) {
+            this.mostrarNotificacionToast(`✅ ${enviados} registro(s) guardados en dispositivo enviados a la base de datos.`, 'success');
+          }
+        }
+        this.actualizarIndicadoresOfflineUI();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         console.warn('Advertencia en subida Supabase:', res.error);
@@ -642,7 +663,7 @@ class BoviTrackApp {
 
         const numOrdFinal = (protegerPrecios && local && local.numeroOrdenos !== undefined)
           ? Number(local.numeroOrdenos)
-          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 2);
+          : Number(fCloud.numeroOrdenos ?? (local && local.numeroOrdenos) ?? 1);
 
         return {
           ...fCloud,
@@ -653,8 +674,8 @@ class BoviTrackApp {
           precioCarneKgPie: (protegerPrecios && local && local.precioCarneKgPie !== undefined)
             ? local.precioCarneKgPie
             : fCloud.precioCarneKgPie,
-          numeroOrdenos: numOrdFinal === 1 ? 1 : 2,
-          tipoOrdeno: numOrdFinal === 1 ? 'un_ordeno' : 'doble_ordeno',
+          numeroOrdenos: numOrdFinal === 2 ? 2 : 1,
+          tipoOrdeno: numOrdFinal === 2 ? 'doble_ordeno' : 'un_ordeno',
           lotes: (local && Array.isArray(local.lotes) && local.lotes.length > 0)
             ? local.lotes
             : (fCloud.lotes || ['Lote 1', 'Lote 2', 'Maternidad', 'Ordeño', 'Ceba'])
@@ -819,20 +840,11 @@ class BoviTrackApp {
         const cloudIds = new Set(animalesValidosCloud.map((a) => a.id || getClaveFincaTag(a)));
         const cloudTags = new Set(animalesValidosCloud.map((a) => getClaveFincaTag(a)));
 
-        // Preservar ejemplares locales ÚNICAMENTE si fueron creados o modificados en esta sesión recientemente (últimos 10 min)
-        // ¡NUNCA resucitar ejemplares viejos de localStorage que ya fueron purgados en la nube!
+        // Preservar ejemplares locales modificados o creados offline o recientemente
+        // ¡Y proteger los animales existentes que fueron pesados/editados sin conexión para no pisar sus datos!
         const modLocales = this.state._animalesModificadosLocalmente || {};
+        const pendOffline = this.state._animalesPendientesSync || {};
         const ahora = Date.now();
-        const localesPendientes = actuales.filter((a) => {
-          if (!a) return false;
-          const kId = a.id || getClaveFincaTag(a);
-          const kTag = getClaveFincaTag(a);
-          if (cloudIds.has(kId) || cloudTags.has(kTag)) return false;
-          const mod = modLocales[a.id] || modLocales[kTag];
-          const esModReciente = mod && (ahora - (mod.timestamp || 0) < 600000);
-          const esCreadoReciente = a.creadoEn && (ahora - new Date(a.creadoEn).getTime() < 600000);
-          return esModReciente || esCreadoReciente;
-        });
 
         const anmLocalesMap = new Map();
         actuales.forEach((a) => {
@@ -840,7 +852,35 @@ class BoviTrackApp {
           if (a.id) anmLocalesMap.set(a.id, a);
           anmLocalesMap.set(getClaveFincaTag(a), a);
         });
-        const listaFinalAnimales = [...animalesValidosCloud, ...localesPendientes];
+
+        const animalesCloudFusionados = animalesValidosCloud.map((aCloud) => {
+          const kTag = getClaveFincaTag(aCloud);
+          const tienePendienteOffline = Boolean(
+            (aCloud.id && pendOffline[aCloud.id]) || pendOffline[kTag]
+          );
+          if (!tienePendienteOffline) return aCloud;
+          const aLoc = (aCloud.id && anmLocalesMap.get(aCloud.id)) || anmLocalesMap.get(kTag);
+          if (!aLoc) return aCloud;
+          return {
+            ...aCloud,
+            ...aLoc,
+            id: aLoc.id || aCloud.id
+          };
+        });
+
+        const localesPendientes = actuales.filter((a) => {
+          if (!a) return false;
+          const kId = a.id || getClaveFincaTag(a);
+          const kTag = getClaveFincaTag(a);
+          if (cloudIds.has(kId) || cloudTags.has(kTag)) return false;
+          const tienePendOffline = Boolean((a.id && pendOffline[a.id]) || pendOffline[kTag]);
+          const mod = modLocales[a.id] || modLocales[kTag];
+          const esModReciente = mod && (ahora - (mod.timestamp || 0) < 600000);
+          const esCreadoReciente = a.creadoEn && (ahora - new Date(a.creadoEn).getTime() < 600000);
+          return tienePendOffline || esModReciente || esCreadoReciente;
+        });
+
+        const listaFinalAnimales = [...animalesCloudFusionados, ...localesPendientes];
 
         let anmCambiaron = (this.state.animales || []).length !== listaFinalAnimales.length;
         if (!anmCambiaron) {
@@ -1109,6 +1149,17 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
+      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar, subirlos ANTES de descargar
+      if (this.state._hayCambiosOfflinePendientes || (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)) {
+        const pushPend = await this.supabase.subirDatosASupabase(this.state);
+        if (pushPend && pushPend.ok && this.offlineManager) {
+          const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          if (enviados > 0) {
+            this.mostrarNotificacionToast(`☁️ ¡Conexión recuperada! ${enviados} registro(s) enviados a la base de datos.`, 'success');
+          }
+        }
+      }
+
       const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (res.ok && res.datos) {
         this.online = true;
@@ -1116,7 +1167,11 @@ class BoviTrackApp {
         this.integrarDatosSupabase(res.datos);
         this.getFincaActiva();
         this.persistirEstadoSeguro();
+        if (this.offlineManager) {
+          this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() }).catch(() => {});
+        }
         this.actualizarHeader();
+        this.actualizarIndicadoresOfflineUI();
         if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
           this.compCuadricula.cargarFilasDesdeInventario();
         }
@@ -1257,11 +1312,36 @@ class BoviTrackApp {
 
     this._syncEnCurso = true;
     try {
+      const esSuperAdmin = this.state?.usuarioActual?.rol === 'superadmin';
+      const fincasPermitidas = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa().map((f) => f.id) : [];
+      const tenantContext = this.state?.usuarioActual ? {
+        empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+        esSuperAdmin,
+        rol: this.state.usuarioActual.rol || null,
+        usuario: this.state.usuarioActual.usuario || null,
+        fincasIds: fincasPermitidas,
+        token: this._tokenSesion || null
+      } : null;
+
       const pushRes = await this.supabase.subirDatosASupabase(this.state);
-      const pullRes = await this.supabase.descargarDatosDeSupabase(8000);
+      if (pushRes.ok && this.offlineManager && this.state) {
+        const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
+        if (cantEnviados > 0) {
+          this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+        }
+      }
+
+      const pullRes = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
       if (pullRes.ok && pullRes.datos) {
         this.integrarDatosSupabase(pullRes.datos);
+        this.persistirEstadoSeguro();
+        if (this.offlineManager && this.state) {
+          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() });
+        }
       }
+
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
 
       if (pushRes.ok) {
         if (!silencioso) this.mostrarNotificacionToast('✅ ¡Sincronización con Supabase exitosa!', 'success');
@@ -1935,13 +2015,266 @@ class BoviTrackApp {
     window.addEventListener('online', () => {
       this.online = true;
       this.actualizarBadgeConexion();
+      this.actualizarIndicadoresOfflineUI();
       this.sincronizarManualConSupabase(true);
     });
 
     window.addEventListener('offline', () => {
       this.online = false;
       this.actualizarBadgeConexion();
+      this.actualizarIndicadoresOfflineUI();
+      this.mostrarNotificacionToast('🟠 Modo Sin Conexión activo: Puedes seguir trabajando con el inventario local; los datos se enviarán al recuperar red.', 'warn');
     });
+
+    // Restaurar respaldo completo de IndexedDB si localStorage móvil estaba vacío o truncado
+    if (this.offlineManager) {
+      this.offlineManager.cargarSnapshotInventario().then((snap) => {
+        if (!snap || !snap.state) return;
+        const localVacio = !Array.isArray(this.state?.animales) || this.state.animales.length === 0;
+        if (localVacio && Array.isArray(snap.state.animales) && snap.state.animales.length > 0) {
+          this.state = {
+            ...snap.state,
+            usuarioActual: this.state?.usuarioActual || snap.state.usuarioActual
+          };
+          this.migrarEstadoMultiTenant(this.state);
+          this.actualizarHeader();
+          this.refrescarVistas();
+        } else if (snap.meta && this.state && !this.state._offlineMeta) {
+          this.state._offlineMeta = snap.meta;
+        }
+        this.actualizarIndicadoresOfflineUI();
+      }).catch(() => {});
+    }
+  }
+
+  obtenerEstadoModoOffline() {
+    if (!this.offlineManager) {
+      return {
+        online: Boolean(this.online),
+        listoParaOffline: false,
+        fincasLocales: 0,
+        animalesLocales: 0,
+        pesajesLocales: 0,
+        pendientesCount: 0,
+        hayCambiosPendientes: false,
+        colaPendiente: []
+      };
+    }
+    const fincasPerm = typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : (this.state?.fincas || []);
+    return this.offlineManager.obtenerResumenOffline(this.state, this.online, fincasPerm);
+  }
+
+  actualizarIndicadoresOfflineUI() {
+    if (typeof document === 'undefined') return;
+    const info = this.obtenerEstadoModoOffline();
+
+    const btnHdr = document.getElementById('btn-modo-offline-header');
+    const txtHdr = document.getElementById('texto-modo-offline-header');
+    const icoHdr = document.getElementById('icono-modo-offline-header');
+    const badgeHdr = document.getElementById('badge-cola-offline-header');
+    const lblDrop = document.getElementById('label-offline-dropdown');
+    const banner = document.getElementById('banner-modo-offline-activo');
+
+    if (icoHdr) icoHdr.textContent = !info.online ? '🟠' : (info.pendientesCount > 0 ? '☁️' : '📶');
+    if (txtHdr) {
+      txtHdr.textContent = !info.online
+        ? 'Sin Red'
+        : (info.pendientesCount > 0 ? 'Sincronizar' : 'Modo Campo');
+    }
+    if (badgeHdr && badgeHdr.classList) {
+      badgeHdr.textContent = String(info.pendientesCount);
+      badgeHdr.classList.toggle('hidden', info.pendientesCount === 0);
+    }
+    if (btnHdr) {
+      btnHdr.title = !info.online
+        ? `Modo Sin Conexión Activo (${info.animalesLocales} animales en equipo • ${info.pendientesCount} cambios pendientes por subir)`
+        : `Modo Trabajo Sin Conexión (${info.animalesLocales} animales listos • Clic para descargar inventario o enviar cambios)`;
+    }
+    if (lblDrop) {
+      lblDrop.textContent = !info.online
+        ? `Offline (${info.pendientesCount})`
+        : (info.pendientesCount > 0 ? `${info.pendientesCount} pend.` : `${info.animalesLocales} anim.`);
+    }
+    if (banner && banner.classList) {
+      if (!info.online) {
+        banner.classList.remove('hidden');
+        banner.innerHTML = `🟠 <strong>Modo Sin Conexión Activo:</strong> Trabajando con <strong>${info.animalesLocales} animales</strong> descargados en este dispositivo. Cambios por enviar al volver la red: <strong>${info.pendientesCount}</strong>. <button type="button" id="btn-ver-cola-banner-offline" class="underline ml-2 font-black cursor-pointer">Ver detalles</button>`;
+        const bVer = document.getElementById('btn-ver-cola-banner-offline');
+        if (bVer) bVer.onclick = () => this.abrirModalModoOffline();
+      } else if (info.pendientesCount > 0) {
+        banner.classList.remove('hidden');
+        banner.innerHTML = `☁️ <strong>Conexión disponible:</strong> Tienes <strong>${info.pendientesCount} registro(s)</strong> guardados localmente listos para enviar a la base de datos. <button type="button" id="btn-enviar-ahora-banner-offline" class="ml-2 px-2.5 py-0.5 rounded-lg bg-emerald-700 text-white font-black cursor-pointer">Enviar Ahora</button>`;
+        const bEnv = document.getElementById('btn-enviar-ahora-banner-offline');
+        if (bEnv) bEnv.onclick = () => this.sincronizarManualConSupabase(false);
+      } else {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+      }
+    }
+  }
+
+  async prepararModoSinConexion() {
+    if (!this.online) {
+      const resLocal = await this.offlineManager.guardarSnapshotInventario(this.state);
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
+      this.mostrarNotificacionToast('ℹ️ Ya estás sin señal; se aseguró el inventario actual en la memoria del dispositivo.', 'info');
+      return resLocal;
+    }
+
+    this.mostrarNotificacionToast('📥 Descargando inventario completo para trabajar sin conexión...', 'info');
+    this.actualizarBadgeConexion('descargando');
+
+    try {
+      // 1. Si había pendientes locales, enviarlos primero para no perder nada
+      if (this.state?._hayCambiosOfflinePendientes && this.supabase?.estaConfigurado()) {
+        const pushPrev = await this.supabase.subirDatosASupabase(this.state);
+        if (pushPrev && pushPrev.ok) {
+          this.offlineManager.limpiarColaSincronizada(this.state);
+        }
+      }
+
+      // 2. Descargar inventario completo de la empresa activa desde Supabase
+      if (this.supabase && this.supabase.estaConfigurado() && this.state?.usuarioActual) {
+        const esSuperAdmin = this.state.usuarioActual.rol === 'superadmin';
+        const fincasPermitidas = this.getFincasEmpresa().map((f) => f.id);
+        const tenantContext = {
+          empresaId: this.state.empresaActivaId || this.state.usuarioActual.empresaId,
+          esSuperAdmin,
+          rol: this.state.usuarioActual.rol || null,
+          usuario: this.state.usuarioActual.usuario || null,
+          fincasIds: fincasPermitidas,
+          token: this._tokenSesion || null
+        };
+        const pull = await this.supabase.descargarDatosDeSupabase(25000, tenantContext);
+        if (pull && pull.ok && pull.datos) {
+          this._descargaCompletaRealizada = true;
+          this.integrarDatosSupabase(pull.datos);
+        }
+      }
+
+      // 3. Guardar copia íntegra en IndexedDB + localStorage y calentar caché del Service Worker
+      this.persistirEstadoSeguro();
+      const snapRes = await this.offlineManager.guardarSnapshotInventario(this.state, {
+        descargadoEn: new Date().toISOString()
+      });
+      await this.offlineManager.calentarCacheServiceWorker();
+
+      const info = this.obtenerEstadoModoOffline();
+      this.actualizarBadgeConexion('sincronizado');
+      this.actualizarIndicadoresOfflineUI();
+      if (this._modalOfflineAbierto) this.abrirModalModoOffline();
+      this.mostrarNotificacionToast(
+        `✅ Listo para trabajar sin conexión: ${info.animalesLocales} animales y ${info.fincasLocales} finca(s) guardados en este dispositivo.`,
+        'success'
+      );
+      return { ok: true, ...snapRes, resumen: info };
+    } catch (err) {
+      this.actualizarBadgeConexion('error');
+      this.mostrarNotificacionToast('⚠️ Error preparando modo sin conexión: ' + (err?.message || err), 'warn');
+      return { ok: false, error: err?.message || String(err) };
+    }
+  }
+
+  cerrarModalModoOffline() {
+    this._modalOfflineAbierto = false;
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('modal-modo-offline');
+    if (modal) modal.innerHTML = '';
+  }
+
+  abrirModalModoOffline() {
+    if (typeof document === 'undefined') return;
+    const modal = document.getElementById('modal-modo-offline');
+    if (!modal) return;
+    this._modalOfflineAbierto = true;
+    const info = this.obtenerEstadoModoOffline();
+    const fechaDescTxt = info.descargadoEn
+      ? new Date(info.descargadoEn).toLocaleString('es-CO')
+      : 'Pendiente descargar';
+
+    modal.innerHTML = `
+      <div id="backdrop-modal-offline" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden my-auto">
+          <div class="bovi-module-header p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl p-2 rounded-2xl bg-emerald-100 border border-emerald-300">${info.online ? '📶' : '🟠'}</span>
+              <div>
+                <h3 class="text-base font-black text-slate-800">Modo Trabajo Sin Conexión (Corral / Potrero)</h3>
+                <p class="text-xs text-slate-600">Descarga el inventario antes de ir a campo y envía los datos al volver a tener señal.</p>
+              </div>
+            </div>
+            <button type="button" id="btn-cerrar-modal-offline" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer">✕</button>
+          </div>
+
+          <div class="p-5 space-y-4 text-xs">
+            <!-- ESTADO DE RED E INVENTARIO LOCAL -->
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="p-3 rounded-2xl border ${info.online ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-300'}">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Estado Red</span>
+                <strong class="text-sm font-black ${info.online ? 'text-emerald-800' : 'text-amber-900'}">${info.online ? '🟢 En Línea' : '🟠 Sin Señal'}</strong>
+              </div>
+              <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Inventario Local</span>
+                <strong class="text-sm font-black text-slate-800">${info.animalesLocales} animales</strong>
+                <span class="text-[10px] text-slate-600 block">${info.fincasLocales} finca(s)</span>
+              </div>
+              <div class="p-3 rounded-2xl border ${info.pendientesCount > 0 ? 'bg-sky-50 border-sky-300' : 'bg-slate-50 border-slate-200'}">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Por Enviar</span>
+                <strong class="text-sm font-black ${info.pendientesCount > 0 ? 'text-sky-900' : 'text-slate-800'}">${info.pendientesCount} cambios</strong>
+                <span class="text-[10px] text-slate-600 block">Cola segura</span>
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+              <div class="font-bold text-slate-800">📥 Última descarga en este dispositivo: <span class="font-mono text-emerald-800">${fechaDescTxt}</span></div>
+              <p class="text-[11px] text-slate-600">
+                <strong>Paso 1 (Con internet):</strong> Pulsa <em>"Descargar Datos del Inventario"</em> antes de salir hacia la finca.<br>
+                <strong>Paso 2 (Sin internet en la manga):</strong> Registra pesajes, leche, partos o palpaciones normalmente.<br>
+                <strong>Paso 3 (Al volver la red):</strong> El sistema enviará los datos automáticamente a la base de datos (o pulsa <em>"Enviar Datos Ahora"</em>).
+              </p>
+            </div>
+
+            ${info.colaPendiente.length > 0 ? `
+              <div class="border border-sky-200 bg-sky-50/50 rounded-2xl p-3 space-y-1.5">
+                <div class="font-black text-sky-950">📤 Cambios guardados en dispositivo pendientes de enviar (${info.colaPendiente.length}):</div>
+                <div class="max-h-32 overflow-y-auto space-y-1 pr-1">
+                  ${info.colaPendiente.slice(0, 20).map((it) => `
+                    <div class="text-[11px] bg-white px-2.5 py-1.5 rounded-lg border border-sky-100 flex items-center justify-between gap-2">
+                      <span class="font-semibold text-slate-800 truncate">${this.escapeHTML(it.descripcion)}</span>
+                      <span class="font-mono text-[10px] text-slate-600 shrink-0">${this.escapeHTML(it.tag || it.modulo)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <button type="button" id="btn-ejecutar-descarga-offline" class="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow transition cursor-pointer flex items-center justify-center gap-1.5">
+                <span>📥</span> Descargar Datos del Inventario
+              </button>
+              <button type="button" id="btn-ejecutar-subida-offline" ${!info.online ? 'disabled' : ''} class="py-3 px-4 rounded-2xl ${info.online ? 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} font-black text-xs shadow transition flex items-center justify-center gap-1.5">
+                <span>☁️</span> Enviar Datos a Base de Datos (${info.pendientesCount})
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const btnCerrar = document.getElementById('btn-cerrar-modal-offline');
+    const backdrop = document.getElementById('backdrop-modal-offline');
+    const btnDesc = document.getElementById('btn-ejecutar-descarga-offline');
+    const btnSubir = document.getElementById('btn-ejecutar-subida-offline');
+
+    if (btnCerrar) btnCerrar.onclick = () => this.cerrarModalModoOffline();
+    if (backdrop) {
+      backdrop.onclick = (ev) => {
+        if (ev.target === backdrop) this.cerrarModalModoOffline();
+      };
+    }
+    if (btnDesc) btnDesc.onclick = () => this.prepararModoSinConexion();
+    if (btnSubir) btnSubir.onclick = () => this.sincronizarManualConSupabase(false);
   }
 
   initTheme() {
@@ -2076,6 +2409,10 @@ class BoviTrackApp {
       getAnimales: () => this.getAnimalesParaBusquedaUniversal(),
       getLotes: () => this.getLotesPredio(),
       getFincaActiva: () => this.getFincaActiva(),
+      getPesajes: () => this.state.pesajes || [],
+      getOperaciones: () => this.state.operacionesDiarias || [],
+      getEstadoOffline: () => this.obtenerEstadoModoOffline(),
+      onAbrirModoOffline: () => this.abrirModalModoOffline(),
       onActualizarOrdenoFinca: (fincaId, numOrd) => this.actualizarOrdenoFinca(fincaId, numOrd),
       onGuardarRegistros: (data) => this.guardarOperacionGrid(data),
       onGuardarRegistroIndividual: (data) => this.guardarOperacionGrid(data),
@@ -2092,12 +2429,25 @@ class BoviTrackApp {
       onAccionZootecnica: ({ animalId, tipo }) => this.manejarAccionZootecnica(animalId, tipo)
     });
 
-    // 3. Centro de Informes & Inteligencia Ganadera (Rankings, Razas & Cruces)
+    // 3. Centro de Informes & Inteligencia Ganadera (Utilidad por Finca, Faltantes, Rankings, Razas & Cruces)
     this.compDinamica = new TablaDinamica({
       containerId: 'pantalla-dinamica',
       getAnimales: () => this.getAnimalesPredio(),
       getAnimalesBusqueda: () => this.getAnimalesParaBusquedaUniversal(),
+      getTodosAnimalesEmpresa: () => {
+        const fIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+        return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
+      },
+      getFincas: () => this.getFincasEmpresa(),
       getFincaActiva: () => this.getFincaActiva(),
+      getPesajes: () => this.state.pesajes || [],
+      getOperaciones: () => this.state.operacionesDiarias || [],
+      getServicios: () => this.state.servicios || [],
+      getMovimientosContables: () => this.state.contabilidadMovimientos || [],
+      getPagosNomina: () => this.state.nominaPagos || [],
+      getCostosFijosMap: () => this.state.costosFijos || {},
+      getInversiones: () => this.state.inversiones || [],
+      onCambiarFinca: (fincaId) => this.setFincaActiva(fincaId),
       onVerFicha: (animalId) => this.abrirFichaAnimal(animalId)
     });
 
@@ -2348,6 +2698,10 @@ class BoviTrackApp {
         return (this.state.animales || []).filter((a) => a && fIds.has(a.fincaId));
       },
       getMovimientos: () => this.state.contabilidadMovimientos || [],
+      getInversiones: () => {
+        const fIds = new Set(this.getFincasEmpresa().map((f) => f.id));
+        return (this.state.inversiones || []).filter((i) => i && fIds.has(i.fincaId));
+      },
       getTrabajadores: () => this.state.nominaTrabajadores || [],
       getPagosNomina: () => this.state.nominaPagos || [],
       getRol: () => (this.state.usuarioActual ? this.state.usuarioActual.rol : 'consultor'),
@@ -2391,7 +2745,17 @@ class BoviTrackApp {
       this.state.contabilidadMovimientos.unshift(nuevoMov);
     }
 
+    if (this.offlineManager && !this.online) {
+      this.offlineManager.registrarCambioPendiente(this.state, {
+        modulo: nuevoMov.tipo === 'inversion_diferida' ? 'inversion_diferida' : 'contabilidad',
+        fincaId,
+        fincaNombre: nuevoMov.fincaNombre,
+        descripcion: `${nuevoMov.tipo === 'inversion_diferida' ? 'Inversión Diferida' : 'Contabilidad'}: ${nuevoMov.concepto} ($${nuevoMov.monto.toLocaleString('es-CO')})`
+      });
+    }
+
     this.guardarEstado();
+    if (this.compDinamica && typeof this.compDinamica.render === 'function') this.compDinamica.render();
     return nuevoMov;
   }
 
@@ -3084,9 +3448,9 @@ class BoviTrackApp {
     if (!finca.codigo) {
       finca.codigo = `FIN-${Math.floor(Math.random() * 900) + 100}`;
     }
-    const numOrdFinca = Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+    const numOrdFinca = Number(finca.numeroOrdenos) === 2 || finca.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
     finca.numeroOrdenos = numOrdFinca;
-    finca.tipoOrdeno = numOrdFinca === 1 ? 'un_ordeno' : 'doble_ordeno';
+    finca.tipoOrdeno = numOrdFinca === 2 ? 'doble_ordeno' : 'un_ordeno';
 
     if (Array.isArray(this.state._fincasEliminadas)) {
       this.state._fincasEliminadas = this.state._fincasEliminadas.filter(
@@ -4006,13 +4370,13 @@ class BoviTrackApp {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
     const numOrd = numeroOrdenos !== undefined
-      ? (Number(numeroOrdenos) === 1 ? 1 : 2)
-      : (tipoOrdeno === 'un_ordeno' ? 1 : (f && Number(f.numeroOrdenos) === 1 ? 1 : 2));
+      ? (Number(numeroOrdenos) === 2 ? 2 : 1)
+      : (tipoOrdeno === 'doble_ordeno' ? 2 : (f && Number(f.numeroOrdenos) === 2 ? 2 : 1));
     if (f) {
       f.precioLecheLitro = Number(leche);
       f.precioCarneKgPie = Number(carne);
       f.numeroOrdenos = numOrd;
-      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+      f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -4021,7 +4385,7 @@ class BoviTrackApp {
       precioLecheLitro: Number(leche),
       precioCarneKgPie: Number(carne),
       numeroOrdenos: numOrd,
-      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
@@ -4046,10 +4410,10 @@ class BoviTrackApp {
   async actualizarOrdenoFinca(fincaId, numeroOrdenos) {
     const targetId = fincaId || this.state.fincaActivaId;
     const f = (this.state.fincas || []).find((item) => item.id === targetId);
-    const numOrd = Number(numeroOrdenos) === 1 ? 1 : 2;
+    const numOrd = Number(numeroOrdenos) === 2 ? 2 : 1;
     if (f) {
       f.numeroOrdenos = numOrd;
-      f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+      f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
     }
     if (!this.state._preciosModificadosLocalmente) {
       this.state._preciosModificadosLocalmente = {};
@@ -4059,7 +4423,7 @@ class BoviTrackApp {
       precioLecheLitro: f ? Number(f.precioLecheLitro || 2450) : 2450,
       precioCarneKgPie: f ? Number(f.precioCarneKgPie || 8900) : 8900,
       numeroOrdenos: numOrd,
-      tipoOrdeno: numOrd === 1 ? 'un_ordeno' : 'doble_ordeno',
+      tipoOrdeno: numOrd === 2 ? 'doble_ordeno' : 'un_ordeno',
       timestamp: Date.now()
     };
     this.guardarEstado();
@@ -4121,7 +4485,7 @@ class BoviTrackApp {
         if (f && f.id) {
           if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
           if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
-            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+            fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
           }
         }
       });
@@ -4614,7 +4978,7 @@ class BoviTrackApp {
       return;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const registrosAProcesar = silencioso
       ? (registros || [])
       : (registros || []).filter((r) => !r._persistido);
@@ -4991,6 +5355,26 @@ class BoviTrackApp {
           fincaId: this.state.fincaActivaId,
           detalle: `Servicio reproductivo (${srv.tipo}): Reproductor ${srv.reproductor} | Protocolo: ${srv.protocolo}`,
           responsable: this.state.usuarioActual ? this.state.usuarioActual.nombre : 'Operador'
+        });
+      }
+
+      // Registrar protección offline-first hasta confirmar sincronización con la base de datos
+      if (this.offlineManager) {
+        const fAct = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : null;
+        let resumenOp = `${modulo}: ${animal.identificacionTag}`;
+        if (modulo === 'pesajes' && reg.pesoNuevo) resumenOp = `Pesaje ${animal.identificacionTag}: ${reg.pesoNuevo} kg`;
+        else if (modulo === 'leche' && reg.totalLitros !== undefined) resumenOp = `Leche ${animal.identificacionTag}: ${reg.totalLitros} L`;
+        else if (modulo === 'palpaciones' && reg.resultado) resumenOp = `Palpación ${animal.identificacionTag}: ${reg.resultado}`;
+        else if (modulo === 'partos') resumenOp = `Parto ${animal.identificacionTag}`;
+        else if (modulo === 'destetes') resumenOp = `Destete ${animal.identificacionTag}`;
+
+        this.offlineManager.registrarCambioPendiente(this.state, {
+          modulo,
+          tag: animal.identificacionTag,
+          animalId: animal.id,
+          fincaId: this.state.fincaActivaId,
+          fincaNombre: fAct ? fAct.nombre : '',
+          descripcion: resumenOp
         });
       }
     });
@@ -6067,6 +6451,25 @@ class BoviTrackApp {
         this.sincronizarManualConSupabase();
       });
     }
+
+    const btnOfflineHdr = document.getElementById('btn-modo-offline-header');
+    if (btnOfflineHdr && !btnOfflineHdr._listenerAdded) {
+      btnOfflineHdr._listenerAdded = true;
+      btnOfflineHdr.addEventListener('click', () => {
+        this.abrirModalModoOffline();
+      });
+    }
+
+    const btnOfflineDrop = document.getElementById('btn-modo-offline-dropdown');
+    if (btnOfflineDrop && !btnOfflineDrop._listenerAdded) {
+      btnOfflineDrop._listenerAdded = true;
+      btnOfflineDrop.addEventListener('click', () => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        if (dropdown && dropdown.classList) dropdown.classList.add('hidden');
+        this.abrirModalModoOffline();
+      });
+    }
+    this.actualizarIndicadoresOfflineUI();
 
     const btnBackupHeader = document.getElementById('btn-backup-excel-header');
     if (btnBackupHeader && !btnBackupHeader._listenerAdded) {

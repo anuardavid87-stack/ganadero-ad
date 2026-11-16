@@ -1,12 +1,13 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v4.1.0 (UNIVERSAL SCOPE & OFFLINE CACHE)
+// GANADERO AD PWA: SERVICE WORKER v4.7.0 (OFFLINE FIELD MODE & CACHE WARMING)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.6.1-zero-waste-egress';
+const CACHE_NAME = 'ganadero-ad-v4.7.0-offline-field';
 const CORE_FILES = [
   './',
   './index.html',
   './bundle.js',
+  './bovitrack_bundle.js',
   './tailwind.min.css',
   './styles.css',
   './xlsx.full.min.js',
@@ -32,19 +33,20 @@ const CORE_FILES = [
   './frontend/src/styles.css'
 ];
 
+async function precacheCoreFiles() {
+  const cache = await caches.open(CACHE_NAME);
+  for (const f of CORE_FILES) {
+    try {
+      await cache.add(f);
+    } catch (_err) {
+      // Continuar aunque alguna ruta opcional no exista en ese despliegue
+    }
+  }
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      for (const f of CORE_FILES) {
-        try {
-          await cache.add(f);
-        } catch (err) {
-          // Si algún recurso falla, continuar para no abortar el SW
-        }
-      }
-    })
-  );
+  event.waitUntil(precacheCoreFiles());
 });
 
 self.addEventListener('activate', (event) => {
@@ -55,17 +57,26 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (!event || !event.data) return;
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  } else if (event.data.type === 'WARM_OFFLINE_CACHE') {
+    event.waitUntil(precacheCoreFiles());
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // 1. Peticiones a Supabase Cloud van directo a la red sin pasar por cache del SW
-  if (url.hostname.includes('supabase.co')) {
+  // 1. Peticiones a Supabase Cloud o API serverless van directo a la red sin pasar por cache del SW
+  if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
     return;
   }
 
-  // 2. Para navegación (HTML) y scripts principales (bundle.js), aplicar Network-First
+  // 2. Para navegación (HTML) y scripts principales (bundle.js), aplicar Network-First con respaldo Offline ignorando querystring (?v=...)
   const esNavegacionOScript =
     event.request.mode === 'navigate' ||
     url.pathname.endsWith('.html') ||
@@ -83,8 +94,14 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(async () => {
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
+          const cachedExact = await caches.match(event.request);
+          if (cachedExact) return cachedExact;
+          const cachedIgnoreSearch = await caches.match(event.request, { ignoreSearch: true });
+          if (cachedIgnoreSearch) return cachedIgnoreSearch;
+          if (url.pathname.endsWith('bundle.js')) {
+            const relBundle = await caches.match('./bundle.js') || await caches.match('/bundle.js');
+            if (relBundle) return relBundle;
+          }
           if (event.request.mode === 'navigate') {
             const rootCached = await caches.match('/');
             if (rootCached) return rootCached;
@@ -93,7 +110,7 @@ self.addEventListener('fetch', (event) => {
             const relIndex = await caches.match('./index.html');
             if (relIndex) return relIndex;
           }
-          return null;
+          return new Response('Sin conexión a internet', { status: 503, statusText: 'Offline' });
         })
     );
     return;
@@ -101,7 +118,7 @@ self.addEventListener('fetch', (event) => {
 
   // 3. Para activos estáticos (iconos, fuentes, hojas de estilo), Cache-First con actualización de fondo
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(event.request, { ignoreSearch: true }).then((cached) => {
       if (cached) {
         fetch(event.request)
           .then((res) => {

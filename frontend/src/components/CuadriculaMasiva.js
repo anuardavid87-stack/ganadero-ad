@@ -1,21 +1,42 @@
 /**
  * GANADERO AD - INGRESO MASIVO RÁPIDO EN CAMPO (FLUJO UNO A UNO EN MANGA/BÁSCULA)
  * Permite buscar/digitar el número del animal uno a uno, cargar sus antecedentes,
- * registrar la medición con auditoría de IA y acumular la sesión de trabajo.
+ * saltar directamente al dato de pesaje con Enter (usando la fecha única superior de jornada),
+ * alertar si el animal ya fue ingresado en el mismo trabajo y operar 100% sin conexión.
  */
 
-import { calcularGDP, calcularGDPEjemplar, formatearFecha } from '../core/zootecnia.js';
+import { calcularGDP, calcularGDPEjemplar, formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 import { auditarPesajeInput, auditarPalpacionInput, auditarPartoInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class CuadriculaMasiva {
-  constructor({ containerId, onGuardarRegistros, onGuardarRegistroIndividual, getAnimales, getLotes, getFincaActiva, onActualizarOrdenoFinca, onTrasladarAFinca, onReactivarAnimal, onExtraerAnimal, onVerFicha }) {
-    this.container = document.getElementById(containerId);
+  constructor({
+    containerId,
+    onGuardarRegistros,
+    onGuardarRegistroIndividual,
+    getAnimales,
+    getLotes,
+    getFincaActiva,
+    getPesajes,
+    getOperaciones,
+    getEstadoOffline,
+    onAbrirModoOffline,
+    onActualizarOrdenoFinca,
+    onTrasladarAFinca,
+    onReactivarAnimal,
+    onExtraerAnimal,
+    onVerFicha
+  }) {
+    this.container = typeof document !== 'undefined' ? document.getElementById(containerId) : null;
     this.onGuardarRegistros = onGuardarRegistros;
     this.onGuardarRegistroIndividual = onGuardarRegistroIndividual || null;
     this.getAnimales = getAnimales;
     this.getLotes = getLotes;
     this.getFincaActiva = getFincaActiva || null;
+    this.getPesajes = getPesajes || null;
+    this.getOperaciones = getOperaciones || null;
+    this.getEstadoOffline = getEstadoOffline || null;
+    this.onAbrirModoOffline = onAbrirModoOffline || null;
     this.onActualizarOrdenoFinca = onActualizarOrdenoFinca || null;
     this.onTrasladarAFinca = onTrasladarAFinca;
     this.onReactivarAnimal = onReactivarAnimal;
@@ -24,15 +45,169 @@ export class CuadriculaMasiva {
     this.moduloActivo = 'pesajes'; // 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destetes' | 'extracciones'
     this.loteFiltro = 'todos';
     this.animalSeleccionado = null;
-    this.fechaJornada = new Date().toISOString().split('T')[0];
+
+    const hoyLocal = obtenerFechaHoyLocal();
+    this.fechaJornada = hoyLocal;
+    this._diaBaseSistema = hoyLocal;
+
     this.registrosSesion = []; // Acumulador de la sesión de trabajo en campo
     this.campoEnfocadoActual = '#input-tag-manga';
   }
 
+  /**
+   * Garantiza que si la aplicación quedó abierta de días anteriores (ej. 12 de noviembre)
+   * y hoy es un nuevo día sin sesión pendiente, la fecha avance automáticamente al día real actual.
+   */
+  asegurarFechaSistemaActualizada() {
+    const hoyReal = obtenerFechaHoyLocal();
+    if (hoyReal !== this._diaBaseSistema) {
+      if (this.fechaJornada === this._diaBaseSistema && this.registrosSesion.length === 0) {
+        this.fechaJornada = hoyReal;
+      }
+      this._diaBaseSistema = hoyReal;
+    }
+    if (!this.fechaJornada) {
+      this.fechaJornada = hoyReal;
+    }
+    return this.fechaJornada;
+  }
+
+  /**
+   * Determina si la finca activa trabaja con 1 solo ordeño al día (por defecto = true / 1 ordeño),
+   * salvo que en Administración de la finca se haya configurado manualmente Doble Ordeño (2).
+   */
   esUnSoloOrdeno() {
     const finca = this.getFincaActiva ? this.getFincaActiva() : null;
-    if (!finca) return false;
-    return Number(finca.numeroOrdenos) === 1 || finca.tipoOrdeno === 'un_ordeno' || Number(finca.ordenos) === 1;
+    if (!finca) return true;
+    if (
+      Number(finca.numeroOrdenos) === 2 ||
+      finca.tipoOrdeno === 'doble_ordeno' ||
+      Number(finca.ordenos) === 2
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Verifica si un ejemplar ya fue ingresado en este mismo trabajo (misma sesión o misma fecha + módulo en la finca).
+   */
+  verificarAnimalYaIngresadoEnTrabajo(animal, fechaObjetivo = null, moduloObjetivo = null) {
+    if (!animal) return { yaIngresado: false };
+
+    const tagUpper = String(animal.identificacionTag || animal.numero || animal.tag || '').trim().toUpperCase();
+    const animalId = animal.id || null;
+    if (!tagUpper && !animalId) return { yaIngresado: false };
+
+    const fecha = fechaObjetivo || this.fechaJornada || obtenerFechaHoyLocal();
+    const modulo = moduloObjetivo || this.moduloActivo || 'pesajes';
+    const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
+    const fincaId = fincaAct?.id || animal.fincaId || null;
+
+    // 1. Revisar en la planilla de la sesión actual en pantalla
+    const idxSesion = (this.registrosSesion || []).findIndex((r) => {
+      if (!r || r.modulo !== modulo) return false;
+      const fReg = r.fecha || this.fechaJornada;
+      if (fReg !== fecha) return false;
+      const coincideId = animalId && r.animalId && r.animalId === animalId;
+      const coincideTag = tagUpper && String(r.tag || '').trim().toUpperCase() === tagUpper;
+      return Boolean(coincideId || coincideTag);
+    });
+
+    if (idxSesion >= 0) {
+      const regPrev = this.registrosSesion[idxSesion];
+      let detallePrevio = `Fecha ${formatearFecha(fecha)}`;
+      if (modulo === 'pesajes' && regPrev.pesoNuevo) detallePrevio = `Peso registrado: ${regPrev.pesoNuevo} kg`;
+      else if (modulo === 'leche' && regPrev.totalLitros !== undefined) detallePrevio = `Leche registrada: ${regPrev.totalLitros} L`;
+      else if (modulo === 'palpaciones' && regPrev.resultado) detallePrevio = `Diagnóstico: ${regPrev.resultado}`;
+      else if (modulo === 'partos' && regPrev.tagCria) detallePrevio = `Parto cría: ${regPrev.tagCria}`;
+      else if (modulo === 'destetes' && regPrev.pesoDestete) detallePrevio = `Destete: ${regPrev.pesoDestete} kg`;
+
+      return {
+        yaIngresado: true,
+        origen: 'sesion',
+        indiceSesion: idxSesion,
+        detallePrevio,
+        registroPrevio: regPrev
+      };
+    }
+
+    // 2. Revisar en los registros ya guardados de la misma finca en esa misma fecha de trabajo
+    if (modulo === 'pesajes' && typeof this.getPesajes === 'function') {
+      const pesajesGuardados = this.getPesajes() || [];
+      const pesPrev = pesajesGuardados.find((p) => {
+        if (!p) return false;
+        if (fincaId && p.fincaId && p.fincaId !== fincaId) return false;
+        if (String(p.fecha || '').slice(0, 10) !== fecha) return false;
+        const pTag = String(p.tag || p.animalTag || '').trim().toUpperCase();
+        return (animalId && p.animalId === animalId) || (tagUpper && pTag === tagUpper);
+      });
+      if (pesPrev) {
+        return {
+          yaIngresado: true,
+          origen: 'base_datos',
+          indiceSesion: -1,
+          detallePrevio: `Peso ya guardado hoy (${formatearFecha(fecha)}): ${pesPrev.pesoNuevo ?? pesPrev.peso ?? ''} kg`,
+          registroPrevio: pesPrev
+        };
+      }
+    }
+
+    if (typeof this.getOperaciones === 'function') {
+      const mapaAcciones = {
+        pesajes: ['pesajes', 'pesaje'],
+        palpaciones: ['palpacion', 'palpaciones'],
+        leche: ['pesaje_leche', 'leche'],
+        partos: ['partos', 'parto'],
+        destetes: ['destete', 'destetes'],
+        extracciones: ['extracciones', 'extraccion', 'baja', 'venta'],
+        servicios: ['servicios', 'servicio']
+      };
+      const accionesBuscadas = mapaAcciones[modulo] || [modulo];
+      const ops = this.getOperaciones() || [];
+      const opPrev = ops.find((op) => {
+        if (!op) return false;
+        if (fincaId && op.fincaId && op.fincaId !== fincaId) return false;
+        if (String(op.fecha || '').slice(0, 10) !== fecha) return false;
+        const acc = String(op.accion || op.modulo || '').toLowerCase();
+        if (!accionesBuscadas.includes(acc)) return false;
+        const oTag = String(op.tag || op.animalTag || '').trim().toUpperCase();
+        return (animalId && op.animalId === animalId) || (tagUpper && oTag === tagUpper);
+      });
+      if (opPrev) {
+        return {
+          yaIngresado: true,
+          origen: 'base_datos',
+          indiceSesion: -1,
+          detallePrevio: opPrev.detalle || `Registrado el ${formatearFecha(fecha)}`,
+          registroPrevio: opPrev
+        };
+      }
+    }
+
+    return { yaIngresado: false };
+  }
+
+  emitirAlertaSonoraDuplicado() {
+    try {
+      const AudioCtx = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      osc.frequency.setValueAtTime(390, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.28);
+      setTimeout(() => { try { ctx.close(); } catch (_e) {} }, 350);
+    } catch (_err) {
+      // Silencioso en entornos sin audio o pruebas unitarias
+    }
   }
 
   resolverRelacionDestete(animal) {
@@ -113,38 +288,41 @@ export class CuadriculaMasiva {
     };
   }
 
+  /**
+   * Define el orden de campos al presionar Enter (salta directo al pesaje/dato sin pasar por fecha).
+   */
   obtenerSelectoresNavegablesModulo() {
     if (!this.animalSeleccionado || this.animalSeleccionado._estaEnOtraFinca) return [];
 
     if (this.moduloActivo === 'pesajes') {
-      return ['#form-peso-fecha', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas'];
+      return ['#form-nuevo-peso', '#form-condicion', '#form-peso-notas'];
     } else if (this.moduloActivo === 'palpaciones') {
       const diagEl = this.container ? this.container.querySelector('#form-diagnostico') : null;
       const diagVal = diagEl && diagEl.value ? diagEl.value : 'Preñada';
       if (diagVal === 'Preñada') {
-        return ['#form-palp-fecha', '#form-diagnostico', '#form-dias-preñez', '#form-estructura-ovario'];
+        return ['#form-diagnostico', '#form-dias-preñez', '#form-estructura-ovario'];
       }
-      return ['#form-palp-fecha', '#form-diagnostico', '#form-estructura-ovario'];
+      return ['#form-diagnostico', '#form-estructura-ovario'];
     } else if (this.moduloActivo === 'leche') {
       if (this.esUnSoloOrdeno()) {
-        return ['#form-leche-fecha', '#form-leche-am', '#form-leche-notas'];
+        return ['#form-leche-am', '#form-leche-notas'];
       }
-      return ['#form-leche-fecha', '#form-leche-am', '#form-leche-pm', '#form-leche-notas'];
+      return ['#form-leche-am', '#form-leche-pm', '#form-leche-notas'];
     } else if (this.moduloActivo === 'partos') {
-      return ['#form-parto-fecha', '#form-parto-sexo', '#form-parto-peso', '#form-parto-tag-cria', '#form-parto-tipo'];
+      return ['#form-parto-sexo', '#form-parto-peso', '#form-parto-tag-cria', '#form-parto-tipo'];
     } else if (this.moduloActivo === 'destetes') {
       const rel = this.resolverRelacionDestete(this.animalSeleccionado);
       const selectorRel = rel.esVacaSeleccionada ? '#form-destete-cria-tag' : '#form-destete-madre-tag';
-      return ['#form-destete-fecha', selectorRel, '#form-destete-peso-madre', '#form-destete-peso', '#form-destete-lote', '#form-destete-obs'];
+      return [selectorRel, '#form-destete-peso-madre', '#form-destete-peso', '#form-destete-lote', '#form-destete-obs'];
     } else if (this.moduloActivo === 'extracciones') {
       const motEl = this.container ? this.container.querySelector('#form-extraer-motivo') : null;
       const motVal = motEl && motEl.value ? motEl.value : 'Venta';
       if (motVal === 'Venta') {
-        return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-comprador', '#form-extraer-valor', '#form-extraer-peso', '#form-extraer-obs'];
+        return ['#form-extraer-motivo', '#form-extraer-comprador', '#form-extraer-valor', '#form-extraer-peso', '#form-extraer-obs'];
       }
-      return ['#form-extraer-fecha', '#form-extraer-motivo', '#form-extraer-causa', '#form-extraer-obs'];
+      return ['#form-extraer-motivo', '#form-extraer-causa', '#form-extraer-obs'];
     } else if (this.moduloActivo === 'servicios') {
-      return ['#form-srv-fecha', '#form-srv-tipo', '#form-srv-reproductor', '#form-srv-tecnico', '#form-srv-protocolo'];
+      return ['#form-srv-tipo', '#form-srv-reproductor', '#form-srv-tecnico', '#form-srv-protocolo'];
     }
     return [];
   }
@@ -158,6 +336,9 @@ export class CuadriculaMasiva {
       const el = this.container.querySelector(primerSelector);
       if (el && typeof el.focus === 'function') {
         el.focus();
+        if (typeof el.select === 'function' && el.tagName === 'INPUT' && el.type !== 'date') {
+          el.select();
+        }
       }
       setTimeout(() => {
         if (this.animalSeleccionado && this.container && typeof this.container.querySelector === 'function') {
@@ -217,8 +398,19 @@ export class CuadriculaMasiva {
   }
 
   cargarFilasDesdeInventario() {
-    // Si la vista está visible, refrescar los datos desde el inventario del predio activo
-    if (this.container && !this.container.classList.contains('hidden')) {
+    this.asegurarFechaSistemaActualizada();
+    // Si el usuario tiene un animal cargado en pantalla o está editando un control (como la fecha), no re-renderizar encima
+    if (this.animalSeleccionado) return;
+    if (
+      typeof document !== 'undefined' &&
+      document.activeElement &&
+      this.container &&
+      typeof this.container.contains === 'function' &&
+      this.container.contains(document.activeElement)
+    ) {
+      return;
+    }
+    if (this.container && (!this.container.classList || !this.container.classList.contains('hidden'))) {
       this.render();
     }
   }
@@ -255,17 +447,22 @@ export class CuadriculaMasiva {
   seleccionarAnimal(tag) {
     const animal = this.buscarAnimalPorTag(tag);
     this.animalSeleccionado = animal;
+    if (animal && !animal._estaEnOtraFinca) {
+      const checkDup = this.verificarAnimalYaIngresadoEnTrabajo(animal);
+      if (checkDup.yaIngresado) {
+        this.emitirAlertaSonoraDuplicado();
+      }
+    }
     this.renderFormularioIngreso();
   }
 
   render() {
     if (!this.container) return;
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
+    this.asegurarFechaSistemaActualizada();
     const lotes = this.getLotes ? this.getLotes() : [];
-    const todosAnimales = (this.getAnimales ? this.getAnimales() : []).filter(
-      (a) => a.estadoVida === 'activo' || a.estado === 'activo'
-    );
+    const infoOffline = this.getEstadoOffline ? this.getEstadoOffline() : null;
 
     this.container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
@@ -276,29 +473,43 @@ export class CuadriculaMasiva {
               <span>📋</span> Cuadrícula Masiva: Ingreso de Campo en Báscula / Brete
               <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 border border-emerald-400/30">Modo Uno a Uno</span>
             </h2>
-            <p class="text-xs text-slate-600 mt-0.5">Ingresa el número de cada animal individualmente al pasar por la manga.</p>
+            <p class="text-xs text-slate-600 mt-0.5">Selecciona la fecha de trabajo arriba; al digitar el animal y presionar Enter pasarás directo al pesaje.</p>
           </div>
 
-          <!-- Controles superiores: Fecha en que se hace el trabajo, Ordeños de la Finca y Filtro rápido de Lote -->
+          <!-- Controles superiores: Fecha única de trabajo (sin ordeño aquí; ordeños vive en Administración por finca), Lote y Modo Sin Conexión -->
           <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            <div class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-600 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
-              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha en que se hace el trabajo (pesajes, palpaciones, partos, destetes...)" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:border-emerald-400">
+            <div class="flex items-center gap-2 bg-white border border-slate-300 px-3 py-1.5 rounded-xl shadow-sm">
+              <label for="input-fecha-jornada-manga" class="text-xs font-bold text-slate-700 whitespace-nowrap cursor-pointer">📅 Fecha en que se hace el trabajo:</label>
+              <input type="date" id="input-fecha-jornada-manga" value="${this.fechaJornada || hoy}" title="Fecha única en que se realiza la jornada de trabajo" class="bg-white border border-emerald-500/60 text-emerald-800 font-bold font-mono text-xs rounded-lg px-2.5 py-1 outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/30">
+              <button type="button" id="btn-fecha-hoy-manga" class="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black cursor-pointer transition" title="Poner la fecha de hoy (${formatearFecha(hoy)})">
+                Hoy
+              </button>
             </div>
-            <div class="flex items-center gap-1.5 bg-slate-800/90 border border-sky-700/80 px-3 py-1.5 rounded-xl shadow-inner" title="Configura si esta finca hace 1 Ordeño (1 casilla) o Doble Ordeño (2 casillas)">
-              <span class="text-xs font-bold text-sky-700 whitespace-nowrap">🥛 Ordeño Finca:</span>
-              <select id="select-ordeno-manga-header" class="bg-slate-900 border border-sky-600 text-sky-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none cursor-pointer">
-                <option value="1" ${this.esUnSoloOrdeno() ? 'selected' : ''}>1 Ordeño (1 Casilla)</option>
-                <option value="2" ${!this.esUnSoloOrdeno() ? 'selected' : ''}>Doble Ordeño (2 Casillas)</option>
-              </select>
-            </div>
-            <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <span class="text-xs font-bold text-slate-600 whitespace-nowrap">📍 Lote:</span>
-              <select id="select-filtro-lote" class="bg-slate-900 border border-slate-600 text-emerald-700 font-bold text-xs rounded-lg px-2 py-0.5 outline-none w-32 md:w-36">
+            <div class="flex items-center gap-1.5 bg-white border border-slate-300 px-3 py-1.5 rounded-xl shadow-sm">
+              <span class="text-xs font-bold text-slate-700 whitespace-nowrap">📍 Lote:</span>
+              <select id="select-filtro-lote" class="bg-white border border-slate-300 text-emerald-800 font-bold text-xs rounded-lg px-2 py-1 outline-none w-32 md:w-36 cursor-pointer">
                 <option value="todos" ${this.loteFiltro === 'todos' ? 'selected' : ''}>Todos los Lotes</option>
                 ${lotes.map((l) => `<option value="${l}" ${this.loteFiltro === l ? 'selected' : ''}>${l}</option>`).join('')}
               </select>
             </div>
+            ${this.onAbrirModoOffline ? `
+              <button type="button" id="btn-offline-manga" class="px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                infoOffline && !infoOffline.online
+                  ? 'bg-amber-100 border-amber-400 text-amber-900'
+                  : (infoOffline && infoOffline.pendientesCount > 0
+                      ? 'bg-sky-100 border-sky-400 text-sky-900'
+                      : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700')
+              }" title="Descargar inventario para trabajar sin conexión o sincronizar cambios pendientes">
+                <span>${infoOffline && !infoOffline.online ? '🟠' : '📶'}</span>
+                <span>${
+                  infoOffline && !infoOffline.online
+                    ? `Sin Red (${infoOffline.pendientesCount || 0} guardados)`
+                    : (infoOffline && infoOffline.pendientesCount > 0
+                        ? `Enviar ${infoOffline.pendientesCount} Pendientes`
+                        : 'Trabajar Sin Red')
+                }</span>
+              </button>
+            ` : ''}
           </div>
         </div>
 
@@ -402,7 +613,7 @@ export class CuadriculaMasiva {
                   <tr>
                     <td colspan="7" class="p-8 text-center text-slate-600">
                       <span class="text-2xl block mb-1">🎯</span>
-                      Digite el primer animal arriba para cargarlo y registrar su medición.
+                      Digite el primer animal arriba para cargarlo y pasar directo al pesaje con Enter.
                     </td>
                   </tr>
                 `}
@@ -426,38 +637,17 @@ export class CuadriculaMasiva {
       let vistaPreviaModulo = '';
       if (this.moduloActivo === 'leche') {
         vistaPreviaModulo = `
-          <div class="mt-3 p-3.5 bg-sky-50/90 rounded-xl border border-sky-200 text-left space-y-2.5">
+          <div class="mt-3 p-3.5 bg-sky-50/90 rounded-xl border border-sky-200 text-left space-y-2">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <span class="text-xs font-black text-sky-950 flex items-center gap-1.5">
-                  🥛 Configuración de Ordeño para "${nombreFinca}":
+                  🥛 Modalidad activa en "${nombreFinca}": ${esUnOrd ? 'Un Ordeño (1 Casilla)' : 'Doble Ordeño (2 Casillas)'}
                 </span>
-                <p class="text-[11px] text-sky-800">Elige si esta finca trabaja con 1 sola casilla o 2 casillas al pesar leche:</p>
+                <p class="text-[11px] text-sky-800">La cantidad de ordeños al día se configura por finca en el módulo de <strong>Administración</strong> (por defecto: 1 ordeño).</p>
               </div>
-              <div class="flex items-center gap-1.5">
-                <button type="button" data-ordenos="1" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
-                  🥛 Un Ordeño (1 Casilla)
-                </button>
-                <button type="button" data-ordenos="2" class="btn-switch-ordeno-manga px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${!esUnOrd ? 'bg-sky-700 text-white shadow ring-2 ring-sky-400' : 'bg-white text-sky-800 border border-sky-300 hover:bg-sky-100'}">
-                  🥛🥛 Doble Ordeño (2 Casillas)
-                </button>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 ${esUnOrd ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2 pt-1 opacity-85">
-              <div class="p-2 bg-white rounded-lg border border-sky-200 text-[11px]">
-                <span class="font-bold text-slate-600 block">1. Fecha (Enter)</span>
-                <span class="font-mono font-black text-slate-800">📅 Fecha Pesaje Leche</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
-                <span class="font-bold text-sky-700 block">2. ${esUnOrd ? 'Casilla Única (Enter)' : 'Primera Casilla (Enter)'}</span>
-                <span class="font-mono font-black text-sky-900">${esUnOrd ? '🥛 Litros del Ordeño (L)' : '🌅 Ordeño Mañana AM (L)'}</span>
-              </div>
-              ${!esUnOrd ? `
-                <div class="p-2 bg-white rounded-lg border-2 border-sky-400 text-[11px]">
-                  <span class="font-bold text-sky-700 block">3. Segunda Casilla (Enter)</span>
-                  <span class="font-mono font-black text-sky-900">🌆 Ordeño Tarde PM (L)</span>
-                </div>
-              ` : ''}
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-black ${esUnOrd ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+                ${esUnOrd ? '1 Ordeño Diario' : '2 Ordeños Diarios'}
+              </span>
             </div>
           </div>
         `;
@@ -468,26 +658,8 @@ export class CuadriculaMasiva {
               🌾 Formato de Destete Activo (Madre ↔ Cría + Doble Pesaje):
             </div>
             <p class="text-[11px] text-amber-900">
-              Al digitar el número de la cría (o de la madre) y presionar <strong>Enter</strong>, el sistema solicitará en orden:
+              Al digitar el número de la cría (o de la madre) y presionar <strong>Enter</strong>, el sistema solicitará directamente la relación Madre ↔ Cría y los pesos sin repetir la fecha.
             </p>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
-                <span class="font-bold text-amber-700 block">Paso 1 (Enter)</span>
-                <span class="font-black text-slate-800">📅 Fecha del Destete</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border border-amber-300 text-[11px]">
-                <span class="font-bold text-amber-700 block">Paso 2 (Enter)</span>
-                <span class="font-black text-slate-800">🔗 Relación Madre ↔ Cría</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-amber-400 text-[11px]">
-                <span class="font-bold text-amber-800 block">Paso 3 (Enter)</span>
-                <span class="font-black text-amber-950">🐄 Peso de la Vaca (kg)</span>
-              </div>
-              <div class="p-2 bg-white rounded-lg border-2 border-emerald-400 text-[11px]">
-                <span class="font-bold text-emerald-800 block">Paso 4 (Enter)</span>
-                <span class="font-black text-emerald-950">🐮 Peso del Ternero (kg)</span>
-              </div>
-            </div>
           </div>
         `;
       }
@@ -505,7 +677,35 @@ export class CuadriculaMasiva {
     const a = this.animalSeleccionado;
     const especie = a.especie || 'bovino';
     const tag = a.identificacionTag || a.numero;
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
+    const fechaTrabajoActiva = this.fechaJornada || hoy;
+    const estadoDuplicado = !a._estaEnOtraFinca
+      ? this.verificarAnimalYaIngresadoEnTrabajo(a, fechaTrabajoActiva, this.moduloActivo)
+      : { yaIngresado: false };
+
+    const nombresModulos = {
+      pesajes: 'Pesajes',
+      palpaciones: 'Palpaciones',
+      leche: 'Control de Leche',
+      partos: 'Partos',
+      destetes: 'Destetes',
+      extracciones: 'Extracciones',
+      servicios: 'Servicios'
+    };
+
+    const bannerDuplicadoHtml = estadoDuplicado.yaIngresado ? `
+      <div id="alerta-animal-repetido-trabajo" class="p-3.5 rounded-xl bg-amber-100 border-2 border-amber-400 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+        <span class="text-lg shrink-0">⚠️</span>
+        <div>
+          <div class="font-black text-amber-950 uppercase tracking-wide">
+            Animal ya ingresado en este mismo trabajo (${nombresModulos[this.moduloActivo] || this.moduloActivo} • ${formatearFecha(fechaTrabajoActiva)})
+          </div>
+          <p class="mt-0.5 text-amber-900 font-semibold">
+            El ejemplar <strong>${tag}</strong> ya cuenta con registro en esta jornada (${estadoDuplicado.detallePrevio}). Si continúas y guardas, actualizarás ese registro.
+          </p>
+        </div>
+      </div>
+    ` : '';
 
     let inputsModulo = '';
 
@@ -513,16 +713,11 @@ export class CuadriculaMasiva {
       const pesoPrev = a.ultimoPesoKg || a.pesoActual || 0;
       const fechaPrev = a.fechaUltimoPesaje || a.ultimoPesajeFecha || '';
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se pesó (Trabajo):</label>
-            <input type="date" id="form-peso-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            <span class="text-[10px] text-slate-600 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
-          </div>
-
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Nuevo Peso en Báscula (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
+            <input type="number" step="0.5" inputmode="decimal" id="form-nuevo-peso" autofocus placeholder="Ej. 420.5" class="w-full px-3 py-3 sm:py-2 text-lg sm:text-base font-black font-mono text-emerald-800 bg-emerald-50 rounded-xl border-2 border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none text-right shadow-sm">
+            <span class="text-[10px] text-slate-600 block mt-1">${pesoPrev ? `Previo: ${pesoPrev} kg (${formatearFecha(fechaPrev, 'S/F')})` : (a.fechaNacimiento ? `Nacido: ${formatearFecha(a.fechaNacimiento)}` : 'Sin pesajes previos')}</span>
             <div id="live-gdp-indicator" class="text-xs font-bold mt-1 text-slate-600"></div>
           </div>
 
@@ -545,15 +740,10 @@ export class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'palpaciones') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se palpó (Trabajo):</label>
-            <input type="date" id="form-palp-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Diagnóstico:</label>
-            <select id="form-diagnostico" class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <select id="form-diagnostico" autofocus class="w-full px-3 py-3 sm:py-2 bg-white text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="Preñada" selected>🟢 Preñada (Gestante)</option>
               <option value="Vacía">🔴 Vacía (Abierta)</option>
               <option value="Sospechosa">🟡 Sospechosa</option>
@@ -583,14 +773,10 @@ export class CuadriculaMasiva {
               ${unOrdeno ? 'Un Ordeño (1 Casilla)' : 'Doble Ordeño (2 Casillas)'}
             </span>
           </div>
-          <div class="grid grid-cols-1 ${unOrdeno ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de pesaje de leche (Trabajo):</label>
-              <input type="date" id="form-leche-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
+          <div class="grid grid-cols-1 ${unOrdeno ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3">
             <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">${unOrdeno ? 'Pesaje Único de Leche (L):' : 'Turno Mañana (L):'}</label>
-              <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border-2 border-emerald-400 bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <input type="number" step="0.1" inputmode="decimal" id="form-leche-am" autofocus placeholder="0.0" class="w-full px-3 py-3 sm:py-2 font-mono font-bold text-right text-base rounded-xl border-2 border-emerald-400 bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
             ${unOrdeno ? '' : `
             <div>
@@ -607,21 +793,17 @@ export class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'partos') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que parió (Trabajo):</label>
-            <input type="date" id="form-parto-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-emerald-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Sexo Cría:</label>
-            <select id="form-parto-sexo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <select id="form-parto-sexo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="hembra">♀️ Hembra</option>
               <option value="macho">♂️ Macho</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Peso Cría (kg):</label>
-            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="32" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
+            <input type="number" step="0.5" inputmode="decimal" id="form-parto-peso" value="30" class="w-full px-2 py-3 sm:py-2 font-mono text-center font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Tag Cría Generado:</label>
@@ -665,22 +847,17 @@ export class CuadriculaMasiva {
           <datalist id="datalist-crias-destete">${opcionesCrias}</datalist>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se destetó (Trabajo):</label>
-              <input type="date" id="form-destete-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
-
             ${rel.esVacaSeleccionada ? `
               <div>
                 <input type="hidden" id="form-destete-madre-tag" value="${rel.madreTag}">
                 <label class="block text-xs font-bold text-slate-800 mb-1">🍼 No. Ternero / Cría (Hijo de ${rel.madreTag}):</label>
-                <input type="text" id="form-destete-cria-tag" list="datalist-crias-destete" value="${rel.criaTag}" placeholder="Ej. CRIA-${rel.madreTag}" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <input type="text" id="form-destete-cria-tag" autofocus list="datalist-crias-destete" value="${rel.criaTag}" placeholder="Ej. CRIA-${rel.madreTag}" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
               </div>
             ` : `
               <div>
                 <input type="hidden" id="form-destete-cria-tag" value="${rel.criaTag}">
                 <label class="block text-xs font-bold text-slate-800 mb-1">🐄 No. Vaca / Madre (Madre de ${rel.criaTag}):</label>
-                <input type="text" id="form-destete-madre-tag" list="datalist-madres-destete" value="${rel.madreTag}" placeholder="Ej. BV-104 (No. Madre)" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                <input type="text" id="form-destete-madre-tag" autofocus list="datalist-madres-destete" value="${rel.madreTag}" placeholder="Ej. BV-104 (No. Madre)" class="w-full px-3 py-3 sm:py-2 font-mono text-xs font-black uppercase rounded-xl border-2 border-amber-300 bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
               </div>
             `}
 
@@ -699,7 +876,7 @@ export class CuadriculaMasiva {
               <input type="text" id="form-destete-lote" value="Lote Levante" placeholder="Ej. Lote Levante" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
 
-            <div>
+            <div class="sm:col-span-2">
               <label class="block text-xs font-bold text-slate-800 mb-1">📝 Observaciones:</label>
               <input type="text" id="form-destete-obs" placeholder="Vacunación al destete, estado..." class="w-full px-2 py-3 sm:py-2 text-xs rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
@@ -719,12 +896,8 @@ export class CuadriculaMasiva {
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
-              <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha de Extracción (Trabajo):</label>
-              <input type="date" id="form-extraer-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-rose-500">
-            </div>
-            <div>
               <label class="block text-xs font-bold text-slate-800 mb-1">Motivo de Extracción:</label>
-              <select id="form-extraer-motivo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white outline-none focus:ring-2 focus:ring-rose-500">
+              <select id="form-extraer-motivo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border-2 border-rose-300 bg-white outline-none focus:ring-2 focus:ring-rose-500">
                 <option value="Venta" selected>💰 Venta Comercial</option>
                 <option value="Muerte">☠️ Muerte</option>
                 <option value="Descarte">⚠️ Descarte / Sacrificio</option>
@@ -755,14 +928,10 @@ export class CuadriculaMasiva {
       `;
     } else if (this.moduloActivo === 'servicios') {
       inputsModulo = `
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-white p-4 rounded-xl border border-indigo-200">
-          <div>
-            <label class="block text-xs font-bold text-slate-800 mb-1">📅 Fecha en que se sirvió (Trabajo):</label>
-            <input type="date" id="form-srv-fecha" autofocus value="${this.fechaJornada || hoy}" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500">
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-indigo-200">
           <div>
             <label class="block text-xs font-bold text-slate-800 mb-1">Modalidad:</label>
-            <select id="form-srv-tipo" class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="form-srv-tipo" autofocus class="w-full px-2 py-3 sm:py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="inseminacion_artificial" selected>💉 Inseminación Artificial</option>
               <option value="transferencia_embriones">🔬 Transf. Embriones</option>
               <option value="monta_natural">🐂 Servicio con Toro</option>
@@ -798,7 +967,7 @@ export class CuadriculaMasiva {
                 <span class="text-xs text-slate-600">• ${a.raza}</span>
                 <span class="text-xs text-slate-600">• ${a.categoria}</span>
               </div>
-              <div class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5">
+              <div class="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5 flex-wrap">
                 <span class="px-2 py-0.2 rounded text-[10px] font-bold ${especie === 'bufalino' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
                   ${especie === 'bufalino' ? '🦬 Especie Bufalina' : '🐂 Especie Vacuna'}
                 </span>
@@ -819,7 +988,7 @@ export class CuadriculaMasiva {
                 <span>🚪</span> Extraer Animal
               </button>
             ` : ''}
-            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-600 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer">
+            <button type="button" id="btn-cerrar-animal-manga" class="text-slate-600 hover:text-slate-800 text-xs font-bold p-1 cursor-pointer">
               ✕ Cancelar
             </button>
           </div>
@@ -853,6 +1022,9 @@ export class CuadriculaMasiva {
             </div>
           </div>
         ` : `
+          <!-- ALERTA SI EL ANIMAL YA FUE INGRESADO EN ESTE MISMO TRABAJO -->
+          ${bannerDuplicadoHtml}
+
           <!-- INPUTS ESPECÍFICOS DEL MÓDULO -->
           ${inputsModulo}
 
@@ -871,7 +1043,7 @@ export class CuadriculaMasiva {
   }
 
   renderFormularioIngreso() {
-    const cont = this.container.querySelector('#contenedor-formulario-animal');
+    const cont = this.container ? this.container.querySelector('#contenedor-formulario-animal') : null;
     if (cont) {
       cont.innerHTML = this.obtenerHtmlFormularioIngreso();
     }
@@ -879,56 +1051,38 @@ export class CuadriculaMasiva {
   }
 
   attachEventsFormulario() {
-    if (this.container && typeof this.container.querySelectorAll === 'function') {
-      this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
-        if (typeof btn.addEventListener === 'function' && !btn._ordenoBound) {
-          btn._ordenoBound = true;
-          btn.addEventListener('click', (e) => {
-            const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
-            const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-            if (fincaAct) {
-              fincaAct.numeroOrdenos = numOrd;
-              fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-              if (this.onActualizarOrdenoFinca) {
-                this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-              }
-            }
-            this.render();
-          });
-        }
-      });
-    }
-
+    if (!this.container) return;
     const a = this.animalSeleccionado;
     if (!a) return;
 
-    // Cálculo dinámico de GDP en vivo mientras escribe peso o cambia fecha
+    // Cálculo dinámico de GDP en vivo mientras escribe el peso usando la fecha superior del trabajo
     const inputPeso = this.container.querySelector('#form-nuevo-peso');
-    const inputFechaPeso = this.container.querySelector('#form-peso-fecha');
     const gdpIndicador = this.container.querySelector('#live-gdp-indicator');
     const alertaIa = this.container.querySelector('#alerta-ia-manga');
 
     const recalcularLiveGDP = () => {
       const pNum = parseFloat(inputPeso?.value);
-      const fPes = inputFechaPeso?.value || this.fechaJornada || new Date().toISOString().split('T')[0];
+      const fPes = this.fechaJornada || obtenerFechaHoyLocal();
 
-      if (!isNaN(pNum) && pNum > 0) {
-        const res = calcularGDPEjemplar({ animal: a, pesoActual: pNum, fechaPesaje: fPes });
-        if (res && res.gdp !== null) {
-          let color = 'text-emerald-700 font-bold';
-          if (res.gdp < 300) color = 'text-rose-600 font-black';
-          else if (res.gdp < 600) color = 'text-amber-600 font-bold';
+      if (gdpIndicador) {
+        if (!isNaN(pNum) && pNum > 0) {
+          const res = calcularGDPEjemplar({ animal: a, pesoActual: pNum, fechaPesaje: fPes });
+          if (res && res.gdp !== null) {
+            let color = 'text-emerald-700 font-bold';
+            if (res.gdp < 300) color = 'text-rose-600 font-black';
+            else if (res.gdp < 600) color = 'text-amber-600 font-bold';
 
-          const detalleOrigen = res.origen === 'nacimiento'
-            ? `🌱 Desde nacimiento (${res.dias} días de vida, peso base ${res.pesoBase || 0} kg)`
-            : `⚖️ En ${res.dias} días contra pesaje anterior de ${res.pesoBase} kg`;
+            const detalleOrigen = res.origen === 'nacimiento'
+              ? `🌱 Desde nacimiento (${res.dias} días de vida, peso base ${res.pesoBase || 0} kg)`
+              : `⚖️ En ${res.dias} días contra pesaje anterior de ${res.pesoBase} kg`;
 
-          gdpIndicador.innerHTML = `GDP (${fPes}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-600 block">${detalleOrigen}</span>`;
+            gdpIndicador.innerHTML = `GDP (${formatearFecha(fPes)}): <span class="${color}">${res.gdp > 0 ? '+' : ''}${res.gdp} g/día</span> <span class="text-[10px] text-slate-600 block">${detalleOrigen}</span>`;
+          } else {
+            gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-600">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
+          }
         } else {
-          gdpIndicador.innerHTML = `<span class="text-[10px] text-slate-600">Sin antecedentes para calcular GDP (registre fecha nacimiento o pesaje previo)</span>`;
+          gdpIndicador.innerHTML = '';
         }
-      } else {
-        gdpIndicador.innerHTML = '';
       }
 
       // Auditar IA
@@ -947,11 +1101,9 @@ export class CuadriculaMasiva {
       }
     };
 
+    this._recalcularLiveGDPActivo = recalcularLiveGDP;
     if (inputPeso) {
       inputPeso.addEventListener('input', recalcularLiveGDP);
-    }
-    if (inputFechaPeso) {
-      inputFechaPeso.addEventListener('change', recalcularLiveGDP);
     }
 
     // Autocompletar peso previo cuando se digite la Madre o Cría en Destetes
@@ -980,19 +1132,6 @@ export class CuadriculaMasiva {
         }
       });
     }
-
-    // Sincronizar fecha de trabajo desde el formulario hacia la jornada general
-    const inputsFechaForm = this.container.querySelectorAll('#form-peso-fecha, #form-palp-fecha, #form-leche-fecha, #form-parto-fecha, #form-destete-fecha, #form-extraer-fecha, #form-srv-fecha');
-    inputsFechaForm.forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        const val = e.target.value;
-        if (val) {
-          this.fechaJornada = val;
-          const inHdr = this.container.querySelector('#input-fecha-jornada-manga');
-          if (inHdr && inHdr.value !== val) inHdr.value = val;
-        }
-      });
-    });
 
     // Toggle de campos según motivo de extracción (Venta vs Muerte/Descarte)
     const selectMotivoExtraer = this.container.querySelector('#form-extraer-motivo');
@@ -1095,12 +1234,13 @@ export class CuadriculaMasiva {
       }
     });
 
-    // Posicionar cursor automáticamente en el primer campo (Fecha) al seleccionar el animal
+    // Posicionar cursor automáticamente en el primer campo de captura (ej. Nuevo Peso en Báscula) al seleccionar el animal
     this.enfocarPrimerCampoFormulario();
 
-    // Tecla Enter secuencial: avanza por fecha y demás campos y al final guarda y regresa al buscador
+    // Tecla Enter secuencial: avanza directo por el peso/datos y al final guarda y regresa al buscador
     const contForm = this.container.querySelector('#contenedor-formulario-animal');
-    if (contForm) {
+    if (contForm && !contForm._enterListenerBound) {
+      contForm._enterListenerBound = true;
       contForm.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -1116,33 +1256,46 @@ export class CuadriculaMasiva {
     if (!a) return false;
 
     if (a._estaEnOtraFinca) {
-      alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      if (typeof alert === 'function') {
+        alert(`El ejemplar "${a.identificacionTag || a.numero}" pertenece a "${a._fincaNombre || 'otra finca'}". Para registrar pesajes o ingresar datos de campo es necesario trasladarlo primero a esta finca.`);
+      }
       return false;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const tag = a.identificacionTag || a.numero;
 
-    // Extraer fecha explícita del formulario según el módulo activo (o usa la fecha de la jornada)
-    let fechaEvento = this.fechaJornada || hoy;
+    // Tomar siempre la fecha única superior de la jornada
+    const inHdrFecha = this.container ? this.container.querySelector('#input-fecha-jornada-manga') : null;
+    const fechaEvento = (inHdrFecha && inHdrFecha.value) ? inHdrFecha.value : (this.fechaJornada || hoy);
+    this.fechaJornada = fechaEvento;
+
+    // Validar primero los campos obligatorios antes de preguntar por duplicado
     if (this.moduloActivo === 'pesajes') {
-      fechaEvento = this.container.querySelector('#form-peso-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'palpaciones') {
-      fechaEvento = this.container.querySelector('#form-palp-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'leche') {
-      fechaEvento = this.container.querySelector('#form-leche-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'partos') {
-      fechaEvento = this.container.querySelector('#form-parto-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'destetes') {
-      fechaEvento = this.container.querySelector('#form-destete-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'extracciones') {
-      fechaEvento = this.container.querySelector('#form-extraer-fecha')?.value || fechaEvento;
-    } else if (this.moduloActivo === 'servicios') {
-      fechaEvento = this.container.querySelector('#form-srv-fecha')?.value || fechaEvento;
+      const pInput = this.container.querySelector('#form-nuevo-peso');
+      const pesoVal = parseFloat(pInput?.value);
+      if (isNaN(pesoVal) || pesoVal <= 0) {
+        if (typeof alert === 'function') alert('Ingrese un peso válido.');
+        return false;
+      }
     }
 
-    // Recordar la fecha seleccionada para los siguientes registros de la jornada
-    this.fechaJornada = fechaEvento;
+    // Verificar si este animal ya fue ingresado en este mismo trabajo y avisar al operador
+    const checkDuplicado = this.verificarAnimalYaIngresadoEnTrabajo(a, fechaEvento, this.moduloActivo);
+    if (checkDuplicado.yaIngresado) {
+      if (typeof confirm === 'function') {
+        const deseaReemplazar = confirm(
+          `⚠️ AVISO: El animal "${tag}" YA FUE INGRESADO en este mismo trabajo (${checkDuplicado.detallePrevio}).\n\n¿Deseas actualizar/reemplazar el registro anterior?\n(Presiona Cancelar si digitaste este número por error)`
+        );
+        if (!deseaReemplazar) {
+          return false;
+        }
+      }
+      // Si ya estaba en la planilla de sesión actual, remover la fila previa para no duplicarla
+      if (checkDuplicado.indiceSesion >= 0) {
+        this.registrosSesion.splice(checkDuplicado.indiceSesion, 1);
+      }
+    }
 
     const registro = {
       animalId: a.id,
@@ -1156,10 +1309,6 @@ export class CuadriculaMasiva {
     if (this.moduloActivo === 'pesajes') {
       const pInput = this.container.querySelector('#form-nuevo-peso');
       const peso = parseFloat(pInput?.value);
-      if (isNaN(peso) || peso <= 0) {
-        alert('Ingrese un peso válido.');
-        return false;
-      }
       const pPrev = a.ultimoPesoKg || a.pesoActual || 0;
       const gdpRes = calcularGDPEjemplar({ animal: a, pesoActual: peso, fechaPesaje: fechaEvento });
 
@@ -1188,7 +1337,7 @@ export class CuadriculaMasiva {
     } else if (this.moduloActivo === 'partos') {
       registro.fechaParto = fechaEvento;
       registro.sexoCria = this.container.querySelector('#form-parto-sexo')?.value || 'hembra';
-      registro.pesoCria = parseFloat(this.container.querySelector('#form-parto-peso')?.value) || 32;
+      registro.pesoCria = parseFloat(this.container.querySelector('#form-parto-peso')?.value) || 30;
       registro.tagCria = this.container.querySelector('#form-parto-tag-cria')?.value || `CRIA-${tag}`;
       registro.tipoParto = this.container.querySelector('#form-parto-tipo')?.value || 'Normal';
     } else if (this.moduloActivo === 'destetes') {
@@ -1350,25 +1499,45 @@ export class CuadriculaMasiva {
   }
 
   attachEvents() {
-    // Sincronizador de fecha de trabajo (sólo la cabecera superior)
+    if (!this.container) return;
+
+    // Fecha única de trabajo (sin re-renderizar todo el DOM mientras el usuario elige o escribe la fecha)
     const inFechaJornada = this.container.querySelector('#input-fecha-jornada-manga');
-
     const sincronizarFecha = (nuevaFecha) => {
-      if (!nuevaFecha) return;
+      if (!nuevaFecha || !/^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha)) return;
       this.fechaJornada = nuevaFecha;
-      if (inFechaJornada && inFechaJornada.value !== nuevaFecha) inFechaJornada.value = nuevaFecha;
-
-      const formDateInputs = this.container.querySelectorAll('#form-peso-fecha, #form-palp-fecha, #form-leche-fecha, #form-parto-fecha, #form-destete-fecha, #form-extraer-fecha, #form-srv-fecha');
-      formDateInputs.forEach(inp => {
-        if (inp.value !== nuevaFecha) {
-          inp.value = nuevaFecha;
-          inp.dispatchEvent(new Event('change'));
-        }
-      });
+      if (typeof this._recalcularLiveGDPActivo === 'function') {
+        this._recalcularLiveGDPActivo();
+      }
     };
 
     if (inFechaJornada) {
+      inFechaJornada.addEventListener('input', (e) => sincronizarFecha(e.target.value));
       inFechaJornada.addEventListener('change', (e) => sincronizarFecha(e.target.value));
+    }
+
+    const btnFechaHoy = this.container.querySelector('#btn-fecha-hoy-manga');
+    if (btnFechaHoy) {
+      btnFechaHoy.addEventListener('click', () => {
+        const hoyActual = obtenerFechaHoyLocal();
+        this.fechaJornada = hoyActual;
+        this._diaBaseSistema = hoyActual;
+        if (inFechaJornada) inFechaJornada.value = hoyActual;
+        if (typeof this._recalcularLiveGDPActivo === 'function') {
+          this._recalcularLiveGDPActivo();
+        }
+      });
+    }
+
+    const btnOfflineManga = this.container.querySelector('#btn-offline-manga');
+    if (btnOfflineManga && this.onAbrirModoOffline) {
+      btnOfflineManga.addEventListener('click', () => this.onAbrirModoOffline());
+    }
+
+    // Filtro rápido de lote
+    const selLote = this.container.querySelector('#select-filtro-lote');
+    if (selLote) {
+      selLote.addEventListener('change', (e) => this.setLoteFiltro(e.target.value));
     }
 
     // Botón para aplicar fecha activa a todos los registros de la sesión actual
@@ -1376,15 +1545,15 @@ export class CuadriculaMasiva {
     if (btnAplicarFechaSesion) {
       btnAplicarFechaSesion.addEventListener('click', () => {
         if (this.registrosSesion.length === 0) return;
-        const fechaActiva = this.fechaJornada || new Date().toISOString().split('T')[0];
-        this.registrosSesion.forEach(reg => {
+        const fechaActiva = this.fechaJornada || obtenerFechaHoyLocal();
+        this.registrosSesion.forEach((reg) => {
           reg.fecha = fechaActiva;
           if (reg.modulo === 'partos') reg.fechaParto = fechaActiva;
           if (reg.modulo === 'destetes') reg.fechaDestete = fechaActiva;
           if (reg.modulo === 'extracciones') reg.fechaExtraccion = fechaActiva;
           if (reg.modulo === 'servicios') reg.fechaServicio = fechaActiva;
           if (reg.modulo === 'pesajes' && reg.pesoNuevo) {
-            const a = this.getAnimales ? this.getAnimales().find(item => item.id === reg.animalId || item.identificacionTag === reg.tag) : null;
+            const a = this.getAnimales ? this.getAnimales().find((item) => item.id === reg.animalId || item.identificacionTag === reg.tag) : null;
             if (a) {
               const gdpRes = calcularGDPEjemplar({ animal: a, pesoActual: reg.pesoNuevo, fechaPesaje: fechaActiva });
               if (gdpRes) {
@@ -1396,48 +1565,15 @@ export class CuadriculaMasiva {
           }
         });
         this.render();
-        alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
+        if (typeof alert === 'function') {
+          alert(`Se actualizó la fecha de trabajo de todos los ${this.registrosSesion.length} registros a ${formatearFecha(fechaActiva)}.`);
+        }
       });
     }
 
     // Cambio de módulo
     this.container.querySelectorAll('.btn-grid-mod').forEach((btn) => {
       btn.addEventListener('click', (e) => this.setModulo(e.currentTarget.getAttribute('data-mod')));
-    });
-
-    // Selector rápido de 1 Ordeño / Doble Ordeño en cabecera de Cuadrícula Masiva
-    const selOrdenoHeader = this.container.querySelector('#select-ordeno-manga-header');
-    if (selOrdenoHeader && typeof selOrdenoHeader.addEventListener === 'function') {
-      selOrdenoHeader.addEventListener('change', (e) => {
-        const numOrd = parseInt(e.target.value, 10) === 1 ? 1 : 2;
-        const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-        if (fincaAct) {
-          fincaAct.numeroOrdenos = numOrd;
-          fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-          if (this.onActualizarOrdenoFinca) {
-            this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-          }
-        }
-        this.render();
-      });
-    }
-
-    // Botones rápidos de 1 Ordeño / Doble Ordeño en la vista previa de Control Leche
-    this.container.querySelectorAll('.btn-switch-ordeno-manga').forEach((btn) => {
-      if (typeof btn.addEventListener === 'function') {
-        btn.addEventListener('click', (e) => {
-          const numOrd = parseInt(e.currentTarget.getAttribute('data-ordenos'), 10) === 1 ? 1 : 2;
-          const fincaAct = this.getFincaActiva ? this.getFincaActiva() : null;
-          if (fincaAct) {
-            fincaAct.numeroOrdenos = numOrd;
-            fincaAct.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
-            if (this.onActualizarOrdenoFinca) {
-              this.onActualizarOrdenoFinca(fincaAct.id, numOrd);
-            }
-          }
-          this.render();
-        });
-      }
     });
 
     // Búsqueda en manga
@@ -1485,7 +1621,7 @@ export class CuadriculaMasiva {
     if (inTag) {
       conectarAutosuggestAnimales({
         inputElement: inTag,
-        getAnimales: () => this.getAnimales ? this.getAnimales() : [],
+        getAnimales: () => (this.getAnimales ? this.getAnimales() : []),
         onSeleccionar: (animal) => {
           this.seleccionarAnimal(animal.identificacionTag);
         },

@@ -28,8 +28,14 @@ import {
   calcularEdadMeses,
   verificarSecado7Meses,
   formatearFecha,
+  obtenerFechaHoyLocal,
   PARAMETROS_ESPECIES
 } from '../core/zootecnia.js';
+import {
+  calcularInformeUtilidadPorFinca,
+  detectarJornadasTrabajoFinca,
+  calcularAnimalesNoTrabajados
+} from '../core/finanzas.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export const RAZAS_REFERENCIA_GANADERA = [
@@ -59,6 +65,42 @@ export const RAZAS_REFERENCIA_GANADERA = [
 ];
 
 export const CATALOGO_INFORMES_GANADEROS = [
+  {
+    id: 'utilidad_finca',
+    nombre: 'Informe de Utilidad Integral por Finca',
+    subtitulo: 'Leche, ganancia de peso, partos (ternero), costos, diferidos y NIC 41',
+    icono: '💰',
+    fuente: 'NIC 41 / CREA / FEDEGÁN / IFCN',
+    descripcion: 'Calcula la utilidad real de cada finca: litros de leche según último pesaje (si no hay pesaje de leche entiende sin ordeño = $0), ganancia de peso de todo el ganado, partos valorizados en kg, todos los costos/gastos, cuotas de inversiones diferidas y mortalidad.',
+    config: {
+      filtroOrden: 'gdp_desc',
+      modoColumnas: 'todas',
+      agruparPor: 'ninguno',
+      filtroSexo: 'todos',
+      filtroRepro: 'todos',
+      soloEnOrdeno: false,
+      soloConPartos: false,
+      soloCandidatosDescarte: false
+    }
+  },
+  {
+    id: 'animales_no_trabajados',
+    nombre: 'Animales NO Trabajados (Faltantes en Jornada)',
+    subtitulo: 'Ej. 250 en sistema vs 200 pesados → Lista los 50 por buscar en terreno',
+    icono: '🔍',
+    fuente: 'Auditoría de Campo & Control de Hato',
+    descripcion: 'Compara el inventario activo de la finca contra los ejemplares trabajados (pesaje, leche, palpación o servicio) en una fecha o rango, generando la planilla exacta de animales faltantes para verificar la causa en terreno.',
+    config: {
+      filtroOrden: 'peso_desc',
+      modoColumnas: 'todas',
+      agruparPor: 'lote',
+      filtroSexo: 'todos',
+      filtroRepro: 'todos',
+      soloEnOrdeno: false,
+      soloConPartos: false,
+      soloCandidatosDescarte: false
+    }
+  },
   {
     id: 'explorador_libre',
     nombre: 'Explorador Libre & Cruce por Raza',
@@ -292,12 +334,54 @@ export const DEFINICION_COLUMNAS_INFORME = [
 ];
 
 export class TablaDinamica {
-  constructor({ containerId, getAnimales, getAnimalesBusqueda, getFincaActiva, onVerFicha }) {
+  constructor({
+    containerId,
+    getAnimales,
+    getAnimalesBusqueda,
+    getTodosAnimalesEmpresa,
+    getFincas,
+    getFincaActiva,
+    getPesajes,
+    getOperaciones,
+    getServicios,
+    getMovimientosContables,
+    getPagosNomina,
+    getCostosFijosMap,
+    getInversiones,
+    onCambiarFinca,
+    onVerFicha
+  }) {
     this.container = typeof document !== 'undefined' && containerId ? document.getElementById(containerId) : null;
     this.getAnimales = getAnimales;
     this.getAnimalesBusqueda = getAnimalesBusqueda;
+    this.getTodosAnimalesEmpresa = getTodosAnimalesEmpresa || null;
+    this.getFincas = getFincas || null;
     this.getFincaActiva = getFincaActiva;
+    this.getPesajes = getPesajes || (() => []);
+    this.getOperaciones = getOperaciones || (() => []);
+    this.getServicios = getServicios || (() => []);
+    this.getMovimientosContables = getMovimientosContables || (() => []);
+    this.getPagosNomina = getPagosNomina || (() => []);
+    this.getCostosFijosMap = getCostosFijosMap || (() => ({}));
+    this.getInversiones = getInversiones || (() => []);
+    this.onCambiarFinca = onCambiarFinca || null;
     this.onVerFicha = onVerFicha;
+
+    const hoy = obtenerFechaHoyLocal();
+
+    // Estado de los 2 nuevos informes especializados (Utilidad por Finca y Animales NO Trabajados)
+    this.utilidadFincaId = 'ACTIVA'; // 'ACTIVA' | 'TODAS' | finca.id
+    this.utilidadFechaDesde = `${hoy.slice(0, 8)}01`;
+    this.utilidadFechaHasta = hoy;
+    this.utilidadPesoNacimientoKg = 30;
+
+    this.faltantesFincaId = 'ACTIVA';
+    this.faltantesTipoTrabajo = 'pesajes';
+    this.faltantesFechaDesde = '';
+    this.faltantesFechaHasta = '';
+    this.faltantesLote = 'todos';
+    this.faltantesBusqueda = '';
+    this.causasTerrenoMap = {}; // clave fincaId__tag -> causa seleccionada en campo
 
     // Estado del informe activo y filtros multicriterio
     this.informeActivoId = 'explorador_libre';
@@ -1130,6 +1214,7 @@ export class TablaDinamica {
               </div>
             </div>
 
+            ${(this.informeActivoId !== 'utilidad_finca' && this.informeActivoId !== 'animales_no_trabajados') ? `
             <!-- ============================================================== -->
             <!-- 2. MOTOR DE FILTROS MULTIDIMENSIONALES Y CRUCE DE VARIABLES     -->
             <!-- ============================================================== -->
@@ -1321,8 +1406,14 @@ export class TablaDinamica {
                 </div>
               </div>
             </div>
+            ` : ''}
           </div>
 
+          ${this.informeActivoId === 'utilidad_finca'
+            ? this.renderVistaUtilidadPorFinca()
+            : (this.informeActivoId === 'animales_no_trabajados'
+                ? this.renderVistaAnimalesNoTrabajados()
+                : `
           <!-- ================================================================ -->
           <!-- 3. BANNER DE ESTADÍSTICAS DEL CRUCE Y DATO ACTIVO                -->
           <!-- ================================================================ -->
@@ -1538,11 +1629,771 @@ export class TablaDinamica {
               </tbody>
             </table>
           </div>
+          `)}
         </div>
       </div>
     `;
 
     this.attachEvents();
+  }
+
+  fmtCOP(val) {
+    const n = Math.round(Number(val) || 0);
+    return `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('es-CO')}`;
+  }
+
+  obtenerListaFincasDisponibles() {
+    const fincas = typeof this.getFincas === 'function' ? (this.getFincas() || []) : [];
+    if (fincas.length > 0) return fincas;
+    const activa = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : null;
+    return activa ? [activa] : [];
+  }
+
+  obtenerTodosAnimalesDisponibles() {
+    if (typeof this.getTodosAnimalesEmpresa === 'function') {
+      return this.getTodosAnimalesEmpresa() || [];
+    }
+    if (typeof this.getAnimalesBusqueda === 'function') {
+      return this.getAnimalesBusqueda() || [];
+    }
+    return typeof this.getAnimales === 'function' ? (this.getAnimales() || []) : [];
+  }
+
+  calcularDatosInformeUtilidadActual() {
+    const fincas = this.obtenerListaFincasDisponibles();
+    const fincaActiva = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : fincas[0];
+    const todosAnimales = this.obtenerTodosAnimalesDisponibles();
+    const pesajes = this.getPesajes() || [];
+    const operacionesDiarias = this.getOperaciones() || [];
+    const movimientosContables = this.getMovimientosContables() || [];
+    const pagosNomina = this.getPagosNomina() || [];
+    const costosFijosMap = this.getCostosFijosMap() || {};
+    const inversiones = this.getInversiones() || [];
+
+    const reportesPorFinca = fincas.map((f) => calcularInformeUtilidadPorFinca({
+      finca: f,
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      movimientosContables,
+      pagosNomina,
+      costosFijosFinca: costosFijosMap[f.id] || {},
+      inversiones,
+      fechaDesde: this.utilidadFechaDesde,
+      fechaHasta: this.utilidadFechaHasta,
+      pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+    }));
+
+    const targetId = this.utilidadFincaId === 'ACTIVA'
+      ? (fincaActiva?.id || fincas[0]?.id || 'TODAS')
+      : this.utilidadFincaId;
+
+    if (targetId === 'TODAS' && reportesPorFinca.length > 0) {
+      // Consolidar todas las fincas sumando rubros reales
+      const sum = (fn) => reportesPorFinca.reduce((acc, r) => acc + (Number(fn(r)) || 0), 0);
+      const areaTotal = sum((r) => r.areaHa);
+      const dias = reportesPorFinca[0].diasPeriodo || 30;
+      const ingBruto = sum((r) => r.resultados.ingresoBrutoProduccion);
+      const utNeta = sum((r) => r.resultados.utilidadNeta);
+      const totEgr = sum((r) => r.egresos.totalEgresos);
+      const uggTot = Number(sum((r) => r.carne.uggTotalesFinca).toFixed(2));
+      const anmTot = sum((r) => r.carne.animalesActivosCount);
+
+      return {
+        esConsolidado: true,
+        targetId: 'TODAS',
+        fincas,
+        reportesPorFinca,
+        principal: {
+          fincaId: 'TODAS',
+          nombreFinca: `Consolidado Empresarial (${fincas.length} Fincas)`,
+          areaHa: areaTotal,
+          fechaDesde: this.utilidadFechaDesde,
+          fechaHasta: this.utilidadFechaHasta,
+          diasPeriodo: dias,
+          precios: {
+            precioLecheLitro: Math.round(sum((r) => r.precios.precioLecheLitro) / reportesPorFinca.length),
+            precioCarneKgPie: Math.round(sum((r) => r.precios.precioCarneKgPie) / reportesPorFinca.length),
+            pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+          },
+          leche: {
+            tieneOrdeno: reportesPorFinca.some((r) => r.leche.tieneOrdeno),
+            vacasEnOrdeno: sum((r) => r.leche.vacasEnOrdeno),
+            fechaUltimoPesajeLeche: reportesPorFinca.map((r) => r.leche.fechaUltimoPesajeLeche).filter(Boolean).sort().pop() || null,
+            litrosDiariosFinca: Number(sum((r) => r.leche.litrosDiariosFinca).toFixed(1)),
+            litrosProducidosPeriodo: Number(sum((r) => r.leche.litrosProducidosPeriodo).toFixed(1)),
+            ingresoLeche: sum((r) => r.leche.ingresoLeche),
+            ventasLecheEfectivoContab: sum((r) => r.leche.ventasLecheEfectivoContab)
+          },
+          carne: {
+            animalesActivosCount: anmTot,
+            animalesConGdpDirecta: sum((r) => r.carne.animalesConGdpDirecta),
+            animalesConGdpUltimoDatoFinca: sum((r) => r.carne.animalesConGdpUltimoDatoFinca),
+            fechaUltimoPesajeFinca: reportesPorFinca.map((r) => r.carne.fechaUltimoPesajeFinca).filter(Boolean).sort().pop() || null,
+            gdpPromedioFinca: Math.round(sum((r) => r.carne.gdpPromedioFinca) / reportesPorFinca.length),
+            kilosGanadosMedidos: Number(sum((r) => r.carne.kilosGanadosMedidos).toFixed(1)),
+            kilosGanadosProyectadosUltimoDato: Number(sum((r) => r.carne.kilosGanadosProyectadosUltimoDato).toFixed(1)),
+            kilosGanadosGanado: Number(sum((r) => r.carne.kilosGanadosGanado).toFixed(1)),
+            ingresoGananciaPeso: sum((r) => r.carne.ingresoGananciaPeso),
+            pesoTotalInventarioKg: sum((r) => r.carne.pesoTotalInventarioKg),
+            uggTotalesFinca: uggTot,
+            cargaUGGPorHa: areaTotal > 0 ? Number((uggTot / areaTotal).toFixed(2)) : 0
+          },
+          partos: {
+            totalPartosPeriodo: sum((r) => r.partos.totalPartosPeriodo),
+            kilosPartosPeriodo: Number(sum((r) => r.partos.kilosPartosPeriodo).toFixed(1)),
+            ingresoPartos: sum((r) => r.partos.ingresoPartos)
+          },
+          ajustesNIC41: {
+            otrosIngresosContab: sum((r) => r.ajustesNIC41.otrosIngresosContab),
+            ventasAnimalesCount: sum((r) => r.ajustesNIC41.ventasAnimalesCount),
+            valorVentasAnimalesReal: sum((r) => r.ajustesNIC41.valorVentasAnimalesReal),
+            diferencialComercialVentas: sum((r) => r.ajustesNIC41.diferencialComercialVentas),
+            comprasGanadoReposicion: sum((r) => r.ajustesNIC41.comprasGanadoReposicion),
+            muertesCount: sum((r) => r.ajustesNIC41.muertesCount),
+            kilosPerdidosMortalidad: Number(sum((r) => r.ajustesNIC41.kilosPerdidosMortalidad).toFixed(1)),
+            perdidaMortalidadCOP: sum((r) => r.ajustesNIC41.perdidaMortalidadCOP),
+            vientresCriticosAbiertos: sum((r) => r.ajustesNIC41.vientresCriticosAbiertos),
+            lucroCesanteDiasAbiertos: sum((r) => r.ajustesNIC41.lucroCesanteDiasAbiertos)
+          },
+          egresos: {
+            costosDirectos: sum((r) => r.egresos.costosDirectos),
+            gastosAdmin: sum((r) => r.egresos.gastosAdmin),
+            nomina: sum((r) => r.egresos.nomina),
+            egresosOperativosSinDiferidos: sum((r) => r.egresos.egresosOperativosSinDiferidos),
+            cuotaInversionesDiferidas: sum((r) => r.egresos.cuotaInversionesDiferidas),
+            perdidaMortalidadCOP: sum((r) => r.egresos.perdidaMortalidadCOP),
+            totalEgresos: totEgr
+          },
+          resultados: {
+            ingresoBrutoProduccion: ingBruto,
+            ebitdaGanadero: sum((r) => r.resultados.ebitdaGanadero),
+            utilidadNeta: utNeta,
+            margenNetoPct: ingBruto > 0 ? Number(((utNeta / ingBruto) * 100).toFixed(1)) : 0,
+            roiOperativoPct: totEgr > 0 ? Number(((utNeta / totEgr) * 100).toFixed(1)) : 0,
+            utilidadPorHa: areaTotal > 0 ? Math.round(utNeta / areaTotal) : 0,
+            utilidadAnualizadaPorHa: areaTotal > 0 ? Math.round((utNeta * (365 / dias)) / areaTotal) : 0,
+            utilidadPorCabeza: anmTot > 0 ? Math.round(utNeta / anmTot) : 0,
+            utilidadPorUGG: uggTot > 0 ? Math.round(utNeta / uggTot) : 0,
+            kilosTotalesCarneProducidos: Number(sum((r) => r.resultados.kilosTotalesCarneProducidos).toFixed(1)),
+            costoUnitarioKgCarne: reportesPorFinca[0]?.resultados.costoUnitarioKgCarne || 0,
+            costoUnitarioLitroLeche: reportesPorFinca[0]?.resultados.costoUnitarioLitroLeche || 0,
+            puntoEquilibrioKgCarne: Number(sum((r) => r.resultados.puntoEquilibrioKgCarne).toFixed(1)),
+            flujoCajaLiquido: sum((r) => r.resultados.flujoCajaLiquido)
+          }
+        }
+      };
+    }
+
+    const repElegido = reportesPorFinca.find((r) => r.fincaId === targetId) || reportesPorFinca[0] || calcularInformeUtilidadPorFinca({
+      finca: fincaActiva || { id: 'FIN-1', nombre: 'Finca Activa', areaHa: 100, precioLecheLitro: 2450, precioCarneKgPie: 8900 },
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      movimientosContables,
+      pagosNomina,
+      fechaDesde: this.utilidadFechaDesde,
+      fechaHasta: this.utilidadFechaHasta,
+      pesoBaseNacimientoKg: this.utilidadPesoNacimientoKg
+    });
+
+    return {
+      esConsolidado: false,
+      targetId: repElegido.fincaId,
+      fincas,
+      reportesPorFinca,
+      principal: repElegido
+    };
+  }
+
+  renderVistaUtilidadPorFinca() {
+    const data = this.calcularDatosInformeUtilidadActual();
+    const r = data.principal;
+    const fincas = data.fincas;
+
+    return `
+      <div class="p-4 sm:p-6 space-y-5 bg-slate-50/70">
+        <!-- CONTROLES DEL INFORME DE UTILIDAD POR FINCA -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+          <div>
+            <label for="sel-utilidad-finca" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🏡 Finca a Evaluar:</label>
+            <select id="sel-utilidad-finca" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+              <option value="TODAS" ${data.targetId === 'TODAS' ? 'selected' : ''}>🌐 Todas las Fincas (Consolidado)</option>
+              ${fincas.map((f) => `
+                <option value="${f.id}" ${data.targetId === f.id ? 'selected' : ''}>🏡 ${f.nombre} (${f.areaHa || f.hectareas || 0} Ha)</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label for="in-utilidad-desde" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Desde Fecha:</label>
+            <input type="date" id="in-utilidad-desde" value="${this.utilidadFechaDesde}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div>
+            <label for="in-utilidad-hasta" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Hasta Fecha (${r.diasPeriodo} días):</label>
+            <input type="date" id="in-utilidad-hasta" value="${this.utilidadFechaHasta}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div>
+            <label for="in-utilidad-peso-nac" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🍼 Peso Base Ternero al Nacer (kg):</label>
+            <input type="number" id="in-utilidad-peso-nac" value="${this.utilidadPesoNacimientoKg}" min="10" max="70" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+          </div>
+
+          <div class="flex items-end gap-1.5 flex-wrap">
+            <button type="button" data-rango-util="MES" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold cursor-pointer">Mes Actual</button>
+            <button type="button" data-rango-util="30D" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold cursor-pointer">30 Días</button>
+            <button type="button" data-rango-util="ANIO" class="btn-rango-utilidad flex-1 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold cursor-pointer">Año</button>
+          </div>
+        </div>
+
+        <!-- 4 TARJETAS PRINCIPALES DE UTILIDAD -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- LECHE -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">🥛 Producción de Leche</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.leche.tieneOrdeno ? 'bg-sky-100 text-sky-900 border border-sky-300' : 'bg-slate-100 text-slate-700 border border-slate-300'}">
+                ${r.leche.tieneOrdeno ? `${r.leche.vacasEnOrdeno} en ordeño` : 'Sin Ordeño'}
+              </span>
+            </div>
+            <div class="text-2xl font-black text-slate-800 bovi-kpi-value">${this.fmtCOP(r.leche.ingresoLeche)}</div>
+            <div class="text-[11px] text-slate-600">
+              ${r.leche.tieneOrdeno
+                ? `<strong>${r.leche.litrosProducidosPeriodo} L</strong> (${r.leche.litrosDiariosFinca} L/d × $${r.precios.precioLecheLitro.toLocaleString('es-CO')}/L • Últ. pesaje: ${formatearFecha(r.leche.fechaUltimoPesajeLeche, 'Vigente')})`
+                : 'Sin pesajes de leche registrados en esta finca (se asume sin ordeño = $0).'}
+            </div>
+          </div>
+
+          <!-- GANANCIA DE PESO + PARTOS -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">⚖️ Ganancia Peso + Partos</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                +$${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg
+              </span>
+            </div>
+            <div class="text-2xl font-black text-emerald-700 bovi-kpi-value">${this.fmtCOP(r.carne.ingresoGananciaPeso + r.partos.ingresoPartos)}</div>
+            <div class="text-[11px] text-slate-600">
+              Ganado: <strong>+${r.carne.kilosGanadosGanado} kg</strong> (${this.fmtCOP(r.carne.ingresoGananciaPeso)}) • Partos (${r.partos.totalPartosPeriodo}): <strong>+${r.partos.kilosPartosPeriodo} kg</strong> (${this.fmtCOP(r.partos.ingresoPartos)})
+            </div>
+          </div>
+
+          <!-- COSTOS, GASTOS, NÓMINA Y DIFERIDOS -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-600">🧾 Costos, Gastos & Diferidos</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                Egresos + NIC 41
+              </span>
+            </div>
+            <div class="text-2xl font-black text-rose-700 bovi-kpi-value">${this.fmtCOP(r.egresos.totalEgresos)}</div>
+            <div class="text-[11px] text-slate-600">
+              Operación + Nómina: <strong>${this.fmtCOP(r.egresos.egresosOperativosSinDiferidos)}</strong> • Cuota Inversión: <strong>${this.fmtCOP(r.egresos.cuotaInversionesDiferidas)}</strong>
+            </div>
+          </div>
+
+          <!-- UTILIDAD NETA REAL -->
+          <div class="bg-white p-4 rounded-2xl border-2 ${r.resultados.utilidadNeta >= 0 ? 'border-emerald-400' : 'border-rose-400'} shadow-sm space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-black uppercase text-slate-700">💰 Utilidad Neta Finca</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${r.resultados.utilidadNeta >= 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
+                Margen ${r.resultados.margenNetoPct}%
+              </span>
+            </div>
+            <div class="text-2xl font-black ${r.resultados.utilidadNeta >= 0 ? 'text-emerald-700' : 'text-rose-700'} bovi-kpi-value">${this.fmtCOP(r.resultados.utilidadNeta)}</div>
+            <div class="text-[11px] text-slate-600">
+              Por Ha: <strong>${this.fmtCOP(r.resultados.utilidadPorHa)}/Ha</strong> • Anualizada: <strong>${this.fmtCOP(r.resultados.utilidadAnualizadaPorHa)}/Ha/año</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- DESGLOSE TÉCNICO Y ESTÁNDARES MUNDIALES (NIC 41 / CREA / FEDEGÁN) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2.5 text-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+              <h3 class="font-black text-sm text-slate-800">📊 Estado de Utilidad Económica & Biológica — ${r.nombreFinca}</h3>
+              <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">NIC 41 / CREA</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-sky-50/70">
+              <span><strong>(+) Producción de Leche</strong> ${r.leche.tieneOrdeno ? `(${r.leche.litrosProducidosPeriodo} L según último pesaje)` : '(Sin pesaje de leche → Sin ordeño)'}</span>
+              <span class="font-bold text-slate-800 font-mono">${this.fmtCOP(r.leche.ingresoLeche)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-emerald-50/70">
+              <span><strong>(+) Ganancia de Peso del Ganado</strong> (${r.carne.kilosGanadosGanado} kg en ${r.carne.animalesActivosCount} cab • Últ. pesaje finca: ${formatearFecha(r.carne.fechaUltimoPesajeFinca, 'Base inventario')})</span>
+              <span class="font-bold text-emerald-800 font-mono">${this.fmtCOP(r.carne.ingresoGananciaPeso)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-2.5 rounded-lg bg-emerald-50/40">
+              <span><strong>(+) Nacimientos / Partos</strong> (${r.partos.totalPartosPeriodo} crías nacidas = ${r.partos.kilosPartosPeriodo} kg × $${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg)</span>
+              <span class="font-bold text-emerald-800 font-mono">${this.fmtCOP(r.partos.ingresoPartos)}</span>
+            </div>
+
+            ${(r.ajustesNIC41.otrosIngresosContab !== 0 || r.ajustesNIC41.diferencialComercialVentas !== 0) ? `
+              <div class="flex justify-between py-1.5 px-2.5">
+                <span>(+) Otros Ingresos Operativos y Diferencial Comercial en Ventas (${r.ajustesNIC41.ventasAnimalesCount} ventas)</span>
+                <span class="font-bold text-slate-800 font-mono">${this.fmtCOP(r.ajustesNIC41.otrosIngresosContab + r.ajustesNIC41.diferencialComercialVentas)}</span>
+              </div>
+            ` : ''}
+
+            <div class="flex justify-between py-2 px-3 rounded-xl bg-slate-100 font-black text-slate-800">
+              <span>(=) INGRESO BRUTO TOTAL GENERADO POR LA FINCA</span>
+              <span class="font-mono">${this.fmtCOP(r.resultados.ingresoBrutoProduccion)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Costos Directos (Sanidad, Sal/Suplementos, Potreros, Insumos)</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.costosDirectos)}</span>
+            </div>
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Gastos Fijos y Administrativos</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.gastosAdmin)}</span>
+            </div>
+            <div class="flex justify-between py-1 px-2.5 text-slate-700">
+              <span>(-) Nómina, Jornales, Seguridad Social y Prestaciones</span>
+              <span class="font-bold text-rose-700 font-mono">-${this.fmtCOP(r.egresos.nomina)}</span>
+            </div>
+
+            <div class="flex justify-between py-1.5 px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold">
+              <span>(=) EBITDA GANADERO (Utilidad Operativa antes de Inversiones y Mortalidad)</span>
+              <span class="font-mono ${r.resultados.ebitdaGanadero >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${this.fmtCOP(r.resultados.ebitdaGanadero)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-purple-900">
+              <span>(-) Cuota Diferida de Inversiones en el Período (Amortización mensual CAPEX)</span>
+              <span class="font-bold font-mono">-${this.fmtCOP(r.egresos.cuotaInversionesDiferidas)}</span>
+            </div>
+
+            <div class="flex justify-between py-1 px-2.5 text-rose-800">
+              <span>(-) Siniestralidad / Mortalidad Biológica NIC 41 (${r.ajustesNIC41.muertesCount} bajas = ${r.ajustesNIC41.kilosPerdidosMortalidad} kg)</span>
+              <span class="font-bold font-mono">-${this.fmtCOP(r.egresos.perdidaMortalidadCOP)}</span>
+            </div>
+
+            <div class="flex justify-between py-2.5 px-3 rounded-xl border-2 ${r.resultados.utilidadNeta >= 0 ? 'bg-emerald-50 border-emerald-400 text-emerald-950' : 'bg-rose-50 border-rose-400 text-rose-950'} font-black text-sm">
+              <span>(=) UTILIDAD NETA INTEGRAL DE LA FINCA</span>
+              <span class="font-mono">${this.fmtCOP(r.resultados.utilidadNeta)}</span>
+            </div>
+          </div>
+
+          <!-- VARIABLES EXPERTAS DE NIVEL MUNDIAL -->
+          <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+            <h3 class="font-black text-sm text-slate-800 pb-2 border-b border-slate-200">
+              🌍 Indicadores Expertos Internacionales (Benchmarking)
+            </h3>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Costo producir 1 kg carne</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${this.fmtCOP(r.resultados.costoUnitarioKgCarne)}/kg</strong>
+                <span class="text-[10px] text-slate-600 block">Venta ref: $${r.precios.precioCarneKgPie.toLocaleString('es-CO')}/kg</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Costo producir 1 L leche</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.leche.tieneOrdeno ? `${this.fmtCOP(r.resultados.costoUnitarioLitroLeche)}/L` : 'N/A (Sin ordeño)'}</strong>
+                <span class="text-[10px] text-slate-600 block">${r.leche.tieneOrdeno ? `Venta ref: $${r.precios.precioLecheLitro.toLocaleString('es-CO')}/L` : 'Predio de Cría/Ceba'}</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Carga Animal (UGG/Ha)</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.carne.cargaUGGPorHa} UGG/Ha</strong>
+                <span class="text-[10px] text-slate-600 block">${r.carne.uggTotalesFinca} UGG totales en ${r.areaHa} Ha</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-600 block">Punto de Equilibrio</span>
+                <strong class="text-sm font-black text-slate-800 font-mono">${r.resultados.puntoEquilibrioKgCarne} kg</strong>
+                <span class="text-[10px] text-slate-600 block">Kilos necesarios para cubrir costos</span>
+              </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+              <div class="font-black text-amber-950 flex items-center justify-between">
+                <span>⏳ Costo Oculto por Días Abiertos (>120d)</span>
+                <span class="font-mono">${this.fmtCOP(r.ajustesNIC41.lucroCesanteDiasAbiertos)}</span>
+              </div>
+              <p class="text-[11px] text-amber-900">
+                <strong>${r.ajustesNIC41.vientresCriticosAbiertos} hembras abiertas</strong> superan los 120 días posparto (estándar DairyComp 305 / FEDEGÁN). Preñarlas a tiempo recupera este potencial productivo.
+              </p>
+            </div>
+
+            <div class="p-3 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between">
+              <div>
+                <div class="font-bold text-blue-950">💵 Flujo de Caja en Efectivo del Período</div>
+                <span class="text-[10px] text-blue-800">Conciliación de efectivo real cobrado vs pagado</span>
+              </div>
+              <strong class="font-mono text-sm font-black text-blue-950">${this.fmtCOP(r.resultados.flujoCajaLiquido)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLA COMPARATIVA MULTI-FINCA -->
+        ${data.reportesPorFinca.length > 1 ? `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-200 font-black text-xs uppercase tracking-wider text-slate-800">
+              🏡 Comparativa de Rentabilidad y Utilidad por Finca
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead class="bg-slate-100 text-[10px] uppercase font-black text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th class="p-3">Finca</th>
+                    <th class="p-3 text-center">Ordeño / Leche</th>
+                    <th class="p-3 text-right">Ingreso Leche</th>
+                    <th class="p-3 text-right">Ganancia Peso + Partos</th>
+                    <th class="p-3 text-right">Egresos + Diferidos</th>
+                    <th class="p-3 text-right">Utilidad Neta</th>
+                    <th class="p-3 text-right">Utilidad / Ha</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${data.reportesPorFinca.map((rf) => `
+                    <tr class="hover:bg-slate-50">
+                      <td class="p-3 font-bold text-slate-800">🏡 ${rf.nombreFinca} <span class="text-[10px] text-slate-600">(${rf.carne.animalesActivosCount} cab • ${rf.areaHa} Ha)</span></td>
+                      <td class="p-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${rf.leche.tieneOrdeno ? 'bg-sky-100 text-sky-900' : 'bg-slate-100 text-slate-600'}">
+                          ${rf.leche.tieneOrdeno ? `${rf.leche.litrosDiariosFinca} L/d` : 'Sin ordeño'}
+                        </span>
+                      </td>
+                      <td class="p-3 text-right font-mono">${this.fmtCOP(rf.leche.ingresoLeche)}</td>
+                      <td class="p-3 text-right font-mono text-emerald-700 font-bold">${this.fmtCOP(rf.carne.ingresoGananciaPeso + rf.partos.ingresoPartos)}</td>
+                      <td class="p-3 text-right font-mono text-rose-700">-${this.fmtCOP(rf.egresos.totalEgresos)}</td>
+                      <td class="p-3 text-right font-mono font-black ${rf.resultados.utilidadNeta >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${this.fmtCOP(rf.resultados.utilidadNeta)}</td>
+                      <td class="p-3 text-right font-mono font-bold">${this.fmtCOP(rf.resultados.utilidadPorHa)}/Ha</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  calcularDatosFaltantesActual() {
+    const fincas = this.obtenerListaFincasDisponibles();
+    const fincaActiva = typeof this.getFincaActiva === 'function' ? this.getFincaActiva() : fincas[0];
+    const targetFincaId = this.faltantesFincaId === 'ACTIVA'
+      ? (fincaActiva?.id || fincas[0]?.id || '')
+      : this.faltantesFincaId;
+    const fincaObj = fincas.find((f) => f.id === targetFincaId) || fincaActiva || { id: targetFincaId, nombre: 'Predio' };
+
+    const todosAnimales = this.obtenerTodosAnimalesDisponibles();
+    const pesajes = this.getPesajes() || [];
+    const operacionesDiarias = this.getOperaciones() || [];
+    const servicios = this.getServicios() || [];
+
+    const jornadas = detectarJornadasTrabajoFinca({
+      fincaId: targetFincaId,
+      pesajes,
+      operacionesDiarias,
+      servicios,
+      tipoTrabajo: this.faltantesTipoTrabajo
+    });
+
+    const hoy = obtenerFechaHoyLocal();
+    const fechaDesde = this.faltantesFechaDesde || (jornadas[0]?.fecha || hoy);
+    const fechaHasta = this.faltantesFechaHasta || fechaDesde;
+
+    const resultado = calcularAnimalesNoTrabajados({
+      fincaId: targetFincaId,
+      fincaNombre: fincaObj.nombre || 'Predio',
+      animales: todosAnimales,
+      pesajes,
+      operacionesDiarias,
+      servicios,
+      tipoTrabajo: this.faltantesTipoTrabajo,
+      fechaDesde,
+      fechaHasta,
+      filtroLote: this.faltantesLote
+    });
+
+    // Lotes únicos de la finca para selector
+    const lotesFinca = Array.from(
+      new Set(
+        todosAnimales
+          .filter((a) => a && (!targetFincaId || (a.fincaId || a.finca_id) === targetFincaId) && (a.estadoVida || a.estado || 'activo') === 'activo')
+          .map((a) => (a.lote || 'General').trim())
+          .filter(Boolean)
+      )
+    ).sort();
+
+    return {
+      fincas,
+      fincaObj,
+      targetFincaId,
+      jornadas,
+      lotesFinca,
+      fechaDesde,
+      fechaHasta,
+      resultado
+    };
+  }
+
+  renderVistaAnimalesNoTrabajados() {
+    const ctx = this.calcularDatosFaltantesActual();
+    const res = ctx.resultado;
+
+    let faltantesVisibles = res.faltantes;
+    if (this.faltantesBusqueda && this.faltantesBusqueda.trim()) {
+      const q = this.faltantesBusqueda.trim().toLowerCase();
+      faltantesVisibles = faltantesVisibles.filter((a) =>
+        String(a.tag || '').toLowerCase().includes(q) ||
+        String(a.nombreAlias || a.nombre || '').toLowerCase().includes(q) ||
+        String(a.lote || '').toLowerCase().includes(q) ||
+        String(a.categoria || '').toLowerCase().includes(q)
+      );
+    }
+
+    const causasOpciones = [
+      'Pendiente buscar en potrero',
+      'Quedó en otro potrero / monte',
+      'Parida escondida con cría',
+      'Enferma / Cojera en potrero',
+      'Saltó cerca a lote vecino',
+      'Vendida / Trasladada sin descargar',
+      'Muerte en campo no reportada',
+      'Extraviada / Faltante físico'
+    ];
+
+    return `
+      <div class="p-4 sm:p-6 space-y-5 bg-slate-50/70">
+        <!-- FILTROS DE AUDITORÍA DE JORNADA (ANIMALES NO TRABAJADOS) -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label for="sel-faltantes-finca" class="block font-black text-slate-700 uppercase text-[10px] mb-1">🏡 Finca Trabajada:</label>
+              <select id="sel-faltantes-finca" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                ${ctx.fincas.map((f) => `
+                  <option value="${f.id}" ${ctx.targetFincaId === f.id ? 'selected' : ''}>🏡 ${f.nombre}</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div>
+              <label for="sel-faltantes-tipo" class="block font-black text-slate-700 uppercase text-[10px] mb-1">⚡ Tipo de Trabajo:</label>
+              <select id="sel-faltantes-tipo" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                <option value="pesajes" ${this.faltantesTipoTrabajo === 'pesajes' ? 'selected' : ''}>⚖️ Pesaje de Ganado</option>
+                <option value="leche" ${this.faltantesTipoTrabajo === 'leche' ? 'selected' : ''}>🥛 Pesaje / Control de Leche</option>
+                <option value="palpaciones" ${this.faltantesTipoTrabajo === 'palpaciones' ? 'selected' : ''}>✋ Palpación Reproductiva</option>
+                <option value="servicios" ${this.faltantesTipoTrabajo === 'servicios' ? 'selected' : ''}>🧬 Servicios IA / Monta</option>
+                <option value="cualquiera" ${this.faltantesTipoTrabajo === 'cualquiera' ? 'selected' : ''}>🌐 Cualquier Trabajo</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="in-faltantes-desde" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Desde Fecha Trabajo:</label>
+              <input type="date" id="in-faltantes-desde" value="${ctx.fechaDesde}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="in-faltantes-hasta" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📅 Hasta Fecha Trabajo:</label>
+              <input type="date" id="in-faltantes-hasta" value="${ctx.fechaHasta}" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="sel-faltantes-lote" class="block font-black text-slate-700 uppercase text-[10px] mb-1">📍 Lote / Potrero:</label>
+              <select id="sel-faltantes-lote" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 cursor-pointer">
+                <option value="todos" ${this.faltantesLote === 'todos' ? 'selected' : ''}>Todos los Lotes de la Finca</option>
+                ${ctx.lotesFinca.map((l) => `<option value="${l}" ${this.faltantesLote === l ? 'selected' : ''}>📍 ${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          ${ctx.jornadas.length > 0 ? `
+            <div class="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+              <span class="text-[10px] font-black uppercase text-slate-600">📌 Jornadas recientes detectadas en ${ctx.fincaObj.nombre}:</span>
+              ${ctx.jornadas.slice(0, 6).map((j) => `
+                <button type="button" data-jornada-fecha="${j.fecha}" class="btn-elegir-jornada-detectada px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
+                  ctx.fechaDesde === j.fecha && ctx.fechaHasta === j.fecha
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                    : 'bg-slate-50 hover:bg-emerald-50 text-slate-700 border-slate-300'
+                }">
+                  📅 ${formatearFecha(j.fecha)} (${j.cantidadAnimales} trabajados)
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 4 TARJETAS DE CONCILIACIÓN DE CAMPO -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-slate-600 block">🏷️ Total Activos en Sistema</span>
+            <div class="text-2xl font-black text-slate-800 mt-1 bovi-kpi-value">${res.totalSistema} animales</div>
+            <span class="text-[11px] text-slate-600">Inventario esperado en ${ctx.fincaObj.nombre}</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-emerald-800 block">✅ Animales Sí Trabajados</span>
+            <div class="text-2xl font-black text-emerald-700 mt-1 bovi-kpi-value">${res.totalTrabajados} animales</div>
+            <span class="text-[11px] text-emerald-800 font-bold">Cobertura: ${res.porcentajeCobertura}% del hato</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border-2 border-rose-300 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-rose-800 block">🚨 Animales NO Trabajados (Faltantes)</span>
+            <div class="text-2xl font-black text-rose-700 mt-1 bovi-kpi-value">${res.totalFaltantes} animales</div>
+            <span class="text-[11px] text-rose-800 font-bold">Pendientes de verificar causa en terreno</span>
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm">
+            <span class="text-[11px] font-black uppercase text-amber-900 block">📍 Distribución por Lote</span>
+            <div class="text-xs font-bold text-slate-800 mt-1.5 space-y-0.5 max-h-14 overflow-y-auto">
+              ${res.resumenPorLote.length > 0
+                ? res.resumenPorLote.slice(0, 3).map((g) => `<div>• ${g.lote}: <strong class="text-rose-700">${g.cantidad} faltantes</strong></div>`).join('')
+                : '<span class="text-emerald-700">¡100% del ganado trabajado!</span>'}
+            </div>
+          </div>
+        </div>
+
+        <!-- BARRA DE BÚSQUEDA E IMPRESIÓN DE PLANILLA DE BÚSQUEDA EN TERRENO -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="font-black text-sm text-slate-800">
+                📋 Listado de Animales Faltantes para Verificación en Terreno (${faltantesVisibles.length})
+              </h3>
+              <p class="text-xs text-slate-600">
+                Lleva o imprime este listado al potrero para ubicar cada ejemplar que no pasó por báscula/manga y registrar la causa.
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                id="in-buscar-dentro-faltantes"
+                value="${this.faltantesBusqueda}"
+                placeholder="Buscar arete, nombre o lote..."
+                class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800"
+              />
+              <button type="button" id="btn-imprimir-planilla-faltantes" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5">
+                <span>🖨️</span> Imprimir Planilla de Campo
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-100 uppercase text-[10px] font-black text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th class="p-3 w-10 text-center">#</th>
+                  <th class="p-3">Arete / Nº</th>
+                  <th class="p-3">Nombre & Especie</th>
+                  <th class="p-3">Categoría & Sexo</th>
+                  <th class="p-3">📍 Lote Registrado</th>
+                  <th class="p-3 text-right">Último Peso</th>
+                  <th class="p-3">Último Trabajo Previo</th>
+                  <th class="p-3">Causa / Hallazgo en Terreno</th>
+                  <th class="p-3 text-center">Ficha</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${faltantesVisibles.length > 0 ? faltantesVisibles.map((a, idx) => {
+                  const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+                  const causaActual = this.causasTerrenoMap[claveCausa] || causasOpciones[0];
+                  return `
+                    <tr class="hover:bg-rose-50/40 transition">
+                      <td class="p-3 text-center font-mono text-slate-600">${idx + 1}</td>
+                      <td class="p-3 font-black font-mono text-slate-800 text-sm">${a.tag}</td>
+                      <td class="p-3">
+                        <div class="font-bold text-slate-800">${a.nombreAlias || a.nombre || 'Sin Alias'}</div>
+                        <div class="text-[10px] text-slate-600">${(a.especie || 'bovino') === 'bufalino' ? '🦬 Bufalino' : '🐂 Vacuno'} • ${a.raza || 'Común'}</div>
+                      </td>
+                      <td class="p-3 text-slate-700 font-semibold">${a.categoria || 'General'} (${(a.sexo || 'hembra') === 'macho' ? '♂️' : '♀️'})</td>
+                      <td class="p-3">
+                        <span class="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-950 border border-amber-300 font-bold text-[11px]">
+                          📍 ${a.lote || 'General'}
+                        </span>
+                      </td>
+                      <td class="p-3 text-right font-mono font-bold text-slate-800">
+                        ${a.ultimoPesoKg ? `${a.ultimoPesoKg} kg` : 'Sin peso'}
+                      </td>
+                      <td class="p-3 font-mono text-[11px] text-slate-600">
+                        ${a.fechaUltimoTrabajoPrevio ? `${formatearFecha(a.fechaUltimoTrabajoPrevio)} (${a.diasSinTrabajar ?? 0}d atrás)` : 'Sin registro previo'}
+                      </td>
+                      <td class="p-3">
+                        <select data-causa-clave="${claveCausa}" class="sel-causa-faltante-terreno px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-[11px] text-slate-800 cursor-pointer">
+                          ${causasOpciones.map((opC) => `<option value="${opC}" ${causaActual === opC ? 'selected' : ''}>${opC}</option>`).join('')}
+                        </select>
+                      </td>
+                      <td class="p-3 text-center">
+                        ${a.id ? `
+                          <button type="button" data-action="ver-ficha-animal" data-id="${a.id}" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-800 text-[10px] font-bold rounded-lg cursor-pointer">
+                            🔍 Ficha
+                          </button>
+                        ` : '—'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('') : `
+                  <tr>
+                    <td colspan="9" class="p-10 text-center text-emerald-800 font-bold">
+                      🎉 ¡Excelente! No hay animales faltantes sin trabajar para los criterios seleccionados (${res.totalTrabajados} de ${res.totalSistema} trabajados).
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  imprimirPlanillaFaltantesTerreno() {
+    if (typeof window === 'undefined') return;
+    const ctx = this.calcularDatosFaltantesActual();
+    const res = ctx.resultado;
+    const filasHtml = res.faltantes.map((a, i) => {
+      const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+      const causa = this.causasTerrenoMap[claveCausa] || '';
+      return `
+        <tr>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;">${i + 1}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;font-weight:bold;font-family:monospace;font-size:13px;">${a.tag}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.nombreAlias || a.nombre || ''}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.categoria || ''}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;font-weight:bold;">${a.lote || 'General'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;text-align:right;">${a.ultimoPesoKg ? `${a.ultimoPesoKg} kg` : '-'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;">${a.fechaUltimoTrabajoPrevio ? formatearFecha(a.fechaUltimoTrabajoPrevio) : '-'}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px;min-width:190px;">${causa === 'Pendiente buscar en potrero' ? '' : causa}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const w = window.open('', '_blank', 'width=980,height=720');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Planilla de Animales NO Trabajados - ${ctx.fincaObj.nombre}</title></head>
+      <body style="font-family:Arial,sans-serif;padding:20px;color:#1e293b;">
+        <h2 style="margin:0 0 6px 0;">GANADERO AD — Planilla de Búsqueda en Terreno (Animales NO Trabajados)</h2>
+        <p style="margin:0 0 12px 0;font-size:13px;">
+          <strong>Finca:</strong> ${ctx.fincaObj.nombre} &nbsp;|&nbsp;
+          <strong>Trabajo:</strong> ${this.faltantesTipoTrabajo.toUpperCase()} &nbsp;|&nbsp;
+          <strong>Jornada:</strong> ${formatearFecha(ctx.fechaDesde)} al ${formatearFecha(ctx.fechaHasta)} &nbsp;|&nbsp;
+          <strong>En Sistema:</strong> ${res.totalSistema} &nbsp;|&nbsp;
+          <strong>Trabajados:</strong> ${res.totalTrabajados} &nbsp;|&nbsp;
+          <strong>Faltantes:</strong> ${res.totalFaltantes}
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:#f1f5f9;">
+              <th style="border:1px solid #cbd5e1;padding:6px;">#</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Arete / Nº</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Nombre</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Categoría</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Lote / Potrero</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Últ. Peso</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Últ. Trabajo</th>
+              <th style="border:1px solid #cbd5e1;padding:6px;">Causa Encontrada en Terreno</th>
+            </tr>
+          </thead>
+          <tbody>${filasHtml}</tbody>
+        </table>
+        <script>window.onload = function(){ window.print(); };<\/script>
+      </body></html>`);
+    w.document.close();
   }
 
   obtenerEtiquetaDimension(dim) {
@@ -1746,6 +2597,95 @@ export class TablaDinamica {
   }
 
   exportarInformeActualExcel() {
+    const fechaHoyArchivo = obtenerFechaHoyLocal();
+
+    if (this.informeActivoId === 'utilidad_finca') {
+      const data = this.calcularDatosInformeUtilidadActual();
+      const r = data.principal;
+      const filasPyG = [
+        { Concepto: 'Finca / Alcance', Valor: r.nombreFinca },
+        { Concepto: 'Período Analizado', Valor: `${r.fechaDesde} a ${r.fechaHasta} (${r.diasPeriodo} días)` },
+        { Concepto: 'Tiene Ordeño Activo', Valor: r.leche.tieneOrdeno ? 'SÍ' : 'NO (Sin pesajes de leche registrados)' },
+        { Concepto: 'Litros de Leche del Período', Valor: r.leche.litrosProducidosPeriodo },
+        { Concepto: '(+) Ingreso por Leche ($ COP)', Valor: r.leche.ingresoLeche },
+        { Concepto: 'Kilos Ganados por el Ganado (kg)', Valor: r.carne.kilosGanadosGanado },
+        { Concepto: '(+) Ingreso por Ganancia de Peso ($ COP)', Valor: r.carne.ingresoGananciaPeso },
+        { Concepto: 'Partos / Terneros Nacidos (kg)', Valor: `${r.partos.totalPartosPeriodo} partos (${r.partos.kilosPartosPeriodo} kg)` },
+        { Concepto: '(+) Ingreso por Partos ($ COP)', Valor: r.partos.ingresoPartos },
+        { Concepto: '(=) Ingreso Bruto Total ($ COP)', Valor: r.resultados.ingresoBrutoProduccion },
+        { Concepto: '(-) Costos Directos ($ COP)', Valor: r.egresos.costosDirectos },
+        { Concepto: '(-) Gastos Administrativos ($ COP)', Valor: r.egresos.gastosAdmin },
+        { Concepto: '(-) Nómina y Seguridad Social ($ COP)', Valor: r.egresos.nomina },
+        { Concepto: '(=) EBITDA Ganadero ($ COP)', Valor: r.resultados.ebitdaGanadero },
+        { Concepto: '(-) Cuota Mensual Inversiones Diferidas ($ COP)', Valor: r.egresos.cuotaInversionesDiferidas },
+        { Concepto: '(-) Pérdida por Mortalidad NIC 41 ($ COP)', Valor: r.egresos.perdidaMortalidadCOP },
+        { Concepto: '(=) UTILIDAD NETA DE LA FINCA ($ COP)', Valor: r.resultados.utilidadNeta },
+        { Concepto: 'Margen Neto (%)', Valor: `${r.resultados.margenNetoPct}%` },
+        { Concepto: 'Utilidad por Hectárea ($/Ha)', Valor: r.resultados.utilidadPorHa }
+      ];
+      if (typeof XLSX !== 'undefined' && XLSX.utils) {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPyG), 'Utilidad_Finca');
+        if (data.reportesPorFinca.length > 0) {
+          const filasComp = data.reportesPorFinca.map((rf) => ({
+            Finca: rf.nombreFinca,
+            Hectareas: rf.areaHa,
+            Animales_Activos: rf.carne.animalesActivosCount,
+            Ordeno: rf.leche.tieneOrdeno ? 'Sí' : 'Sin ordeño',
+            Litros_Periodo: rf.leche.litrosProducidosPeriodo,
+            Ingreso_Leche_COP: rf.leche.ingresoLeche,
+            Kg_Ganancia_Ganado: rf.carne.kilosGanadosGanado,
+            Ingreso_Ganancia_Peso_COP: rf.carne.ingresoGananciaPeso,
+            Partos_Kg: rf.partos.kilosPartosPeriodo,
+            Ingreso_Partos_COP: rf.partos.ingresoPartos,
+            Egresos_Totales_COP: rf.egresos.totalEgresos,
+            Utilidad_Neta_COP: rf.resultados.utilidadNeta,
+            Utilidad_Por_Ha_COP: rf.resultados.utilidadPorHa
+          }));
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasComp), 'Comparativa_Fincas');
+        }
+        const nombreArchivo = `Utilidad_Por_Finca_${fechaHoyArchivo}.xlsx`;
+        if (typeof XLSX.writeFile === 'function') XLSX.writeFile(wb, nombreArchivo);
+        return { ok: true, total: filasPyG.length, nombreArchivo };
+      }
+      return { ok: true, total: filasPyG.length, filas: filasPyG };
+    }
+
+    if (this.informeActivoId === 'animales_no_trabajados') {
+      const ctx = this.calcularDatosFaltantesActual();
+      const res = ctx.resultado;
+      const filasFaltantes = res.faltantes.map((a, idx) => {
+        const claveCausa = `${ctx.targetFincaId}__${a.tag}`;
+        return {
+          Item: idx + 1,
+          Finca: ctx.fincaObj.nombre,
+          Arete_Animal: a.tag,
+          Nombre_Alias: a.nombreAlias || a.nombre || '',
+          Especie: a.especie || 'bovino',
+          Raza: a.raza || 'Común',
+          Categoria: a.categoria || '',
+          Sexo: a.sexo || 'hembra',
+          Lote_Registrado: a.lote || 'General',
+          Ultimo_Peso_Kg: a.ultimoPesoKg || '',
+          Fecha_Ultimo_Trabajo: a.fechaUltimoTrabajoPrevio || '',
+          Dias_Sin_Trabajar: a.diasSinTrabajar ?? '',
+          Causa_En_Terreno: this.causasTerrenoMap[claveCausa] || 'Pendiente verificar en terreno'
+        };
+      });
+      if (typeof XLSX !== 'undefined' && XLSX.utils) {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.json_to_sheet(filasFaltantes.length > 0 ? filasFaltantes : [{ Mensaje: '100% de animales trabajados, 0 faltantes' }]),
+          'Animales_No_Trabajados'
+        );
+        const nombreArchivo = `Animales_No_Trabajados_${ctx.fincaObj.nombre}_${fechaHoyArchivo}.xlsx`;
+        if (typeof XLSX.writeFile === 'function') XLSX.writeFile(wb, nombreArchivo);
+        return { ok: true, total: filasFaltantes.length, nombreArchivo };
+      }
+      return { ok: true, total: filasFaltantes.length, filas: filasFaltantes };
+    }
+
     const animales = this.obtenerAnimalesFiltradosYOrdenados();
     const resumenGrupos = this.calcularResumenAgrupado(animales, this.agruparPor);
     const informeActual = CATALOGO_INFORMES_GANADEROS.find((i) => i.id === this.informeActivoId) || CATALOGO_INFORMES_GANADEROS[0];
@@ -1962,6 +2902,140 @@ export class TablaDinamica {
     });
 
     this.enlazarEventosTabla();
+    this.enlazarEventosInformesEspeciales();
+  }
+
+  enlazarEventosInformesEspeciales() {
+    if (!this.container) return;
+
+    // Eventos Informe Utilidad por Finca
+    const selUtilFinca = this.container.querySelector('#sel-utilidad-finca');
+    if (selUtilFinca) {
+      selUtilFinca.addEventListener('change', (e) => {
+        this.utilidadFincaId = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilDesde = this.container.querySelector('#in-utilidad-desde');
+    if (inUtilDesde) {
+      inUtilDesde.addEventListener('change', (e) => {
+        this.utilidadFechaDesde = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilHasta = this.container.querySelector('#in-utilidad-hasta');
+    if (inUtilHasta) {
+      inUtilHasta.addEventListener('change', (e) => {
+        this.utilidadFechaHasta = e.target.value;
+        this.render();
+      });
+    }
+    const inUtilPesoNac = this.container.querySelector('#in-utilidad-peso-nac');
+    if (inUtilPesoNac) {
+      inUtilPesoNac.addEventListener('change', (e) => {
+        this.utilidadPesoNacimientoKg = Math.max(10, Number(e.target.value) || 30);
+        this.render();
+      });
+    }
+    this.container.querySelectorAll('.btn-rango-utilidad').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const tipo = e.currentTarget.getAttribute('data-rango-util');
+        const hoy = obtenerFechaHoyLocal();
+        this.utilidadFechaHasta = hoy;
+        if (tipo === 'MES') {
+          this.utilidadFechaDesde = `${hoy.slice(0, 8)}01`;
+        } else if (tipo === '30D') {
+          const d = new Date();
+          d.setDate(d.getDate() - 29);
+          this.utilidadFechaDesde = obtenerFechaHoyLocal(d);
+        } else if (tipo === 'ANIO') {
+          this.utilidadFechaDesde = `${hoy.slice(0, 4)}-01-01`;
+        }
+        this.render();
+      });
+    });
+
+    // Eventos Informe Animales NO Trabajados
+    const selFaltFinca = this.container.querySelector('#sel-faltantes-finca');
+    if (selFaltFinca) {
+      selFaltFinca.addEventListener('change', (e) => {
+        this.faltantesFincaId = e.target.value;
+        this.faltantesFechaDesde = '';
+        this.faltantesFechaHasta = '';
+        this.faltantesLote = 'todos';
+        this.render();
+      });
+    }
+    const selFaltTipo = this.container.querySelector('#sel-faltantes-tipo');
+    if (selFaltTipo) {
+      selFaltTipo.addEventListener('change', (e) => {
+        this.faltantesTipoTrabajo = e.target.value;
+        this.faltantesFechaDesde = '';
+        this.faltantesFechaHasta = '';
+        this.render();
+      });
+    }
+    const inFaltDesde = this.container.querySelector('#in-faltantes-desde');
+    if (inFaltDesde) {
+      inFaltDesde.addEventListener('change', (e) => {
+        this.faltantesFechaDesde = e.target.value;
+        if (!this.faltantesFechaHasta || this.faltantesFechaHasta < e.target.value) {
+          this.faltantesFechaHasta = e.target.value;
+        }
+        this.render();
+      });
+    }
+    const inFaltHasta = this.container.querySelector('#in-faltantes-hasta');
+    if (inFaltHasta) {
+      inFaltHasta.addEventListener('change', (e) => {
+        this.faltantesFechaHasta = e.target.value;
+        this.render();
+      });
+    }
+    const selFaltLote = this.container.querySelector('#sel-faltantes-lote');
+    if (selFaltLote) {
+      selFaltLote.addEventListener('change', (e) => {
+        this.faltantesLote = e.target.value;
+        this.render();
+      });
+    }
+    this.container.querySelectorAll('.btn-elegir-jornada-detectada').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const f = e.currentTarget.getAttribute('data-jornada-fecha');
+        if (f) {
+          this.faltantesFechaDesde = f;
+          this.faltantesFechaHasta = f;
+          this.render();
+        }
+      });
+    });
+    const inBusqFalt = this.container.querySelector('#in-buscar-dentro-faltantes');
+    if (inBusqFalt) {
+      inBusqFalt.addEventListener('input', (e) => {
+        this.faltantesBusqueda = e.target.value;
+        this.render();
+        const refoc = this.container.querySelector('#in-buscar-dentro-faltantes');
+        if (refoc && typeof refoc.focus === 'function') {
+          refoc.focus();
+          if (typeof refoc.setSelectionRange === 'function') {
+            const len = refoc.value.length;
+            refoc.setSelectionRange(len, len);
+          }
+        }
+      });
+    }
+    this.container.querySelectorAll('.sel-causa-faltante-terreno').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const k = e.currentTarget.getAttribute('data-causa-clave');
+        if (k) {
+          this.causasTerrenoMap[k] = e.currentTarget.value;
+        }
+      });
+    });
+    const btnPrintFalt = this.container.querySelector('#btn-imprimir-planilla-faltantes');
+    if (btnPrintFalt) {
+      btnPrintFalt.addEventListener('click', () => this.imprimirPlanillaFaltantesTerreno());
+    }
   }
 
   enlazarEventosTabla() {

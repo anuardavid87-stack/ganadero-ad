@@ -3960,9 +3960,9 @@ const htmlCuadriculaDestetes = cuadriculaDesteteTest.container.innerHTML;
 test(
   htmlCuadricula.includes('data-mod="destetes"') &&
   htmlCuadricula.includes('Destetes') &&
-  htmlCuadricula.includes('form-peso-fecha') &&
+  !htmlCuadricula.includes('form-peso-fecha') &&
   htmlCuadricula.includes('btn-manga-extraer-animal') &&
-  htmlCuadriculaDestetes.includes('form-destete-fecha'),
+  !htmlCuadriculaDestetes.includes('form-destete-fecha'),
   'CuadriculaMasiva: Incluye pestaña Destetes, selector explícito de fecha por evento y botón de extracción en brete'
 );
 
@@ -4112,7 +4112,7 @@ const todosModulosTienenEtiqueta = modulosYEtiquetas.every(({ mod, etiqueta }) =
   cuadriculaTrabajo.moduloActivo = mod;
   cuadriculaTrabajo.animalSeleccionado = animalesRazasMock[0];
   const formHtml = cuadriculaTrabajo.obtenerHtmlFormularioIngreso();
-  return formHtml.includes(etiqueta);
+  return !formHtml.includes(etiqueta);
 });
 
 test(
@@ -4485,7 +4485,7 @@ cuadriculaTrabajo.moduloActivo = 'extracciones';
 cuadriculaTrabajo.animalSeleccionado = animalesRazasMock[0];
 const formExtraerHtml = cuadriculaTrabajo.obtenerHtmlFormularioIngreso();
 test(
-  formExtraerHtml.includes('form-extraer-fecha') &&
+  !formExtraerHtml.includes('form-extraer-fecha') &&
   formExtraerHtml.includes('form-extraer-motivo') &&
   formExtraerHtml.includes('form-extraer-comprador') &&
   formExtraerHtml.includes('form-extraer-valor') &&
@@ -5896,7 +5896,7 @@ const { CATALOGO_INFORMES_GANADEROS, RAZAS_REFERENCIA_GANADERA } = await import(
 // 54.1: Verificar los 12 informes ganaderos especializados del catálogo y razas de referencia (incluyendo Simmental)
 test(
   Array.isArray(CATALOGO_INFORMES_GANADEROS) &&
-  CATALOGO_INFORMES_GANADEROS.length === 12 &&
+  CATALOGO_INFORMES_GANADEROS.length === 14 &&
   CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_leche') &&
   CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_gdp') &&
   CATALOGO_INFORMES_GANADEROS.some(i => i.id === 'ranking_peso') &&
@@ -6322,29 +6322,29 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   const selLeche2Ord = gridEnterTest.obtenerSelectoresNavegablesModulo();
 
   test(
-    selPesajes[0] === '#form-peso-fecha' &&
-    selPesajes.includes('#form-nuevo-peso') &&
-    selDestetes[0] === '#form-destete-fecha' &&
+    selPesajes[0] === '#form-nuevo-peso' &&
+    !selPesajes.includes('#form-peso-fecha') &&
+    !selDestetes.includes('#form-destete-fecha') &&
     selDestetes.includes('#form-destete-peso-madre') &&
     selDestetes.includes('#form-destete-peso') &&
-    selLeche1Ord.includes('#form-leche-am') &&
+    selLeche1Ord[0] === '#form-leche-am' &&
     !selLeche1Ord.includes('#form-leche-pm') &&
-    selLeche2Ord.includes('#form-leche-am') &&
+    selLeche2Ord[0] === '#form-leche-am' &&
     selLeche2Ord.includes('#form-leche-pm'),
-    'CuadriculaMasiva (Tecla Enter): Define orden secuencial exacto (Fecha -> Datos -> Guardar) adaptándose a 1 o 2 ordeños'
+    'CuadriculaMasiva (Tecla Enter): Salta directamente al Pesaje/Dato sin pasar por Fecha adaptándose a 1 o 2 ordeños'
   );
 
-  // 57.2: Simulación de avance paso a paso con Enter hasta guardar y devolver cursor a #input-tag-manga
+  // 57.2: Simulación de avance paso a paso con Enter directo en Peso -> CC -> Notas -> Guardar
   gridEnterTest.moduloActivo = 'pesajes';
   gridEnterTest.animalSeleccionado = animalesMangaTest[0];
   gridEnterTest.fechaJornada = '2026-10-15';
 
   const mockInputsMap = {};
   let focusedSelector = null;
-  ['#form-peso-fecha', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas', '#input-tag-manga'].forEach((sel) => {
+  ['#input-fecha-jornada-manga', '#form-nuevo-peso', '#form-condicion', '#form-peso-notas', '#input-tag-manga'].forEach((sel) => {
     mockInputsMap[sel] = {
       id: sel.replace('#', ''),
-      value: sel === '#form-peso-fecha' ? '2026-10-15' : (sel === '#form-nuevo-peso' ? '505' : (sel === '#form-condicion' ? '3.75' : '')),
+      value: sel === '#input-fecha-jornada-manga' ? '2026-10-15' : (sel === '#form-nuevo-peso' ? '505' : (sel === '#form-condicion' ? '3.75' : '')),
       offsetParent: {},
       focus: () => { focusedSelector = sel; },
       select: () => {},
@@ -6354,10 +6354,7 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
 
   gridEnterTest.container.querySelector = (sel) => mockInputsMap[sel] || new MockDomElement();
   gridEnterTest.enfocarPrimerCampoFormulario();
-  const primerFocoEsFecha = focusedSelector === '#form-peso-fecha';
-
-  gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-peso-fecha']);
-  const segundoFocoEsPeso = focusedSelector === '#form-nuevo-peso';
+  const primerFocoEsPeso = focusedSelector === '#form-nuevo-peso';
 
   gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-nuevo-peso']);
   const tercerFocoEsCondicion = focusedSelector === '#form-condicion';
@@ -6369,13 +6366,12 @@ console.log('\n--- 57. Pruebas de Flujo Enter, Destete Madre+Cría, 1/2 Ordeños
   gridEnterTest.avanzarConEnterEnFormulario(mockInputsMap['#form-peso-notas']);
 
   test(
-    primerFocoEsFecha &&
-    segundoFocoEsPeso &&
+    primerFocoEsPeso &&
     tercerFocoEsCondicion &&
     cuartoFocoEsNotas &&
     ultimoGuardadoIndividual !== null &&
     ultimoGuardadoIndividual.registros[0].pesoNuevo === 505,
-    'CuadriculaMasiva (Sin Mouse): Avanza con Enter por Fecha -> Peso -> CC -> Notas y al final guarda automáticamente'
+    'CuadriculaMasiva (Sin Mouse): Salta directo con Enter a Peso -> CC -> Notas y al final guarda automáticamente'
   );
 
   // 57.3: Control Leche con 1 Ordeño (1 casilla) vs Doble Ordeño (2 casillas)
@@ -7942,6 +7938,195 @@ console.log('\n--- 62. Pruebas de Resiliencia Móvil (QuotaExceededError y Condi
   test(
     descargasSinCambios === 0 && descargasConCambios === 1,
     'Optimización Zero-Waste Egress (Heartbeat Sonda Liviana): Omite descarga completa cuando no hay cambios remotos y descarga sólo cuando la sonda detecta novedades'
+  );
+}
+
+// ============================================================================
+// 62. PRUEBAS DE NUEVAS MEJORAS: FLUJO ENTER SIN FECHA, DUPLICADOS, OFFLINE,
+//     INVERSIONES DIFERIDAS, UTILIDAD POR FINCA Y ANIMALES NO TRABAJADOS
+// ============================================================================
+{
+  console.log('\n--- 62. Flujo Manga, Modo Offline, Inversiones Diferidas, Utilidad por Finca y Animales No Trabajados ---');
+
+  const { obtenerFechaHoyLocal } = await import('./frontend/src/core/zootecnia.js');
+  const { OfflineFieldManager } = await import('./frontend/src/core/offlineManager.js');
+  const {
+    calcularAmortizacionInversionEnPeriodo,
+    calcularInformeUtilidadPorFinca,
+    calcularAnimalesNoTrabajados
+  } = await import('./frontend/src/core/finanzas.js');
+
+  // 62.1: Corrección de fecha estancada (ej. 12/11/2026) y eliminación de selector de ordeño de la cabecera de Manga
+  const gridFechaRoll = new CuadriculaMasiva({
+    containerId: 'grid-fecha-roll-test',
+    getAnimales: () => [{ id: 'A-5937', identificacionTag: '5937', estadoVida: 'activo', fincaId: 'FIN-W' }],
+    getLotes: () => ['General'],
+    getFincaActiva: () => ({ id: 'FIN-W', nombre: 'Waterloo' }), // sin numeroOrdenos explícito => por defecto 1 ordeño
+    getPesajes: () => [
+      { id: 'PES-1', fincaId: 'FIN-W', animalId: 'A-5937', tag: '5937', fecha: obtenerFechaHoyLocal(), pesoNuevo: 420 }
+    ]
+  });
+  gridFechaRoll.container = new MockDomElement('grid-fecha-roll-test');
+  // Simular app que había quedado abierta desde el 12 de noviembre
+  gridFechaRoll.fechaJornada = '2026-11-12';
+  gridFechaRoll._diaBaseSistema = '2026-11-12';
+  gridFechaRoll.render();
+  const htmlHeaderManga = gridFechaRoll.container.innerHTML;
+
+  test(
+    gridFechaRoll.fechaJornada === obtenerFechaHoyLocal() &&
+    gridFechaRoll.esUnSoloOrdeno() === true &&
+    !htmlHeaderManga.includes('select-ordeno-manga-header'),
+    'Fecha del Sistema & Ordeño por Defecto: Actualiza automáticamente fechas estancadas (ej. 12/11) al día actual, quita ordeño de Manga y deja 1 ordeño por defecto'
+  );
+
+  // 62.2: Aviso cuando se ingresa un animal ya ingresado en el mismo trabajo
+  gridFechaRoll.seleccionarAnimal('5937');
+  const dupInfo = gridFechaRoll.verificarAnimalYaIngresadoEnTrabajo(gridFechaRoll.animalSeleccionado);
+  const htmlAnimalRepetido = gridFechaRoll.obtenerHtmlFormularioIngreso();
+
+  test(
+    dupInfo.yaIngresado === true &&
+    htmlAnimalRepetido.includes('alerta-animal-repetido-trabajo') &&
+    htmlAnimalRepetido.includes('Animal ya ingresado en este mismo trabajo'),
+    'Control de Duplicados en Manga: Detecta y muestra alerta inmediata cuando se ingresa un animal ya registrado en el mismo trabajo'
+  );
+
+  // 62.3: Modo Sin Conexión (OfflineFieldManager): cola persistente y limpieza tras envío a BD
+  const offlineMgr = new OfflineFieldManager();
+  const mockStateOffline = {
+    empresaActivaId: 'EMP-01',
+    fincaActivaId: 'FIN-W',
+    fincas: [{ id: 'FIN-W', nombre: 'Waterloo' }],
+    animales: [{ id: 'A-1', identificacionTag: '101', fincaId: 'FIN-W', estadoVida: 'activo' }],
+    pesajes: []
+  };
+  await offlineMgr.guardarSnapshotInventario(mockStateOffline);
+  offlineMgr.registrarCambioPendiente(mockStateOffline, {
+    modulo: 'pesajes',
+    tag: '101',
+    animalId: 'A-1',
+    fincaId: 'FIN-W',
+    descripcion: 'Pesaje 101: 455 kg'
+  });
+  const resumenAntesSync = offlineMgr.obtenerResumenOffline(mockStateOffline, false);
+  const limpiados = offlineMgr.limpiarColaSincronizada(mockStateOffline);
+  const resumenDespuesSync = offlineMgr.obtenerResumenOffline(mockStateOffline, true);
+
+  test(
+    resumenAntesSync.online === false &&
+    resumenAntesSync.animalesLocales === 1 &&
+    resumenAntesSync.pendientesCount === 1 &&
+    limpiados === 1 &&
+    resumenDespuesSync.pendientesCount === 0 &&
+    resumenDespuesSync.hayCambiosPendientes === false,
+    'Modo Sin Conexión (OfflineFieldManager): Descarga snapshot de inventario, encola cambios realizados sin señal y limpia la cola al enviar a la base de datos'
+  );
+
+  // 62.4: Contabilidad — Inversiones diferidas en N meses (no entra todo el costo en un solo mes)
+  const hoyRef = obtenerFechaHoyLocal();
+  const resumenContabDif = calcularResumenContableFinca({
+    fincas: [{ id: 'FIN-W', nombre: 'Waterloo', hectareas: 200 }],
+    animales: [{ id: 'A-1', fincaId: 'FIN-W', estadoVida: 'activo' }],
+    fincaFiltroId: 'FIN-W',
+    periodoFiltro: 'MES_ACTUAL',
+    movimientos: [
+      { id: 'MOV-ING-1', fincaId: 'FIN-W', fecha: hoyRef, tipo: 'ingreso', categoria: 'Otros', concepto: 'Ingreso mes', monto: 5000000 },
+      { id: 'MOV-INV-1', fincaId: 'FIN-W', fecha: hoyRef, tipo: 'inversion_diferida', categoria: 'Infraestructura ganadera', concepto: 'Báscula electrónica', monto: 12000000, plazoMeses: 12 }
+    ]
+  });
+
+  test(
+    resumenContabDif.totalCapexInvertido === 12000000 &&
+    resumenContabDif.totalCuotaInversionesDiferidas === 1000000 &&
+    resumenContabDif.totalSaldoPorDiferir === 11000000 &&
+    resumenContabDif.utilidadNeta === 4000000,
+    'ModuloContabilidad (Inversiones Diferidas): Difiere una inversión de $12.000.000 a 12 meses aplicando sólo $1.000.000 en el mes actual'
+  );
+
+  // 62.5: Informe de Utilidad por Finca — Caso A: Sin pesajes de leche (sin ordeño = $0) + Ganancia de peso + Parto de 30 kg
+  const utilSinLeche = calcularInformeUtilidadPorFinca({
+    finca: { id: 'FIN-CEBA', nombre: 'Waterloo Ceba', areaHa: 100, precioLecheLitro: 2500, precioCarneKgPie: 9000 },
+    animales: [
+      { id: 'B-1', identificacionTag: 'B-1', fincaId: 'FIN-CEBA', estadoVida: 'activo', ultimoPesoKg: 400, gdpPromedioGDia: 500 },
+      { id: 'B-2', identificacionTag: 'B-2', fincaId: 'FIN-CEBA', estadoVida: 'activo', ultimoPesoKg: 380 } // sin GDP individual: hereda último dato de la finca (500 g/d)
+    ],
+    pesajes: [],
+    operacionesDiarias: [
+      { id: 'OP-PARTO-1', fincaId: 'FIN-CEBA', accion: 'partos', fecha: '2026-11-10', tag: 'B-1', pesoCria: 30, tagCria: 'CRIA-B1' }
+    ],
+    movimientosContables: [
+      { id: 'MC-1', fincaId: 'FIN-CEBA', fecha: '2026-11-05', tipo: 'costo_directo', categoria: 'Sanidad y medicamentos', monto: 200000 },
+      { id: 'MC-2', fincaId: 'FIN-CEBA', fecha: '2026-11-01', tipo: 'inversion_diferida', concepto: 'Cerca eléctrica', monto: 2400000, plazoMeses: 12 }
+    ],
+    fechaDesde: '2026-11-01',
+    fechaHasta: '2026-11-30',
+    pesoBaseNacimientoKg: 30
+  });
+
+  // 2 animales × 0.5 kg/d × 30 días = 30 kg ganados × $9.000 = $270.000
+  // 1 parto de 30 kg × $9.000 = $270.000
+  // Leche = $0 (sin ordeño)
+  // Costos = $200.000 + Cuota inversión ($200.000) = $400.000 -> Utilidad Neta = $140.000
+  test(
+    utilSinLeche.leche.tieneOrdeno === false &&
+    utilSinLeche.leche.ingresoLeche === 0 &&
+    utilSinLeche.carne.kilosGanadosGanado === 30 &&
+    utilSinLeche.carne.ingresoGananciaPeso === 270000 &&
+    utilSinLeche.partos.kilosPartosPeriodo === 30 &&
+    utilSinLeche.partos.ingresoPartos === 270000 &&
+    utilSinLeche.egresos.cuotaInversionesDiferidas === 200000 &&
+    utilSinLeche.resultados.utilidadNeta === 140000,
+    'Informe Utilidad por Finca: Detecta ausencia de ordeño ($0 leche), suma ganancia de peso con respaldo al último dato de la finca, valoriza parto (30 kg × $/kg) y descuenta costos y diferidos'
+  );
+
+  // 62.6: Informe de Animales NO Trabajados — Ejemplo exacto Waterloo (250 en sistema, 200 pesados => 50 faltantes)
+  const animalesWaterloo250 = [];
+  const pesajesWaterloo200 = [];
+  for (let i = 1; i <= 250; i++) {
+    const tag = `W-${String(i).padStart(3, '0')}`;
+    animalesWaterloo250.push({
+      id: `ANM-W-${i}`,
+      fincaId: 'FIN-WATERLOO',
+      identificacionTag: tag,
+      nombreAlias: `Búfala ${i}`,
+      especie: 'bufalino',
+      lote: i <= 220 ? 'Lote General' : 'Lote Monte',
+      estadoVida: 'activo',
+      ultimoPesoKg: 450,
+      fechaUltimoPesaje: i <= 200 ? '2026-11-16' : '2026-09-15'
+    });
+    if (i <= 200) {
+      pesajesWaterloo200.push({
+        id: `PES-W-${i}`,
+        fincaId: 'FIN-WATERLOO',
+        animalId: `ANM-W-${i}`,
+        tag,
+        fecha: '2026-11-16',
+        pesoNuevo: 465
+      });
+    }
+  }
+
+  const auditFaltantesWaterloo = calcularAnimalesNoTrabajados({
+    fincaId: 'FIN-WATERLOO',
+    fincaNombre: 'Waterloo',
+    animales: animalesWaterloo250,
+    pesajes: pesajesWaterloo200,
+    tipoTrabajo: 'pesajes',
+    fechaDesde: '2026-11-16',
+    fechaHasta: '2026-11-16'
+  });
+
+  test(
+    auditFaltantesWaterloo.totalSistema === 250 &&
+    auditFaltantesWaterloo.totalTrabajados === 200 &&
+    auditFaltantesWaterloo.totalFaltantes === 50 &&
+    auditFaltantesWaterloo.porcentajeCobertura === 80 &&
+    auditFaltantesWaterloo.faltantes.some((f) => f.tag === 'W-201') &&
+    auditFaltantesWaterloo.faltantes.some((f) => f.tag === 'W-250') &&
+    !auditFaltantesWaterloo.faltantes.some((f) => f.tag === 'W-001'),
+    'Informe Animales NO Trabajados (Waterloo 250 vs 200): Identifica exactamente los 50 ejemplares faltantes con su lote para búsqueda en terreno'
   );
 }
 

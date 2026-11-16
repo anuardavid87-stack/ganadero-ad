@@ -501,6 +501,7 @@ export class SupabaseSyncService {
       tenantFromUbic = matchTenant[1].trim();
       rawUbicacion = matchTenant[2];
     }
+    const numOrdRow = Number(row.numero_ordenos ?? row.numeroOrdenos) === 2 ? 2 : 1;
     return {
       id: row.id,
       empresaId: tenantFromUbic || row.empresa_id || null,
@@ -508,8 +509,11 @@ export class SupabaseSyncService {
       nombre: row.nombre,
       ubicacion: rawUbicacion,
       areaHa: Number(row.area_ha || 0),
+      hectareas: Number(row.area_ha || row.hectareas || 0),
       precioLecheLitro: Number(row.precio_leche_litro || 2450),
-      precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900)
+      precioCarneKgPie: Number(row.precio_carne_kg_pie || 8900),
+      numeroOrdenos: numOrdRow,
+      tipoOrdeno: numOrdRow === 2 ? 'doble_ordeno' : 'un_ordeno'
     };
   }
 
@@ -682,7 +686,7 @@ export class SupabaseSyncService {
           if (f && f.id) {
             if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
             if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
-              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 1 || f.tipoOrdeno === 'un_ordeno' ? 1 : 2;
+              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
             }
           }
         });
@@ -1213,9 +1217,9 @@ export class SupabaseSyncService {
         if (det.fincasOrdenosMap && typeof det.fincasOrdenosMap === 'object') {
           fincas.forEach(f => {
             if (det.fincasOrdenosMap[f.id] !== undefined) {
-              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 1 ? 1 : 2;
+              const numOrd = Number(det.fincasOrdenosMap[f.id]) === 2 ? 2 : 1;
               f.numeroOrdenos = numOrd;
-              f.tipoOrdeno = numOrd === 1 ? 'un_ordeno' : 'doble_ordeno';
+              f.tipoOrdeno = numOrd === 2 ? 'doble_ordeno' : 'un_ordeno';
             }
           });
         }

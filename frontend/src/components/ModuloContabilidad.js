@@ -7,6 +7,9 @@
  *  3. Nómina, Seguridad Social (EPS, AFP, ARL, Caja) y Prestaciones (Prima, Cesantías, Intereses, Vacaciones)
  */
 
+import { calcularAmortizacionInversionEnPeriodo } from '../core/finanzas.js';
+import { obtenerFechaHoyLocal } from '../core/zootecnia.js';
+
 export const CATEGORIAS_CONTABILIDAD = {
   ingreso: [
     'Venta de ganado (novillos, destetos, descarte)',
@@ -28,6 +31,15 @@ export const CATEGORIAS_CONTABILIDAD = {
     'Honorarios profesionales',
     'Mantenimiento de vehículos/maquinaria',
     'Varios'
+  ],
+  inversion_diferida: [
+    'Infraestructura ganadera (corrales, manga, báscula, cercas)',
+    'Maquinaria y equipos (tractor, picapasto, guadaña, tanque frío)',
+    'Establecimiento / renovación de pasturas y silvopastoril',
+    'Acueductos ganaderos, pozos y sistemas de riego',
+    'Mejoramiento genético (toros reproductores, embriones)',
+    'Construcciones, bodegas y energía solar',
+    'Otra inversión diferida'
   ],
   nomina: [
     'Nómina, Seguridad Social y Prestaciones'
@@ -145,6 +157,7 @@ export function calcularLiquidacionNomina({
  */
 export function calcularResumenContableFinca({
   movimientos = [],
+  inversiones = [],
   pagosNomina = [],
   animales = [],
   fincas = [],
@@ -160,12 +173,12 @@ export function calcularResumenContableFinca({
     return esConsolidado ? true : itemFincaId === fincaFiltroId;
   };
 
+  const hoyLocalIso = obtenerFechaHoyLocal();
   const cumplePeriodo = (fechaStr) => {
     if (!periodoFiltro || periodoFiltro === 'ALL' || !fechaStr) return true;
     const f = String(fechaStr).slice(0, 10);
-    const hoy = new Date();
-    const mesActualPrefix = hoy.toISOString().slice(0, 7);
-    const anioActualPrefix = hoy.toISOString().slice(0, 4);
+    const mesActualPrefix = hoyLocalIso.slice(0, 7);
+    const anioActualPrefix = hoyLocalIso.slice(0, 4);
 
     if (periodoFiltro === 'MES_ACTUAL') {
       return f.startsWith(mesActualPrefix);
@@ -176,7 +189,7 @@ export function calcularResumenContableFinca({
     if (periodoFiltro === 'ULTIMOS_90') {
       const lim = new Date();
       lim.setDate(lim.getDate() - 90);
-      return f >= lim.toISOString().slice(0, 10);
+      return f >= obtenerFechaHoyLocal(lim);
     }
     if (/^\d{4}-\d{2}$/.test(periodoFiltro)) {
       return f.startsWith(periodoFiltro);
@@ -188,7 +201,13 @@ export function calcularResumenContableFinca({
   const movsFiltrados = (movimientos || []).filter((m) => {
     if (!m) return false;
     const fid = m.fincaId || m.finca_id;
-    return perteneceAFinca(fid) && cumplePeriodo(m.fecha);
+    if (!perteneceAFinca(fid)) return false;
+    // Las inversiones diferidas activas se incluyen aunque su compra haya sido en meses anteriores
+    if (String(m.tipo || '').toLowerCase() === 'inversion_diferida') {
+      const calcInv = calcularAmortizacionInversionEnPeriodo(m, { periodoFiltro, fechaReferencia: hoyLocalIso });
+      return calcInv.impactoPeriodo > 0 || cumplePeriodo(m.fecha);
+    }
+    return cumplePeriodo(m.fecha);
   });
 
   // Asegurar que pagos de nómina que no tengan aún su espejo en movimientos se contabilicen sin duplicar
@@ -205,10 +224,56 @@ export function calcularResumenContableFinca({
   let totalCostosDirectos = 0;
   let totalGastosAdmin = 0;
   let totalNominaSeguridadSocial = 0;
+  let totalCuotaInversionesDiferidas = 0;
+  let totalCapexInvertido = 0;
+  let totalSaldoPorDiferir = 0;
   let cuentasPorPagar = 0;
   let cuentasPorCobrar = 0;
 
   const porCategoriaMap = new Map();
+  const inversionesDiferidasMap = new Map();
+
+  for (const m of (movimientos || [])) {
+    if (!m || String(m.tipo || '').toLowerCase() !== 'inversion_diferida') continue;
+    const fid = m.fincaId || m.finca_id;
+    if (!perteneceAFinca(fid)) continue;
+    inversionesDiferidasMap.set(m.id, m);
+  }
+  for (const inv of (inversiones || [])) {
+    if (!inv) continue;
+    const fid = inv.fincaId || inv.finca_id;
+    if (!perteneceAFinca(fid)) continue;
+    const key = inv.movimientoContableId || inv.id;
+    if (!inversionesDiferidasMap.has(key)) {
+      inversionesDiferidasMap.set(key, {
+        ...inv,
+        tipo: 'inversion_diferida',
+        concepto: inv.concepto || inv.nombreInversion || inv.descripcion || 'Inversión Diferida',
+        monto: Number(inv.monto ?? inv.montoTotalInversion ?? inv.montoTotal ?? 0),
+        plazoMeses: Math.max(1, parseInt(inv.plazoMeses ?? inv.plazoMesesDiferido ?? 1, 10) || 1),
+        fecha: inv.fecha || inv.fechaInicio || hoyLocalIso
+      });
+    }
+  }
+
+  const inversionesDiferidasDetalle = [];
+  for (const inv of inversionesDiferidasMap.values()) {
+    const calc = calcularAmortizacionInversionEnPeriodo(inv, {
+      periodoFiltro,
+      fechaReferencia: hoyLocalIso
+    });
+    totalCapexInvertido += calc.montoTotal;
+    totalSaldoPorDiferir += calc.saldoPorDiferir;
+    if (calc.impactoPeriodo > 0) {
+      totalCuotaInversionesDiferidas += calc.impactoPeriodo;
+      const catInv = 'Inversiones Diferidas (Cuota)';
+      porCategoriaMap.set(catInv, (porCategoriaMap.get(catInv) || 0) + calc.impactoPeriodo);
+    }
+    inversionesDiferidasDetalle.push({
+      ...inv,
+      ...calc
+    });
+  }
 
   for (const m of movsFiltrados) {
     const monto = Math.max(0, Number(m.monto) || 0);
@@ -233,6 +298,10 @@ export function calcularResumenContableFinca({
         cuentasPorPagar += monto;
       }
       porCategoriaMap.set(cat, (porCategoriaMap.get(cat) || 0) + monto);
+    } else if (tipo === 'inversion_diferida') {
+      if ((estado.includes('pagar') || estado.includes('pendiente')) && cumplePeriodo(m.fecha)) {
+        cuentasPorPagar += monto;
+      }
     } else if (tipo === 'nomina') {
       totalNominaSeguridadSocial += monto;
       if (estado.includes('pagar') || estado.includes('pendiente')) {
@@ -251,7 +320,7 @@ export function calcularResumenContableFinca({
   }
 
   const totalCostosOperativos = totalCostosDirectos + totalGastosAdmin;
-  const totalEgresos = totalCostosOperativos + totalNominaSeguridadSocial;
+  const totalEgresos = totalCostosOperativos + totalNominaSeguridadSocial + totalCuotaInversionesDiferidas;
   const utilidadBruta = totalIngresos - totalCostosDirectos;
   const utilidadNeta = totalIngresos - totalEgresos;
   const margenNetoPct = totalIngresos > 0
@@ -320,8 +389,21 @@ export function calcularResumenContableFinca({
     const monto = Math.max(0, Number(m.monto) || 0);
     if (m.tipo === 'ingreso') {
       bucket.ingresos += monto;
-    } else {
+    } else if (m.tipo !== 'inversion_diferida') {
       bucket.egresos += monto;
+    }
+  }
+
+  // Sumar a cada mes de la serie únicamente la cuota diferida mensual activa de cada inversión
+  for (const inv of inversionesDiferidasDetalle) {
+    for (const [ym, bucket] of mesesMap.entries()) {
+      const calcMes = calcularAmortizacionInversionEnPeriodo(inv, {
+        periodoFiltro: ym,
+        fechaReferencia: hoyLocalIso
+      });
+      if (calcMes.impactoPeriodo > 0) {
+        bucket.egresos += calcMes.impactoPeriodo;
+      }
     }
   }
 
@@ -337,6 +419,10 @@ export function calcularResumenContableFinca({
     totalGastosAdmin,
     totalCostosOperativos,
     totalNominaSeguridadSocial,
+    totalCuotaInversionesDiferidas,
+    totalCapexInvertido,
+    totalSaldoPorDiferir,
+    inversionesDiferidasDetalle,
     totalEgresos,
     utilidadBruta,
     utilidadNeta,
@@ -361,6 +447,7 @@ export class ModuloContabilidad {
     getFincaActiva,
     getAnimales,
     getMovimientos,
+    getInversiones,
     getTrabajadores,
     getPagosNomina,
     getRol,
@@ -377,6 +464,7 @@ export class ModuloContabilidad {
     this.getFincaActiva = getFincaActiva || (() => null);
     this.getAnimales = getAnimales || (() => []);
     this.getMovimientos = getMovimientos || (() => []);
+    this.getInversiones = getInversiones || (() => []);
     this.getTrabajadores = getTrabajadores || (() => []);
     this.getPagosNomina = getPagosNomina || (() => []);
     this.getRol = getRol || (() => 'administrador');
@@ -425,6 +513,7 @@ export class ModuloContabilidad {
     const fincas = this.getFincas() || [];
     const animales = this.getAnimales() || [];
     const movimientos = this.getMovimientos() || [];
+    const inversiones = this.getInversiones() || [];
     const trabajadores = this.getTrabajadores() || [];
     const pagosNomina = this.getPagosNomina() || [];
     const rol = (this.getRol() || 'administrador').toLowerCase();
@@ -445,6 +534,7 @@ export class ModuloContabilidad {
 
     const resumen = calcularResumenContableFinca({
       movimientos,
+      inversiones,
       pagosNomina,
       animales,
       fincas,
@@ -473,6 +563,7 @@ export class ModuloContabilidad {
 
     const mostrarDashboard = this.subvistaActiva === 'integral' || this.subvistaActiva === 'dashboard';
     const mostrarMovimientos = this.subvistaActiva === 'integral' || this.subvistaActiva === 'movimientos';
+    const mostrarInversiones = this.subvistaActiva === 'integral' || this.subvistaActiva === 'inversiones';
     const mostrarNomina = this.subvistaActiva === 'integral' || this.subvistaActiva === 'nomina';
 
     this.container.innerHTML = `
@@ -598,6 +689,17 @@ export class ModuloContabilidad {
               }"
             >
               <span>🧾 Ingresos, Costos Directos & Gastos (${resumen.movimientosFiltrados.length})</span>
+            </button>
+            <button
+              type="button"
+              data-subvista="inversiones"
+              class="btn-subvista-contab px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                this.subvistaActiva === 'inversiones'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }"
+            >
+              <span>🏗️ Inversiones Diferidas (${resumen.inversionesDiferidasDetalle.length})</span>
             </button>
             <button
               type="button"
@@ -750,6 +852,16 @@ export class ModuloContabilidad {
         }) : ''}
 
         <!-- ================================================================== -->
+        <!-- SECCIÓN 2.5: SUBMÓDULO DE INVERSIONES DIFERIDAS EN MESES           -->
+        <!-- ================================================================== -->
+        ${mostrarInversiones ? this.renderSeccionInversionesDiferidas({
+          fincas,
+          fincaDefaultForm,
+          resumen,
+          esSoloConsulta
+        }) : ''}
+
+        <!-- ================================================================== -->
         <!-- SECCIÓN 3: SUBMÓDULO DE NÓMINA, SEGURIDAD SOCIAL Y PRESTACIONES    -->
         <!-- ================================================================== -->
         ${mostrarNomina ? this.renderSeccionNomina({
@@ -835,6 +947,11 @@ export class ModuloContabilidad {
               <div class="flex items-center justify-between px-2.5 py-2 text-slate-700">
                 <span>(-) Nómina, Seguridad Social (EPS/AFP/ARL) y Prestaciones</span>
                 <span class="font-bold text-blue-700 bovi-kpi-value">-${formatearMonedaCOP(resumen.totalNominaSeguridadSocial)}</span>
+              </div>
+
+              <div class="flex items-center justify-between px-2.5 py-2 text-slate-700 bg-purple-50/70 rounded-xl border border-purple-200/70">
+                <span>(-) Cuota Diferida de Inversiones (${resumen.inversionesDiferidasDetalle.length} activas)</span>
+                <span class="font-bold text-purple-800 bovi-kpi-value">-${formatearMonedaCOP(resumen.totalCuotaInversionesDiferidas)}</span>
               </div>
             </div>
           </div>
@@ -1010,6 +1127,7 @@ export class ModuloContabilidad {
                 <option value="ingreso" ${this.tipoMovimientoForm === 'ingreso' ? 'selected' : ''}>🟢 Ingreso Agropecuario</option>
                 <option value="costo_directo" ${this.tipoMovimientoForm === 'costo_directo' ? 'selected' : ''}>🟡 Costo Directo (Producción)</option>
                 <option value="gasto_admin" ${this.tipoMovimientoForm === 'gasto_admin' ? 'selected' : ''}>🔴 Gasto Fijo / Administrativo</option>
+                <option value="inversion_diferida" ${this.tipoMovimientoForm === 'inversion_diferida' ? 'selected' : ''}>🏗️ Inversión Diferida (Diferir en Meses)</option>
               </select>
             </div>
 
@@ -1085,6 +1203,25 @@ export class ModuloContabilidad {
               />
             </div>
 
+            <div id="box-contab-plazo-diferido" class="sm:col-span-2 lg:col-span-3 p-3 rounded-xl bg-purple-50 border border-purple-200 ${this.tipoMovimientoForm === 'inversion_diferida' ? '' : 'hidden'}">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div>
+                  <label for="contab-mov-plazo-meses" class="block font-bold text-purple-950 mb-1">⏱️ Tiempo a Diferir (Meses) *</label>
+                  <input
+                    type="number"
+                    id="contab-mov-plazo-meses"
+                    value="12"
+                    min="1"
+                    max="240"
+                    class="w-full px-3 py-1.5 rounded-xl border border-purple-300 bg-white font-black text-purple-950"
+                  />
+                </div>
+                <div id="preview-cuota-diferida-contab" class="text-[11px] text-purple-900 font-semibold">
+                  El costo total se distribuirá mensualmente para que no entre todo en un solo mes.
+                </div>
+              </div>
+            </div>
+
             <div class="sm:col-span-2 lg:col-span-3 flex items-end">
               <button
                 type="submit"
@@ -1096,6 +1233,157 @@ export class ModuloContabilidad {
             </div>
           </form>
         `}
+      </div>
+    `;
+  }
+
+  renderSeccionInversionesDiferidas({ fincas, fincaDefaultForm, resumen, esSoloConsulta }) {
+    const hoyIso = obtenerFechaHoyLocal();
+    const catsInv = CATEGORIAS_CONTABILIDAD.inversion_diferida || [];
+    const listaInvs = resumen.inversionesDiferidasDetalle || [];
+
+    return `
+      <div class="bovi-agrotech-card bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200">
+          <div>
+            <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+              <span>🏗️ Registro y Control de Inversiones Diferidas en el Tiempo</span>
+            </h3>
+            <p class="text-xs text-slate-600 mt-0.5">
+              Registra inversiones de infraestructura, equipos, pasturas o genética e indica el <strong>número de meses a diferir</strong> para que el costo se reparta mensualmente y no golpee todo en un solo mes.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="px-3 py-1 rounded-xl bg-purple-50 border border-purple-200 font-bold text-purple-900">
+              Total Invertido: ${formatearMonedaCOP(resumen.totalCapexInvertido)}
+            </span>
+            <span class="px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-900">
+              Cuota Período: ${formatearMonedaCOP(resumen.totalCuotaInversionesDiferidas)}
+            </span>
+            <span class="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 font-bold text-amber-900">
+              Saldo por Diferir: ${formatearMonedaCOP(resumen.totalSaldoPorDiferir)}
+            </span>
+          </div>
+        </div>
+
+        ${!esSoloConsulta ? `
+          <form id="form-contabilidad-inversion-rapida" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 text-xs p-4 rounded-2xl bg-slate-50 border border-slate-200">
+            <div>
+              <label for="inv-contab-fecha" class="block font-bold text-slate-700 mb-1">Fecha Inversión *</label>
+              <input type="date" id="inv-contab-fecha" value="${hoyIso}" required class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="inv-contab-finca" class="block font-bold text-slate-700 mb-1">Finca Asignada *</label>
+              <select id="inv-contab-finca" required class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+                ${fincas.map((f) => `
+                  <option value="${this.escape(f.id)}" ${f.id === fincaDefaultForm ? 'selected' : ''}>${this.escape(f.nombre)}</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="lg:col-span-2">
+              <label for="inv-contab-categoria" class="block font-bold text-slate-700 mb-1">Rubro de Inversión *</label>
+              <select id="inv-contab-categoria" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+                ${catsInv.map((c) => `<option value="${this.escape(c)}">${this.escape(c)}</option>`).join('')}
+              </select>
+            </div>
+
+            <div>
+              <label for="inv-contab-monto" class="block font-bold text-slate-700 mb-1">Monto Total ($ COP) *</label>
+              <input type="number" id="inv-contab-monto" required min="1" step="any" placeholder="Ej. 12000000" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-black text-slate-800 bovi-kpi-value" />
+            </div>
+
+            <div>
+              <label for="inv-contab-plazo" class="block font-bold text-purple-900 mb-1">⏱️ Meses a Diferir *</label>
+              <input type="number" id="inv-contab-plazo" required value="12" min="1" max="240" class="w-full px-3 py-2 rounded-xl border-2 border-purple-400 bg-white font-black text-purple-950 text-center" />
+            </div>
+
+            <div class="sm:col-span-2 lg:col-span-3">
+              <label for="inv-contab-concepto" class="block font-bold text-slate-700 mb-1">Descripción de la Inversión *</label>
+              <input type="text" id="inv-contab-concepto" required placeholder="Ej. Construcción corral de manejo, compra picapasto, renovación 15 Ha Brachiaria..." class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div>
+              <label for="inv-contab-tercero" class="block font-bold text-slate-700 mb-1">Proveedor / Contratista</label>
+              <input type="text" id="inv-contab-tercero" placeholder="Ej. Casa Toro / Ferretería..." class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-800" />
+            </div>
+
+            <div class="sm:col-span-2 flex flex-col justify-end gap-1.5">
+              <div id="inv-contab-cuota-preview" class="text-[11px] font-bold text-purple-900 bg-purple-100/70 px-3 py-1 rounded-lg border border-purple-200">
+                Cuota mensual estimada: $0 / mes
+              </div>
+              <button type="submit" id="btn-guardar-inversion-diferida" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-sm">
+                + Registrar Inversión Diferida
+              </button>
+            </div>
+          </form>
+        ` : ''}
+
+        <!-- CRONOGRAMA DE INVERSIONES DIFERIDAS -->
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 uppercase text-[10px] font-black text-slate-700 border-b border-slate-200">
+              <tr>
+                <th class="p-3">Inicio → Fin</th>
+                <th class="p-3">Finca</th>
+                <th class="p-3">Inversión & Rubro</th>
+                <th class="p-3 text-right">Monto Total</th>
+                <th class="p-3 text-center">Tiempo Diferido</th>
+                <th class="p-3 text-right">Cuota / Mes</th>
+                <th class="p-3 text-right">Saldo por Diferir</th>
+                <th class="p-3 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${listaInvs.length > 0 ? listaInvs.map((inv) => {
+                const fObj = fincas.find((f) => f.id === (inv.fincaId || inv.finca_id));
+                return `
+                  <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
+                      <div>${this.escape(inv.mesInicio)} → ${this.escape(inv.mesFin)}</div>
+                      <div class="text-[10px] text-slate-600">Mes ${inv.mesesTranscurridos} de ${inv.plazoMeses} (${inv.porcentajeAvance}%)</div>
+                    </td>
+                    <td class="p-3 font-bold text-slate-800 whitespace-nowrap">
+                      🏡 ${this.escape(fObj ? fObj.nombre : (inv.fincaNombre || inv.fincaId))}
+                    </td>
+                    <td class="p-3">
+                      <div class="font-bold text-slate-800">${this.escape(inv.concepto)}</div>
+                      <div class="text-[11px] text-slate-600">${this.escape(inv.categoria || 'Inversión')}</div>
+                    </td>
+                    <td class="p-3 text-right font-bold text-slate-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.montoTotal)}
+                    </td>
+                    <td class="p-3 text-center whitespace-nowrap">
+                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                        ${inv.plazoMeses} ${inv.plazoMeses === 1 ? 'mes' : 'meses'}
+                      </span>
+                    </td>
+                    <td class="p-3 text-right font-black text-purple-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.cuotaMensual)}/mes
+                    </td>
+                    <td class="p-3 text-right font-bold text-amber-800 bovi-kpi-value whitespace-nowrap">
+                      ${formatearMonedaCOP(inv.saldoPorDiferir)}
+                    </td>
+                    <td class="p-3 text-center">
+                      ${!esSoloConsulta && inv.id ? `
+                        <button type="button" data-eliminar-movimiento="${this.escape(inv.id)}" class="btn-eliminar-movimiento-contab px-2 py-1 rounded-lg text-rose-700 hover:bg-rose-50 font-bold cursor-pointer" title="Eliminar inversión diferida">
+                          🗑️
+                        </button>
+                      ` : '—'}
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
+                <tr>
+                  <td colspan="8" class="p-6 text-center text-slate-600">
+                    No hay inversiones diferidas registradas en este filtro. Usa el formulario superior para registrar una inversión y diferirla por meses.
+                  </td>
+                </tr>
+              `}
+            </tbody>
+          </table>
+        </div>
       </div>
     `;
   }
@@ -1466,9 +1754,13 @@ export class ModuloContabilidad {
       return true;
     });
 
-    const getBadgeTipo = (tipo) => {
+    const getBadgeTipo = (tipo, mov = null) => {
       if (tipo === 'ingreso') return { clase: 'bovi-badge-ingreso', label: 'Ingreso' };
       if (tipo === 'costo_directo') return { clase: 'bovi-badge-costo', label: 'Costo Directo' };
+      if (tipo === 'inversion_diferida') {
+        const meses = Math.max(1, parseInt(mov?.plazoMeses ?? mov?.plazoMesesDiferido ?? 12, 10) || 12);
+        return { clase: 'bovi-badge-info', label: `Inversión (${meses}m)` };
+      }
       if (tipo === 'nomina') return { clase: 'bovi-badge-nomina', label: 'Nómina & Ley' };
       return { clase: 'bovi-badge-gasto', label: 'Gasto Admin' };
     };
@@ -1498,6 +1790,7 @@ export class ModuloContabilidad {
               <option value="ingreso" ${this.filtroTablaTipo === 'ingreso' ? 'selected' : ''}>Ingresos</option>
               <option value="costo_directo" ${this.filtroTablaTipo === 'costo_directo' ? 'selected' : ''}>Costos Directos</option>
               <option value="gasto_admin" ${this.filtroTablaTipo === 'gasto_admin' ? 'selected' : ''}>Gastos Admin</option>
+              <option value="inversion_diferida" ${this.filtroTablaTipo === 'inversion_diferida' ? 'selected' : ''}>Inversiones Diferidas</option>
               <option value="nomina" ${this.filtroTablaTipo === 'nomina' ? 'selected' : ''}>Nómina y Seg. Social</option>
             </select>
             <select id="select-filtro-tabla-estado" class="px-2.5 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800">
@@ -1525,8 +1818,11 @@ export class ModuloContabilidad {
             <tbody class="divide-y divide-slate-200">
               ${listaFiltrada.length > 0 ? listaFiltrada.map((m) => {
                 const fincaObj = fincas.find((f) => f.id === (m.fincaId || m.finca_id));
-                const badge = getBadgeTipo(m.tipo);
+                const badge = getBadgeTipo(m.tipo, m);
                 const esIngreso = m.tipo === 'ingreso';
+                const esInversionDif = m.tipo === 'inversion_diferida';
+                const plazoInv = esInversionDif ? Math.max(1, parseInt(m.plazoMeses ?? m.plazoMesesDiferido ?? 12, 10) || 12) : 1;
+                const cuotaInv = esInversionDif ? Math.round((Number(m.monto) || 0) / plazoInv) : 0;
                 const esPendiente = String(m.estado || '').toLowerCase().includes('pagar') || String(m.estado || '').toLowerCase().includes('pendient');
 
                 return `
@@ -1542,7 +1838,7 @@ export class ModuloContabilidad {
                     </td>
                     <td class="p-3.5">
                       <div class="font-bold text-slate-800">${this.escape(m.concepto)}</div>
-                      <div class="text-[11px] text-slate-600">${this.escape(m.categoria)}</div>
+                      <div class="text-[11px] text-slate-600">${this.escape(m.categoria)}${esInversionDif ? ` • Cuota mensual: <strong>${formatearMonedaCOP(cuotaInv)}/mes</strong>` : ''}</div>
                     </td>
                     <td class="p-3.5 font-semibold text-slate-700">${this.escape(m.tercero || '—')}</td>
                     <td class="p-3.5 whitespace-nowrap">
@@ -1626,9 +1922,28 @@ export class ModuloContabilidad {
       };
     });
 
-    // 4. Cambio dinámico de categorías al cambiar Tipo de Movimiento
+    // 4. Cambio dinámico de categorías y plazo diferido al cambiar Tipo de Movimiento
     const selTipoMov = this.container.querySelector('#contab-mov-tipo');
     const selCatMov = this.container.querySelector('#contab-mov-categoria');
+    const boxPlazoDif = this.container.querySelector('#box-contab-plazo-diferido');
+    const inpMontoMov = this.container.querySelector('#contab-mov-monto');
+    const inpPlazoMov = this.container.querySelector('#contab-mov-plazo-meses');
+    const prevCuotaMov = this.container.querySelector('#preview-cuota-diferida-contab');
+
+    const actualizarPreviewCuotaMov = () => {
+      if (!prevCuotaMov) return;
+      const mVal = Math.max(0, Number(inpMontoMov?.value || 0));
+      const pVal = Math.max(1, parseInt(inpPlazoMov?.value || '12', 10) || 12);
+      if (mVal > 0) {
+        prevCuotaMov.innerHTML = `Cuota mensual diferida: <strong>${formatearMonedaCOP(Math.round(mVal / pVal))} / mes</strong> durante <strong>${pVal} ${pVal === 1 ? 'mes' : 'meses'}</strong>.`;
+      } else {
+        prevCuotaMov.textContent = 'El costo total se distribuirá mensualmente para que no entre todo en un solo mes.';
+      }
+    };
+
+    if (inpMontoMov) inpMontoMov.oninput = actualizarPreviewCuotaMov;
+    if (inpPlazoMov) inpPlazoMov.oninput = actualizarPreviewCuotaMov;
+
     if (selTipoMov && selCatMov) {
       selTipoMov.onchange = (e) => {
         this.tipoMovimientoForm = e.target.value || 'costo_directo';
@@ -1636,10 +1951,14 @@ export class ModuloContabilidad {
         selCatMov.innerHTML = cats
           .map((c) => `<option value="${this.escape(c)}">${this.escape(c)}</option>`)
           .join('');
+        if (boxPlazoDif && boxPlazoDif.classList) {
+          boxPlazoDif.classList.toggle('hidden', this.tipoMovimientoForm !== 'inversion_diferida');
+        }
+        actualizarPreviewCuotaMov();
       };
     }
 
-    // 5. Guardar nuevo Movimiento Contable (Ingreso / Costo Directo / Gasto Administrativo)
+    // 5. Guardar nuevo Movimiento Contable (Ingreso / Costo Directo / Gasto Administrativo / Inversión Diferida)
     const formMov = this.container.querySelector('#form-contabilidad-movimiento');
     if (formMov) {
       formMov.onsubmit = (e) => {
@@ -1653,6 +1972,9 @@ export class ModuloContabilidad {
         const metodoPago = this.container.querySelector('#contab-mov-metodo')?.value || 'Transferencia Bancaria';
         const estado = this.container.querySelector('#contab-mov-estado')?.value || 'Pagado';
         const monto = Number(this.container.querySelector('#contab-mov-monto')?.value || 0);
+        const plazoMeses = tipo === 'inversion_diferida'
+          ? Math.max(1, parseInt(this.container.querySelector('#contab-mov-plazo-meses')?.value || '12', 10) || 12)
+          : undefined;
 
         if (!fincaId) {
           if (typeof alert !== 'undefined') alert('Por favor selecciona la finca asignada al registro contable.');
@@ -1674,7 +1996,65 @@ export class ModuloContabilidad {
             tercero,
             metodoPago,
             estado,
-            monto
+            monto,
+            ...(plazoMeses ? {
+              plazoMeses,
+              plazoMesesDiferido: plazoMeses,
+              cuotaMensual: Math.round(monto / plazoMeses)
+            } : {})
+          });
+        }
+        this.render();
+      };
+    }
+
+    // 5.5. Formulario directo de Inversiones Diferidas
+    const inpInvMonto = this.container.querySelector('#inv-contab-monto');
+    const inpInvPlazo = this.container.querySelector('#inv-contab-plazo');
+    const prevInvCuota = this.container.querySelector('#inv-contab-cuota-preview');
+    const actualizarPreviewInversionRapida = () => {
+      if (!prevInvCuota) return;
+      const m = Math.max(0, Number(inpInvMonto?.value || 0));
+      const p = Math.max(1, parseInt(inpInvPlazo?.value || '12', 10) || 12);
+      prevInvCuota.textContent = m > 0
+        ? `Cuota mensual diferida: ${formatearMonedaCOP(Math.round(m / p))} / mes (${p} ${p === 1 ? 'mes' : 'meses'})`
+        : 'Cuota mensual estimada: $0 / mes';
+    };
+    if (inpInvMonto) inpInvMonto.oninput = actualizarPreviewInversionRapida;
+    if (inpInvPlazo) inpInvPlazo.oninput = actualizarPreviewInversionRapida;
+
+    const formInvRapida = this.container.querySelector('#form-contabilidad-inversion-rapida');
+    if (formInvRapida) {
+      formInvRapida.onsubmit = (e) => {
+        e.preventDefault();
+        const fecha = this.container.querySelector('#inv-contab-fecha')?.value || obtenerFechaHoyLocal();
+        const fincaId = this.container.querySelector('#inv-contab-finca')?.value;
+        const categoria = this.container.querySelector('#inv-contab-categoria')?.value || 'Infraestructura ganadera';
+        const monto = Number(this.container.querySelector('#inv-contab-monto')?.value || 0);
+        const plazoMeses = Math.max(1, parseInt(this.container.querySelector('#inv-contab-plazo')?.value || '12', 10) || 12);
+        const concepto = (this.container.querySelector('#inv-contab-concepto')?.value || '').trim();
+        const tercero = (this.container.querySelector('#inv-contab-tercero')?.value || '').trim();
+
+        if (!fincaId || !concepto || monto <= 0) {
+          if (typeof alert !== 'undefined') alert('Completa la finca, descripción, monto total y meses a diferir de la inversión.');
+          return;
+        }
+
+        if (typeof this.onGuardarMovimiento === 'function') {
+          this.onGuardarMovimiento({
+            fecha,
+            fincaId,
+            finca_id: fincaId,
+            tipo: 'inversion_diferida',
+            categoria,
+            concepto,
+            tercero,
+            metodoPago: 'Transferencia Bancaria',
+            estado: 'Pagado',
+            monto,
+            plazoMeses,
+            plazoMesesDiferido: plazoMeses,
+            cuotaMensual: Math.round(monto / plazoMeses)
           });
         }
         this.render();
