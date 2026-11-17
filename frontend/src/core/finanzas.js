@@ -6,7 +6,7 @@
  *  - Amortización lineal diferida por meses de inversiones CAPEX agropecuarias
  */
 
-import { calcularGDP, calcularGDPEjemplar, calcularDiasAbiertos, parsearFechaObjeto, obtenerFechaHoyLocal } from './zootecnia.js';
+import { calcularGDP, calcularGDPEjemplar, calcularDiasAbiertos, parsearFechaObjeto, obtenerFechaHoyLocal, formatearFecha } from './zootecnia.js';
 
 export function consolidarCostosFijos(costos = {}) {
   return (
@@ -122,6 +122,10 @@ export function calcularAmortizacionInversionEnPeriodo(inv, {
       porcentajeAvance: 0,
       mesInicio: '',
       mesFin: '',
+      fechaInicio: '',
+      fechaFin: '',
+      fechaInicioDMY: '-',
+      fechaFinDMY: '-',
       activa: false
     };
   }
@@ -135,6 +139,13 @@ export function calcularAmortizacionInversionEnPeriodo(inv, {
   const idxInicio = ymToIndex(fechaIniStr) ?? ymToIndex(hoyStr) ?? (2026 * 12);
   const idxFin = idxInicio + plazoMeses - 1;
   const idxHoy = ymToIndex(hoyStr) ?? idxInicio;
+
+  const yFin = Math.floor(idxFin / 12);
+  const mFin = (idxFin % 12) + 1;
+  const ultimoDiaFin = new Date(yFin, mFin, 0).getDate();
+  const fechaFinStr = `${String(yFin).padStart(4, '0')}-${String(mFin).padStart(2, '0')}-${String(ultimoDiaFin).padStart(2, '0')}`;
+  const fechaInicioDMY = formatearFecha(fechaIniStr, '-');
+  const fechaFinDMY = formatearFecha(fechaFinStr, '-');
 
   // Meses transcurridos hasta hoy (para barra de progreso de amortización)
   const mesesTranscurridos = idxHoy < idxInicio
@@ -174,6 +185,10 @@ export function calcularAmortizacionInversionEnPeriodo(inv, {
           porcentajeAvance,
           mesInicio: indexToYm(idxInicio),
           mesFin: indexToYm(idxFin),
+          fechaInicio: fechaIniStr,
+          fechaFin: fechaFinStr,
+          fechaInicioDMY,
+          fechaFinDMY,
           activa: idxHoy <= idxFin
         };
       }
@@ -194,6 +209,10 @@ export function calcularAmortizacionInversionEnPeriodo(inv, {
         porcentajeAvance,
         mesInicio: indexToYm(idxInicio),
         mesFin: indexToYm(idxFin),
+        fechaInicio: fechaIniStr,
+        fechaFin: fechaFinStr,
+        fechaInicioDMY,
+        fechaFinDMY,
         activa: idxHoy <= idxFin
       };
     }
@@ -235,6 +254,10 @@ export function calcularAmortizacionInversionEnPeriodo(inv, {
     porcentajeAvance,
     mesInicio: indexToYm(idxInicio),
     mesFin: indexToYm(idxFin),
+    fechaInicio: fechaIniStr,
+    fechaFin: fechaFinStr,
+    fechaInicioDMY,
+    fechaFinDMY,
     activa: idxHoy <= idxFin && (inv.estado || 'activa').toLowerCase() !== 'anulada'
   };
 }

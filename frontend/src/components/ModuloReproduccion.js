@@ -7,7 +7,7 @@
  * Incluye proyecciones zootécnicas de chequeo (ecografía/palpación) y parto.
  */
 
-import { calcularProyeccionServicio, formatearFecha } from '../core/zootecnia.js';
+import { calcularProyeccionServicio, formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 import { auditarServicioInput } from '../core/auditorIA.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
@@ -99,7 +99,7 @@ export class ModuloReproduccion {
   }
 
   renderFormularioRegistro(hembras) {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
 
     return `
       <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">

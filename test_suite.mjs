@@ -7,7 +7,9 @@
  */
 
 import fs from 'fs';
-import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio, formatearFecha, obtenerEdadMesesAnimal, obtenerPesoActualAnimal } from './frontend/src/core/zootecnia.js';
+import { calcularGDP, calcularDiasAbiertos, calcularDEL, calcularIEP, verificarSecado7Meses, calcularEdadMeses, calcularProyeccionServicio, formatearFecha, formatearFechaHora, convertirFechaAISO, obtenerEdadMesesAnimal, obtenerPesoActualAnimal } from './frontend/src/core/zootecnia.js';
+import { aplicarMascaraFechaDMY, mejorarInputFechaDMY, mejorarInputsFechaDMYEnContenedor } from './frontend/src/ui/SelectorFechaDMY.js';
+import { formatearBloqueFichaAnimalWhatsApp } from './frontend/src/core/whatsappCloudService.js';
 import { auditarPesajeInput, auditarPartoInput, auditarPalpacionInput, auditarServicioInput, detectarAlertasZootecnicas } from './frontend/src/core/auditorIA.js';
 import { consolidarCostosFijos, sumarCuotasInversionesDiferidas, computarRendimientoFinanciero } from './frontend/src/core/finanzas.js';
 import { TablaDinamica } from './frontend/src/components/TablaDinamica.js';
@@ -8127,6 +8129,197 @@ console.log('\n--- 62. Pruebas de Resiliencia Móvil (QuotaExceededError y Condi
     auditFaltantesWaterloo.faltantes.some((f) => f.tag === 'W-250') &&
     !auditFaltantesWaterloo.faltantes.some((f) => f.tag === 'W-001'),
     'Informe Animales NO Trabajados (Waterloo 250 vs 200): Identifica exactamente los 50 ejemplares faltantes con su lote para búsqueda en terreno'
+  );
+}
+
+// ============================================================================
+// 63. Formato Universal de Fechas Día/Mes/Año (DD/MM/AAAA) en Todo el Sistema
+// ============================================================================
+console.log('\n--- 63. Formato Universal de Fechas Día/Mes/Año (DD/MM/AAAA) ---');
+{
+  // 63.1: Utilidades núcleo formatearFecha, formatearFechaHora y convertirFechaAISO
+  const f1 = formatearFecha('2026-11-17');
+  const f2 = formatearFecha('2026-03-05T14:22:00.000Z');
+  const f3 = formatearFecha('5/8/2026');
+  const f4 = formatearFecha('2026-11');
+  const f5 = formatearFecha('indefinido');
+  const fh1 = formatearFechaHora('17/11/2026 08:45');
+  const fhEpoch = formatearFechaHora('1763388000'); // Unix epoch 10 dígitos (Meta WhatsApp)
+  const isoOk = convertirFechaAISO('17/11/2026');
+  const isoBadFeb = convertirFechaAISO('31/02/2026');
+  const isoBadMes = convertirFechaAISO('15/13/2026');
+
+  test(
+    f1 === '17/11/2026' &&
+    f2 === '05/03/2026' &&
+    f3 === '05/08/2026' &&
+    f4 === '01/11/2026' &&
+    f5 === 'Indefinido' &&
+    fh1 === '17/11/2026 08:45' &&
+    /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(fhEpoch) &&
+    isoOk === '2026-11-17' &&
+    isoBadFeb === null &&
+    isoBadMes === null,
+    'Núcleo Fechas (DD/MM/AAAA): Convierte ISO, YYYY-MM, timestamps Unix y valida días reales por mes hacia ISO interno'
+  );
+
+  // 63.2: Selector Universal DD/MM/AAAA para <input type="date">
+  test(
+    aplicarMascaraFechaDMY('17112026') === '17/11/2026' &&
+    aplicarMascaraFechaDMY('0509') === '05/09' &&
+    aplicarMascaraFechaDMY('5-9-2026') === '5/9/2026',
+    'SelectorFechaDMY (Máscara): Aplica máscara progresiva dd/mm/aaaa al escribir dígitos o separadores'
+  );
+
+  {
+    const makeMockEl = (tag, docRef) => {
+      const listeners = {};
+      const attrs = {};
+      const el = {
+        nodeType: 1,
+        tagName: tag.toUpperCase(),
+        ownerDocument: docRef,
+        parentNode: null,
+        children: [],
+        dataset: {},
+        className: '',
+        id: '',
+        type: '',
+        value: '',
+        appendChild(child) {
+          if (child.parentNode && child.parentNode !== this) {
+            child.parentNode.children = child.parentNode.children.filter((c) => c !== child);
+          }
+          child.parentNode = this;
+          this.children.push(child);
+          return child;
+        },
+        insertBefore(newNode, refNode) {
+          const idx = this.children.indexOf(refNode);
+          newNode.parentNode = this;
+          if (idx >= 0) this.children.splice(idx, 0, newNode);
+          else this.children.push(newNode);
+          return newNode;
+        },
+        setAttribute(k, v) { attrs[k] = String(v); if (k === 'value') this.value = String(v); },
+        getAttribute(k) { return k === 'value' ? this.value : (attrs[k] ?? null); },
+        addEventListener(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
+        dispatchEvent(ev) { (listeners[ev.type] || []).forEach((fn) => fn(ev)); return true; }
+      };
+      return el;
+    };
+    const mockDoc = {
+      activeElement: null,
+      defaultView: { Event },
+      createElement(t) { return makeMockEl(t, mockDoc); }
+    };
+    const parentMock = makeMockEl('div', mockDoc);
+    const dateMock = makeMockEl('input', mockDoc);
+    dateMock.type = 'date';
+    dateMock.id = 'test-input-dmy-63';
+    dateMock.className = 'w-full px-3 py-2';
+    dateMock.setAttribute('value', '2026-11-17');
+    parentMock.appendChild(dateMock);
+
+    mejorarInputFechaDMY(dateMock);
+    const wrapperEl = parentMock.children[0];
+    const displayDmy = wrapperEl.children.find((c) => c.className.includes('bovi-dmy-display'));
+    const calBtn = wrapperEl.children.find((c) => c.className.includes('bovi-dmy-cal-btn'));
+    const valorInicialDisplay = displayDmy ? displayDmy.value : '';
+
+    let cambioDisparado = false;
+    dateMock.addEventListener('change', () => { cambioDisparado = true; });
+    displayDmy.value = '24122026';
+    displayDmy.dispatchEvent({ type: 'input' });
+
+    test(
+      valorInicialDisplay === '17/11/2026' &&
+      displayDmy.value === '24/12/2026' &&
+      dateMock.getAttribute('value') === '2026-12-24' &&
+      cambioDisparado === true &&
+      Boolean(calBtn),
+      'SelectorFechaDMY (DOM): Envuelve <input type="date">, muestra DD/MM/AAAA (17/11/2026 -> 24/12/2026) y sincroniza ISO (2026-12-24)'
+    );
+  }
+
+  // 63.3: Contabilidad (Libro Mayor, Nómina, Inversiones Diferidas y Exportación CSV en DD/MM/AAAA)
+  const contContab63 = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  const modContab63 = new ModuloContabilidad({
+    getFincas: () => [{ id: 'FIN-63', nombre: 'Hacienda El Sol', areaHa: 100 }],
+    getFincaActiva: () => ({ id: 'FIN-63', nombre: 'Hacienda El Sol', areaHa: 100 }),
+    getAnimales: () => [{ id: 'A-1', fincaId: 'FIN-63', estadoVida: 'activo' }],
+    getMovimientos: () => [
+      { id: 'M-63-1', fincaId: 'FIN-63', fecha: '2026-11-17', tipo: 'costo_directo', categoria: 'Sal mineral', concepto: 'Compra sal', monto: 500000 },
+      { id: 'M-63-2', fincaId: 'FIN-63', fecha: '2026-11-01', tipo: 'inversion_diferida', categoria: 'Corral', concepto: 'Brete nuevo', monto: 12000000, plazoMeses: 12 }
+    ],
+    getTrabajadores: () => [],
+    getPagosNomina: () => [
+      { id: 'NOM-63-1', fincaId: 'FIN-63', fecha: '2026-11-15', periodo: 'Quincenal', trabajadorNombre: 'Pedro Pérez', netoTrabajador: 800000, totalSeguridadSocial: 150000, totalPrestaciones: 120000, costoTotalFinca: 1070000 }
+    ]
+  });
+  modContab63.container = contContab63;
+  modContab63.periodoFiltro = 'ALL';
+  modContab63.render();
+  const csvContab63 = modContab63.exportarDatosContables('csv');
+
+  test(
+    contContab63.innerHTML.includes('17/11/2026') &&
+    contContab63.innerHTML.includes('15/11/2026') &&
+    contContab63.innerHTML.includes('01/11/2026 → 31/10/2027') &&
+    csvContab63.csv.includes('"17/11/2026"') &&
+    !csvContab63.csv.includes('"2026-11-17"'),
+    'ModuloContabilidad: Renderiza movimientos, nómina, cronograma de inversiones diferidas y CSV en formato DD/MM/AAAA'
+  );
+
+  // 63.4: Exportación Excel/Filas de TablaDinamica (Utilidad por Finca y Animales No Trabajados en DD/MM/AAAA)
+  const contTd63 = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  const td63 = new TablaDinamica({
+    container: contTd63,
+    getFincas: () => [{ id: 'FIN-W63', nombre: 'Waterloo', areaHa: 120, precioLecheLitro: 2200, precioCarneKgPie: 8500 }],
+    getFincaActiva: () => ({ id: 'FIN-W63', nombre: 'Waterloo', areaHa: 120, precioLecheLitro: 2200, precioCarneKgPie: 8500 }),
+    getAnimales: () => [
+      { id: 'ANM-W63-1', fincaId: 'FIN-W63', identificacionTag: '501', estadoVida: 'activo', ultimoPesoKg: 420, fechaUltimoPesaje: '2026-09-15', lote: 'Potrero 1' }
+    ],
+    getPesajes: () => []
+  });
+  td63.container = contTd63;
+  td63.utilidadFechaDesde = '2026-11-01';
+  td63.utilidadFechaHasta = '2026-11-17';
+  td63.informeActivoId = 'utilidad_finca';
+  const prevXlsx = globalThis.XLSX;
+  globalThis.XLSX = undefined;
+  const expUtil63 = td63.exportarInformeActualExcel();
+  td63.informeActivoId = 'animales_no_trabajados';
+  td63.faltantesFechaDesde = '2026-11-17';
+  td63.faltantesFechaHasta = '2026-11-17';
+  const expFalt63 = td63.exportarInformeActualExcel();
+  globalThis.XLSX = prevXlsx;
+
+  const filaPeriodo63 = (expUtil63.filas || []).find((r) => r.Concepto === 'Período Analizado');
+  const filaFaltante63 = (expFalt63.filas || [])[0];
+
+  test(
+    filaPeriodo63 &&
+    filaPeriodo63.Valor.startsWith('01/11/2026 a 17/11/2026') &&
+    filaFaltante63 &&
+    filaFaltante63.Fecha_Ultimo_Trabajo === '15/09/2026',
+    'TablaDinamica (Exportación Informes): Exporta Período Analizado y Fecha_Ultimo_Trabajo estrictamente en DD/MM/AAAA'
+  );
+
+  // 63.5: Ficha WhatsApp y Alertas Zootécnicas IA en DD/MM/AAAA
+  const txtFichaWA63 = formatearBloqueFichaAnimalWhatsApp(
+    { identificacion_tag: '045', nombre_alias: 'Reina', ultimo_peso_kg: 480, fecha_ultimo_pesaje: '2026-09-10' },
+    { finca_nombre: 'Vesubio', empresa_nombre: 'INVERSIONES' }
+  );
+  const alertas63 = detectarAlertasZootecnicas([
+    { id: 'A-IA-63', identificacionTag: '909', sexo: 'hembra', categoria: 'Vaca de Ordeño', estadoReproductivo: 'Vacía', fechaUltimoParto: '2026-01-15', estadoVida: 'activo' }
+  ], '2026-11-17');
+
+  test(
+    txtFichaWA63.includes('480 kg (10/09/2026)') &&
+    !txtFichaWA63.includes('2026-09-10') &&
+    alertas63.some((al) => al.mensaje.includes('15/01/2026')),
+    'WhatsApp Bot & Auditor IA: Formatean fechas de pesaje y último parto siempre en DD/MM/AAAA'
   );
 }
 

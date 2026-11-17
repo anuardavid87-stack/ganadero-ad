@@ -5,7 +5,7 @@
  */
 
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
-import { formatearFecha } from '../core/zootecnia.js';
+import { formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 
 export class ModuloTraslados {
   constructor({
@@ -32,7 +32,7 @@ export class ModuloTraslados {
 
     this.fincaOrigenId = null;
     this.fincaDestinoId = null;
-    this.fechaTraslado = new Date().toISOString().split('T')[0];
+    this.fechaTraslado = obtenerFechaHoyLocal();
     this.motivo = 'Pastoreo y Rotación de Potreros';
     this.loteDestino = 'Lote Traslado';
     this.observaciones = '';

@@ -19,6 +19,7 @@ const files = [
   'frontend/src/core/exportadorBackup.js',
   'frontend/src/core/whatsappCloudService.js',
   'frontend/src/ui/AutosuggestAnimales.js',
+  'frontend/src/ui/SelectorFechaDMY.js',
   'frontend/src/components/FichaAnimal.js',
   'frontend/src/components/PanelAlertas.js',
   'frontend/src/components/TablaDinamica.js',

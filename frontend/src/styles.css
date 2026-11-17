@@ -1063,3 +1063,69 @@ button.bg-amber-500 {
   align-items: center;
   padding: 0.75rem 1rem;
 }
+
+/* ==========================================================================
+   SELECTOR UNIVERSAL DE FECHAS EN FORMATO DÍA/MES/AÑO (DD/MM/AAAA)
+   ========================================================================== */
+.bovi-dmy-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.bovi-dmy-wrapper.w-full {
+  display: flex;
+  width: 100%;
+}
+
+.bovi-dmy-display {
+  padding-right: 2.1rem !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.bovi-dmy-display:not(.w-full) {
+  min-width: 9rem;
+}
+
+.bovi-dmy-native-picker {
+  position: absolute !important;
+  right: 0.35rem !important;
+  bottom: 0.2rem !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.bovi-dmy-cal-btn {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.65rem;
+  height: 1.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--bovi-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.bovi-dmy-cal-btn:hover {
+  background-color: var(--bovi-bg-hover);
+}
+
+.bovi-dmy-cal-btn:active {
+  transform: translateY(-50%) scale(0.93);
+}

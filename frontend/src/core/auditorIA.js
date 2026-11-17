@@ -226,7 +226,7 @@ export function detectarAlertasZootecnicas(animales = [], fechaReferencia = new 
           tipo: 'vaca_vacia_dias_abiertos',
           severidad: 'critica',
           titulo: `Vaca Vacía con ${diasAbiertos} Días Abiertos`,
-          mensaje: `Vientre con ${diasAbiertos} días sin confirmar gestación desde su último parto (${fParto}). Supera el límite de 200 días.`,
+          mensaje: `Vientre con ${diasAbiertos} días sin confirmar gestación desde su último parto (${formatearFecha(fParto)}). Supera el límite de 200 días.`,
           valorMedido: `${diasAbiertos} días`,
           valorLimite: '≤ 200 días',
           accionRecomendada: 'Programar protocolo de sincronización IATF o chequeo ecográfico ovárico.'

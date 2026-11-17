@@ -8,7 +8,7 @@
  */
 
 import { calcularAmortizacionInversionEnPeriodo } from '../core/finanzas.js';
-import { obtenerFechaHoyLocal } from '../core/zootecnia.js';
+import { obtenerFechaHoyLocal, formatearFecha } from '../core/zootecnia.js';
 
 export const CATEGORIAS_CONTABILIDAD = {
   ingreso: [
@@ -1066,7 +1066,7 @@ export class ModuloContabilidad {
   }
 
   renderSeccionMovimientos({ fincas, fincaDefaultForm, categoriasForm, esSoloConsulta }) {
-    const hoyIso = new Date().toISOString().split('T')[0];
+    const hoyIso = obtenerFechaHoyLocal();
     return `
       <div class="bovi-agrotech-card bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-sm">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 mb-5 border-b border-slate-200">
@@ -1341,7 +1341,7 @@ export class ModuloContabilidad {
                 return `
                   <tr class="hover:bg-slate-50 transition">
                     <td class="p-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
-                      <div>${this.escape(inv.mesInicio)} → ${this.escape(inv.mesFin)}</div>
+                      <div>${this.escape(inv.fechaInicioDMY || formatearFecha(inv.fecha || inv.mesInicio))} → ${this.escape(inv.fechaFinDMY || formatearFecha(inv.mesFin))}</div>
                       <div class="text-[10px] text-slate-600">Mes ${inv.mesesTranscurridos} de ${inv.plazoMeses} (${inv.porcentajeAvance}%)</div>
                     </td>
                     <td class="p-3 font-bold text-slate-800 whitespace-nowrap">
@@ -1389,7 +1389,7 @@ export class ModuloContabilidad {
   }
 
   renderSeccionNomina({ fincas, fincaDefaultForm, trabajadoresFiltrados, pagosNominaFiltrados, esSoloConsulta }) {
-    const hoyIso = new Date().toISOString().split('T')[0];
+    const hoyIso = obtenerFechaHoyLocal();
     const primerTrab = trabajadoresFiltrados[0] || null;
     const liqInicial = calcularLiquidacionNomina({
       modalidad: primerTrab ? primerTrab.modalidad : 'Sueldo fijo mensual',
@@ -1701,7 +1701,7 @@ export class ModuloContabilidad {
                   <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span class="font-bold text-slate-800">${this.escape(p.trabajadorNombre || 'Trabajador')}</span>
-                      <span class="text-slate-600"> • ${this.escape(p.periodo || 'Mensual')} (${this.escape(p.fecha)}) • 🏡 ${this.escape(fincaObj ? fincaObj.nombre : p.fincaId)}</span>
+                      <span class="text-slate-600"> • ${this.escape(p.periodo || 'Mensual')} (${this.escape(formatearFecha(p.fecha))}) • 🏡 ${this.escape(fincaObj ? fincaObj.nombre : p.fincaId)}</span>
                       <div class="text-[11px] text-slate-600 mt-0.5">
                         Neto: <strong>${formatearMonedaCOP(p.netoTrabajador)}</strong> | Seg. Social: <strong>${formatearMonedaCOP(p.totalSeguridadSocial)}</strong> | Prestaciones: <strong>${formatearMonedaCOP(p.totalPrestaciones)}</strong>
                       </div>
@@ -1748,7 +1748,8 @@ export class ModuloContabilidad {
           String(m.concepto || '').toLowerCase().includes(q) ||
           String(m.categoria || '').toLowerCase().includes(q) ||
           String(m.tercero || '').toLowerCase().includes(q) ||
-          String(m.metodoPago || '').toLowerCase().includes(q);
+          String(m.metodoPago || '').toLowerCase().includes(q) ||
+          formatearFecha(m.fecha, '').toLowerCase().includes(q);
         if (!coincide) return false;
       }
       return true;
@@ -1827,7 +1828,7 @@ export class ModuloContabilidad {
 
                 return `
                   <tr class="bovi-table-row-hover transition">
-                    <td class="p-3.5 font-mono font-semibold text-slate-700 whitespace-nowrap">${this.escape(m.fecha)}</td>
+                    <td class="p-3.5 font-mono font-semibold text-slate-700 whitespace-nowrap">${this.escape(formatearFecha(m.fecha))}</td>
                     <td class="p-3.5 font-bold text-slate-800 whitespace-nowrap">
                       🏡 ${this.escape(fincaObj ? fincaObj.nombre : (m.fincaNombre || m.fincaId))}
                     </td>
@@ -2326,10 +2327,10 @@ export class ModuloContabilidad {
     const filas = resumen.movimientosFiltrados.map((m) => {
       const fObj = fincas.find((f) => f.id === (m.fincaId || m.finca_id));
       return {
-        Fecha: m.fecha || '',
+        Fecha: formatearFecha(m.fecha, ''),
         Finca_ID: m.fincaId || m.finca_id || '',
         Finca: fObj ? fObj.nombre : (m.fincaNombre || m.fincaId || ''),
-        Tipo: m.tipo === 'ingreso' ? 'Ingreso' : m.tipo === 'costo_directo' ? 'Costo Directo' : m.tipo === 'nomina' ? 'Nómina y Seg. Social' : 'Gasto Administrativo',
+        Tipo: m.tipo === 'ingreso' ? 'Ingreso' : m.tipo === 'costo_directo' ? 'Costo Directo' : m.tipo === 'inversion_diferida' ? 'Inversión Diferida' : m.tipo === 'nomina' ? 'Nómina y Seg. Social' : 'Gasto Administrativo',
         Categoria: m.categoria || '',
         Concepto: m.concepto || '',
         Proveedor_Tercero: m.tercero || '',
@@ -2338,6 +2339,8 @@ export class ModuloContabilidad {
         Monto_COP: Number(m.monto || 0)
       };
     });
+
+    const fechaArchivoDMY = formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-');
 
     if (formato === 'xlsx' && typeof XLSX !== 'undefined') {
       const wb = XLSX.utils.book_new();
@@ -2357,8 +2360,7 @@ export class ModuloContabilidad {
       ]);
       XLSX.utils.book_append_sheet(wb, wsPyG, 'Estado_Resultados_PyG');
 
-      const fechaStr = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `Contabilidad_Nomina_GanaderoAD_${fechaStr}.xlsx`);
+      XLSX.writeFile(wb, `Contabilidad_Nomina_GanaderoAD_${fechaArchivoDMY}.xlsx`);
       return { ok: true, formato: 'xlsx', filas: filas.length };
     }
 
@@ -2383,7 +2385,7 @@ export class ModuloContabilidad {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Contabilidad_Nomina_GanaderoAD_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `Contabilidad_Nomina_GanaderoAD_${fechaArchivoDMY}.csv`;
       document.body.appendChild(a);
       if (typeof a.click === 'function') a.click();
       document.body.removeChild(a);

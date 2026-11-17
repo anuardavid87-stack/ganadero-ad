@@ -14,7 +14,7 @@
 
 import { auditarPesajeInput } from '../core/auditorIA.js';
 import { normalizarFechaISO } from '../core/supabaseSync.js';
-import { formatearFecha } from '../core/zootecnia.js';
+import { formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 
 export class ImportadorExcel {
   constructor({ containerId, onImportConfirmada, getFincas, getFincaActiva, getEmpresaActiva, onCambiarFinca }) {
@@ -26,7 +26,7 @@ export class ImportadorExcel {
     this.onCambiarFinca = onCambiarFinca || null;
 
     this.tipoCargue = 'inventario'; // 'inventario' | 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destete'
-    this.fechaGlobal = new Date().toISOString().split('T')[0];
+    this.fechaGlobal = obtenerFechaHoyLocal();
     this.aplicarFechaGlobal = true;
     this.registros = [];
     this.fincaDestinoId = null;
@@ -94,7 +94,9 @@ export class ImportadorExcel {
   descargarPlantillaCSV(tipo = this.tipoCargue) {
     let encabezados = [];
     let ejemplos = [];
-    let nombreArchivo = `plantilla_${tipo}_${this.fechaGlobal}.csv`;
+    const fechaEjemploDMY = formatearFecha(this.fechaGlobal);
+    const fechaArchivoDMY = fechaEjemploDMY.replace(/\//g, '-');
+    let nombreArchivo = `plantilla_${tipo}_${fechaArchivoDMY}.csv`;
 
     if (tipo === 'labores') {
       encabezados = [
@@ -116,51 +118,51 @@ export class ImportadorExcel {
         'observaciones'
       ];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'Pesaje', '512.5', '3.5', '', '', '', '', '', '', '', '', '', '', 'Pesaje regular de manga'],
-        ['BV-102', this.fechaGlobal, 'Palpacion', '', '', 'Preñada', '95', 'CL activo cuerno derecho', '', '', '', '', '', '', '', 'Confirmada preñez'],
-        ['BV-208', this.fechaGlobal, 'Leche', '', '', '', '', '', '16.5', '', '', '', '', '', '', 'Control lechero diario'],
-        ['BV-301', this.fechaGlobal, 'Destete', '', '', '', '', '', '', '185.0', 'Levante Machos', '', '', '', '', 'Destete tradicional'],
-        ['BV-401', this.fechaGlobal, 'Parto', '', '', '', '', '', '', '', '', 'hembra', '36.0', 'CRIA-BV-401', 'TORO-08', 'Parto normal eutócico'],
-        ['BV-501', this.fechaGlobal, 'Pesaje y Palpacion', '480.0', '3.5', 'Preñada', '110', 'CL activo', '', '', '', '', '', '', '', 'Pesaje y palpación simultáneos en brete']
+        ['BV-101', fechaEjemploDMY, 'Pesaje', '512.5', '3.5', '', '', '', '', '', '', '', '', '', '', 'Pesaje regular de manga'],
+        ['BV-102', fechaEjemploDMY, 'Palpacion', '', '', 'Preñada', '95', 'CL activo cuerno derecho', '', '', '', '', '', '', '', 'Confirmada preñez'],
+        ['BV-208', fechaEjemploDMY, 'Leche', '', '', '', '', '', '16.5', '', '', '', '', '', '', 'Control lechero diario'],
+        ['BV-301', fechaEjemploDMY, 'Destete', '', '', '', '', '', '', '185.0', 'Levante Machos', '', '', '', '', 'Destete tradicional'],
+        ['BV-401', fechaEjemploDMY, 'Parto', '', '', '', '', '', '', '', '', 'hembra', '36.0', 'CRIA-BV-401', 'TORO-08', 'Parto normal eutócico'],
+        ['BV-501', fechaEjemploDMY, 'Pesaje y Palpacion', '480.0', '3.5', 'Preñada', '110', 'CL activo', '', '', '', '', '', '', '', 'Pesaje y palpación simultáneos en brete']
       ];
-      nombreArchivo = `plantilla_hoja_unica_labores_${this.fechaGlobal}.csv`;
+      nombreArchivo = `plantilla_hoja_unica_labores_${fechaArchivoDMY}.csv`;
     } else if (tipo === 'pesajes') {
       encabezados = ['numero_animal', 'fecha_pesaje', 'peso_kg', 'condicion_corporal', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, '512.5', '3.5', 'Pesaje regular de manga'],
-        ['BV-102', this.fechaGlobal, '498.0', '4.0', 'Excelente condición'],
-        ['BV-301', this.fechaGlobal, '465.0', '3.5', 'Lote de ceba intensiva'],
-        ['BUF-01', this.fechaGlobal, '620.0', '3.5', 'Búfala pesaje mensual']
+        ['BV-101', fechaEjemploDMY, '512.5', '3.5', 'Pesaje regular de manga'],
+        ['BV-102', fechaEjemploDMY, '498.0', '4.0', 'Excelente condición'],
+        ['BV-301', fechaEjemploDMY, '465.0', '3.5', 'Lote de ceba intensiva'],
+        ['BUF-01', fechaEjemploDMY, '620.0', '3.5', 'Búfala pesaje mensual']
       ];
     } else if (tipo === 'palpaciones') {
       encabezados = ['numero_animal', 'fecha_palpacion', 'resultado', 'dias_gestacion', 'estructura_ovario', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'Preñada', '110', 'CL activo cuerno derecho', 'Confirmada en primer celo'],
-        ['BV-102', this.fechaGlobal, 'Vacía', '0', 'Folículo 14mm ovárico', 'Apta para protocolo IATF'],
-        ['BV-208', this.fechaGlobal, 'Sospechosa', '35', 'Asimetría uterina', 'Rechequear en 15 días'],
-        ['BUF-01', this.fechaGlobal, 'Preñada', '135', 'CL activo', 'Gestación confirmada']
+        ['BV-101', fechaEjemploDMY, 'Preñada', '110', 'CL activo cuerno derecho', 'Confirmada en primer celo'],
+        ['BV-102', fechaEjemploDMY, 'Vacía', '0', 'Folículo 14mm ovárico', 'Apta para protocolo IATF'],
+        ['BV-208', fechaEjemploDMY, 'Sospechosa', '35', 'Asimetría uterina', 'Rechequear en 15 días'],
+        ['BUF-01', fechaEjemploDMY, 'Preñada', '135', 'CL activo', 'Gestación confirmada']
       ];
     } else if (tipo === 'leche') {
       encabezados = ['numero_animal', 'fecha_pesaje_leche', 'litros_manana', 'litros_tarde', 'total_litros', 'notas_ubre'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, '8.5', '6.0', '14.5', 'Ubre sana sin mastitis'],
-        ['BV-102', this.fechaGlobal, '9.2', '7.3', '16.5', 'Pico de lactancia'],
-        ['BV-208', this.fechaGlobal, '5.0', '4.0', '9.0', 'Tercio final de lactancia'],
-        ['BUF-01', this.fechaGlobal, '6.0', '4.5', '10.5', 'Leche rica en sólidos']
+        ['BV-101', fechaEjemploDMY, '8.5', '6.0', '14.5', 'Ubre sana sin mastitis'],
+        ['BV-102', fechaEjemploDMY, '9.2', '7.3', '16.5', 'Pico de lactancia'],
+        ['BV-208', fechaEjemploDMY, '5.0', '4.0', '9.0', 'Tercio final de lactancia'],
+        ['BUF-01', fechaEjemploDMY, '6.0', '4.5', '10.5', 'Leche rica en sólidos']
       ];
     } else if (tipo === 'partos') {
       encabezados = ['numero_madre', 'fecha_parto', 'sexo_cria', 'peso_cria_kg', 'tag_cria', 'padre_toro', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'hembra', '34.5', 'CRIA-BV-101', 'TORO-08', 'Parto normal eutócico'],
-        ['BV-102', this.fechaGlobal, 'macho', '38.0', 'CRIA-BV-102', 'TORO-12', 'Cría vigorosa'],
-        ['BUF-01', this.fechaGlobal, 'hembra', '39.0', 'BUF-CRIA-01', 'BUF-TORO-01', 'Bucerro nacido en potrero']
+        ['BV-101', fechaEjemploDMY, 'hembra', '34.5', 'CRIA-BV-101', 'TORO-08', 'Parto normal eutócico'],
+        ['BV-102', fechaEjemploDMY, 'macho', '38.0', 'CRIA-BV-102', 'TORO-12', 'Cría vigorosa'],
+        ['BUF-01', fechaEjemploDMY, 'hembra', '39.0', 'BUF-CRIA-01', 'BUF-TORO-01', 'Bucerro nacido en potrero']
       ];
     } else if (tipo === 'destete') {
       encabezados = ['numero_animal', 'fecha_destete', 'peso_destete_kg', 'lote_destino', 'observaciones'];
       ejemplos = [
-        ['CRIA-BV-101', this.fechaGlobal, '185.0', 'Levante Hembras', 'Destete a los 8 meses'],
-        ['CRIA-BV-102', this.fechaGlobal, '210.5', 'Levante Machos', 'Buen desarrollo muscular'],
-        ['BUF-CRIA-01', this.fechaGlobal, '195.0', 'Búfalas Levante', 'Destete en peso ideal']
+        ['CRIA-BV-101', fechaEjemploDMY, '185.0', 'Levante Hembras', 'Destete a los 8 meses'],
+        ['CRIA-BV-102', fechaEjemploDMY, '210.5', 'Levante Machos', 'Buen desarrollo muscular'],
+        ['BUF-CRIA-01', fechaEjemploDMY, '195.0', 'Búfalas Levante', 'Destete en peso ideal']
       ];
     } else {
       // Inventario General
@@ -184,11 +186,11 @@ export class ImportadorExcel {
         'fecha_ultimo_parto'
       ];
       ejemplos = [
-        ['BV-101', 'vacuno', 'Paloma', 'hembra', 'Brahman x Gyr', 'Vaca de Ordeño', 'Ordeño 1', '2021-04-12', 'TORO-08', 'BV-050', this.fechaGlobal, '510', '420', this.fechaGlobal, 'Preñada', '110', '2025-11-20'],
-        ['BV-102', 'vacuno', 'Candela', 'hembra', 'Gyr Puro', 'Vaca de Ordeño', 'Ordeño 1', '2020-08-05', 'TORO-12', 'BV-014', this.fechaGlobal, '500', '350', this.fechaGlobal, 'Preñada', '215', '2025-10-20'],
-        ['BV-208', 'vacuno', 'Sultana', 'hembra', 'Guzerá x Holstein', 'Vaca de Ordeño', 'Ordeño 2', '2021-01-20', 'TORO-04', 'BV-098', this.fechaGlobal, '515', '180', this.fechaGlobal, 'Vacía', '0', '2026-01-05'],
-        ['BV-301', 'vacuno', 'Centella', 'macho', 'Nelore x Angus', 'Novillo de Ceba', 'Ceba Intensiva', '2024-03-10', 'TORO-15', 'BV-210', this.fechaGlobal, '455', '650', '', 'No Aplica', '0', ''],
-        ['BUF-01', 'bufalino', 'Noche Buena', 'hembra', 'Murrah Lechero', 'Vaca de Ordeño', 'Búfalas Ordeño', '2021-09-14', 'BUF-TORO-01', 'BUF-005', this.fechaGlobal, '610', '490', this.fechaGlobal, 'Preñada', '130', '2025-12-01']
+        ['BV-101', 'vacuno', 'Paloma', 'hembra', 'Brahman x Gyr', 'Vaca de Ordeño', 'Ordeño 1', '12/04/2021', 'TORO-08', 'BV-050', fechaEjemploDMY, '510', '420', fechaEjemploDMY, 'Preñada', '110', '20/11/2025'],
+        ['BV-102', 'vacuno', 'Candela', 'hembra', 'Gyr Puro', 'Vaca de Ordeño', 'Ordeño 1', '05/08/2020', 'TORO-12', 'BV-014', fechaEjemploDMY, '500', '350', fechaEjemploDMY, 'Preñada', '215', '20/10/2025'],
+        ['BV-208', 'vacuno', 'Sultana', 'hembra', 'Guzerá x Holstein', 'Vaca de Ordeño', 'Ordeño 2', '20/01/2021', 'TORO-04', 'BV-098', fechaEjemploDMY, '515', '180', fechaEjemploDMY, 'Vacía', '0', '05/01/2026'],
+        ['BV-301', 'vacuno', 'Centella', 'macho', 'Nelore x Angus', 'Novillo de Ceba', 'Ceba Intensiva', '10/03/2024', 'TORO-15', 'BV-210', fechaEjemploDMY, '455', '650', '', 'No Aplica', '0', ''],
+        ['BUF-01', 'bufalino', 'Noche Buena', 'hembra', 'Murrah Lechero', 'Vaca de Ordeño', 'Búfalas Ordeño', '14/09/2021', 'BUF-TORO-01', 'BUF-005', fechaEjemploDMY, '610', '490', fechaEjemploDMY, 'Preñada', '130', '01/12/2025']
       ];
     }
 
@@ -268,7 +270,7 @@ export class ImportadorExcel {
   _procesarWorkbookMultiplesHojas(workbook) {
     const registrosCombinados = [];
     let idxGlobal = 1;
-    const hoyDefecto = this.fechaGlobal || new Date().toISOString().split('T')[0];
+    const hoyDefecto = this.fechaGlobal || obtenerFechaHoyLocal();
 
     (workbook.SheetNames || []).forEach((sheetName) => {
       const sNameLower = (sheetName || '').toLowerCase();
@@ -479,7 +481,7 @@ export class ImportadorExcel {
       return defaultIdx;
     };
 
-    const hoyDefecto = this.fechaGlobal || new Date().toISOString().split('T')[0];
+    const hoyDefecto = this.fechaGlobal || obtenerFechaHoyLocal();
 
     // Detección automática si la hoja contiene columnas unificadas de múltiples labores
     const tieneColumnaLabor = headers.some((h) => h === 'labor' || h === 'tipo_labor' || h === 'evento_labor');
@@ -1016,7 +1018,7 @@ export class ImportadorExcel {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reporte_no_encontrados_${this.informeResultados.tipoCargue || 'masivo'}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `reporte_no_encontrados_${this.informeResultados.tipoCargue || 'masivo'}_${formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

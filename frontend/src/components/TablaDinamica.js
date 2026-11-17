@@ -2597,14 +2597,14 @@ export class TablaDinamica {
   }
 
   exportarInformeActualExcel() {
-    const fechaHoyArchivo = obtenerFechaHoyLocal();
+    const fechaHoyArchivo = formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-');
 
     if (this.informeActivoId === 'utilidad_finca') {
       const data = this.calcularDatosInformeUtilidadActual();
       const r = data.principal;
       const filasPyG = [
         { Concepto: 'Finca / Alcance', Valor: r.nombreFinca },
-        { Concepto: 'Período Analizado', Valor: `${r.fechaDesde} a ${r.fechaHasta} (${r.diasPeriodo} días)` },
+        { Concepto: 'Período Analizado', Valor: `${formatearFecha(r.fechaDesde)} a ${formatearFecha(r.fechaHasta)} (${r.diasPeriodo} días)` },
         { Concepto: 'Tiene Ordeño Activo', Valor: r.leche.tieneOrdeno ? 'SÍ' : 'NO (Sin pesajes de leche registrados)' },
         { Concepto: 'Litros de Leche del Período', Valor: r.leche.litrosProducidosPeriodo },
         { Concepto: '(+) Ingreso por Leche ($ COP)', Valor: r.leche.ingresoLeche },
@@ -2667,7 +2667,7 @@ export class TablaDinamica {
           Sexo: a.sexo || 'hembra',
           Lote_Registrado: a.lote || 'General',
           Ultimo_Peso_Kg: a.ultimoPesoKg || '',
-          Fecha_Ultimo_Trabajo: a.fechaUltimoTrabajoPrevio || '',
+          Fecha_Ultimo_Trabajo: formatearFecha(a.fechaUltimoTrabajoPrevio, ''),
           Dias_Sin_Trabajar: a.diasSinTrabajar ?? '',
           Causa_En_Terreno: this.causasTerrenoMap[claveCausa] || 'Pendiente verificar en terreno'
         };
@@ -2749,7 +2749,7 @@ export class TablaDinamica {
         XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen_Cruce');
       }
 
-      const nombreArchivo = `Informe_${informeActual.id}_${this.filtroRaza !== 'todas' ? this.filtroRaza + '_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`;
+      const nombreArchivo = `Informe_${informeActual.id}_${this.filtroRaza !== 'todas' ? this.filtroRaza + '_' : ''}${fechaHoyArchivo}.xlsx`;
       if (typeof XLSX.writeFile === 'function') {
         XLSX.writeFile(wb, nombreArchivo);
       }

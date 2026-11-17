@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-16T19:24:47.200Z
+ * Generado automáticamente: 2026-11-17T20:08:56.122Z
  */
 (function() {
   "use strict";
@@ -260,8 +260,43 @@ function verificarSecado7Meses(diasGestacion, especie = 'bovino') {
  * Tolera cadenas ISO (YYYY-MM-DD), fechas con barra o guión, timestamps y objetos Date.
  * Si el valor es nulo, vacío o inválido, retorna el fallback (por defecto '-').
  */
+function convertirFechaAISO(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return null;
+
+  const validarYArmar = (yNum, mNum, dNum) => {
+    if (yNum < 1900 || yNum > 2199) return null;
+    if (mNum < 1 || mNum > 12) return null;
+    const maxDias = new Date(yNum, mNum, 0).getDate();
+    if (dNum < 1 || dNum > maxDias) return null;
+    return `${String(yNum).padStart(4, '0')}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+  };
+
+  // DD/MM/YYYY o DD-MM-YYYY
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    return validarYArmar(parseInt(matchDmy[3], 10), parseInt(matchDmy[2], 10), parseInt(matchDmy[1], 10));
+  }
+
+  // YYYY-MM-DD (con o sin hora ISO)
+  const matchIso = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
+  if (matchIso) {
+    return validarYArmar(parseInt(matchIso[1], 10), parseInt(matchIso[2], 10), parseInt(matchIso[3], 10));
+  }
+
+  return null;
+}
+
 function formatearFecha(val, fallback = '-') {
-  if (!val) return fallback;
+  if (val === null || val === undefined || val === '') return fallback;
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return fallback;
     const d = String(val.getDate()).padStart(2, '0');
@@ -271,9 +306,10 @@ function formatearFecha(val, fallback = '-') {
   }
   const s = String(val).trim();
   if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+  if (s.toLowerCase() === 'indefinido') return 'Indefinido';
 
-  // Si ya viene en formato DD/MM/YYYY con 2 dígitos
-  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  // Si ya viene en formato DD/MM/YYYY (con o sin hora al final)
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:\s+.*)?$/);
   if (matchDmy) {
     const d = matchDmy[1].padStart(2, '0');
     const m = matchDmy[2].padStart(2, '0');
@@ -290,6 +326,22 @@ function formatearFecha(val, fallback = '-') {
     return `${d}/${m}/${y}`;
   }
 
+  // Cadena YYYY-MM (mes/año) -> primer día del mes en formato DD/MM/YYYY
+  const matchYm = s.match(/^(\d{4})[-/.](\d{1,2})$/);
+  if (matchYm) {
+    const y = matchYm[1];
+    const m = matchYm[2].padStart(2, '0');
+    return `01/${m}/${y}`;
+  }
+
+  // Timestamp numérico Unix (segundos de 10 dígitos o milisegundos de 13 dígitos)
+  if (/^\d{10}$/.test(s)) {
+    return formatearFecha(new Date(Number(s) * 1000), fallback);
+  }
+  if (/^\d{13}$/.test(s)) {
+    return formatearFecha(new Date(Number(s)), fallback);
+  }
+
   const dt = new Date(s);
   if (!isNaN(dt.getTime())) {
     const d = String(dt.getDate()).padStart(2, '0');
@@ -299,6 +351,62 @@ function formatearFecha(val, fallback = '-') {
   }
 
   return s;
+}
+
+/**
+ * Formatea una fecha con hora siempre en formato DD/MM/YYYY HH:mm (día/mes/año hora:minuto).
+ * Si la entrada no contiene hora (solo fecha), retorna DD/MM/YYYY.
+ */
+function formatearFechaHora(val, fallback = '-') {
+  if (val === null || val === undefined || val === '') return fallback;
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return fallback;
+    return `${pad2(val.getDate())}/${pad2(val.getMonth() + 1)}/${val.getFullYear()} ${pad2(val.getHours())}:${pad2(val.getMinutes())}`;
+  }
+
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+
+  // Timestamp Unix en segundos (ej. Meta WhatsApp statuses) o milisegundos
+  if (/^\d{10}$/.test(s)) {
+    const dt = new Date(Number(s) * 1000);
+    if (!isNaN(dt.getTime())) {
+      return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+    }
+  }
+  if (/^\d{13}$/.test(s)) {
+    const dt = new Date(Number(s));
+    if (!isNaN(dt.getTime())) {
+      return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+    }
+  }
+
+  // Solo fecha sin hora (YYYY-MM-DD o DD/MM/YYYY)
+  if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(s) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(s)) {
+    return formatearFecha(s, fallback);
+  }
+
+  // DD/MM/YYYY HH:mm(:ss)
+  const matchDmyHora = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})[T\s]+(\d{1,2}):(\d{2})/);
+  if (matchDmyHora) {
+    return `${pad2(matchDmyHora[1])}/${pad2(matchDmyHora[2])}/${matchDmyHora[3]} ${pad2(matchDmyHora[4])}:${matchDmyHora[5]}`;
+  }
+
+  // ISO con zona horaria o T (convertir a fecha/hora local DD/MM/YYYY HH:mm)
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  }
+
+  // Fallback si es YYYY-MM-DD HH:mm sin parseo estándar
+  const matchIsoHora = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[T\s]+(\d{1,2}):(\d{2})/);
+  if (matchIsoHora) {
+    return `${pad2(matchIsoHora[3])}/${pad2(matchIsoHora[2])}/${matchIsoHora[1]} ${pad2(matchIsoHora[4])}:${matchIsoHora[5]}`;
+  }
+
+  return formatearFecha(s, fallback);
 }
 
 /**
@@ -839,7 +947,7 @@ function detectarAlertasZootecnicas(animales = [], fechaReferencia = new Date())
           tipo: 'vaca_vacia_dias_abiertos',
           severidad: 'critica',
           titulo: `Vaca Vacía con ${diasAbiertos} Días Abiertos`,
-          mensaje: `Vientre con ${diasAbiertos} días sin confirmar gestación desde su último parto (${fParto}). Supera el límite de 200 días.`,
+          mensaje: `Vientre con ${diasAbiertos} días sin confirmar gestación desde su último parto (${formatearFecha(fParto)}). Supera el límite de 200 días.`,
           valorMedido: `${diasAbiertos} días`,
           valorLimite: '≤ 200 días',
           accionRecomendada: 'Programar protocolo de sincronización IATF o chequeo ecográfico ovárico.'
@@ -1027,6 +1135,10 @@ function calcularAmortizacionInversionEnPeriodo(inv, {
       porcentajeAvance: 0,
       mesInicio: '',
       mesFin: '',
+      fechaInicio: '',
+      fechaFin: '',
+      fechaInicioDMY: '-',
+      fechaFinDMY: '-',
       activa: false
     };
   }
@@ -1040,6 +1152,13 @@ function calcularAmortizacionInversionEnPeriodo(inv, {
   const idxInicio = ymToIndex(fechaIniStr) ?? ymToIndex(hoyStr) ?? (2026 * 12);
   const idxFin = idxInicio + plazoMeses - 1;
   const idxHoy = ymToIndex(hoyStr) ?? idxInicio;
+
+  const yFin = Math.floor(idxFin / 12);
+  const mFin = (idxFin % 12) + 1;
+  const ultimoDiaFin = new Date(yFin, mFin, 0).getDate();
+  const fechaFinStr = `${String(yFin).padStart(4, '0')}-${String(mFin).padStart(2, '0')}-${String(ultimoDiaFin).padStart(2, '0')}`;
+  const fechaInicioDMY = formatearFecha(fechaIniStr, '-');
+  const fechaFinDMY = formatearFecha(fechaFinStr, '-');
 
   // Meses transcurridos hasta hoy (para barra de progreso de amortización)
   const mesesTranscurridos = idxHoy < idxInicio
@@ -1079,6 +1198,10 @@ function calcularAmortizacionInversionEnPeriodo(inv, {
           porcentajeAvance,
           mesInicio: indexToYm(idxInicio),
           mesFin: indexToYm(idxFin),
+          fechaInicio: fechaIniStr,
+          fechaFin: fechaFinStr,
+          fechaInicioDMY,
+          fechaFinDMY,
           activa: idxHoy <= idxFin
         };
       }
@@ -1099,6 +1222,10 @@ function calcularAmortizacionInversionEnPeriodo(inv, {
         porcentajeAvance,
         mesInicio: indexToYm(idxInicio),
         mesFin: indexToYm(idxFin),
+        fechaInicio: fechaIniStr,
+        fechaFin: fechaFinStr,
+        fechaInicioDMY,
+        fechaFinDMY,
         activa: idxHoy <= idxFin
       };
     }
@@ -1140,6 +1267,10 @@ function calcularAmortizacionInversionEnPeriodo(inv, {
     porcentajeAvance,
     mesInicio: indexToYm(idxInicio),
     mesFin: indexToYm(idxFin),
+    fechaInicio: fechaIniStr,
+    fechaFin: fechaFinStr,
+    fechaInicioDMY,
+    fechaFinDMY,
     activa: idxHoy <= idxFin && (inv.estado || 'activa').toLowerCase() !== 'anulada'
   };
 }
@@ -6819,6 +6950,7 @@ class ExportadorBackupService {
     // 9. HOJA: Inversiones Diferidas
     const rowsInversiones = (appState.inversiones || []).map(i => ({
       'ID Inversión': i.id,
+      'Fecha Inicio': formatearFecha(i.fecha || i.fechaInicio, ''),
       'Finca / Predio': mapaFincas.get(i.fincaId) || i.fincaId || '',
       'Descripción del Activo': i.descripcionActivo || '',
       'Monto Total Inversión ($)': Number(i.montoTotalInversion || 0),
@@ -6867,10 +6999,10 @@ class ExportadorBackupService {
     const wsOperaciones = XLSX.utils.json_to_sheet(rowsOperaciones.length ? rowsOperaciones : [{ 'Mensaje': 'Sin operaciones registradas' }]);
     XLSX.utils.book_append_sheet(wb, wsOperaciones, '11. Bitácora Operaciones');
 
-    // Generar nombre de archivo con fecha y hora actual
+    // Generar nombre de archivo con fecha (día-mes-año) y hora actual
     const ahora = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const timestamp = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
+    const timestamp = `${pad(ahora.getDate())}-${pad(ahora.getMonth() + 1)}-${ahora.getFullYear()}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
     const nombreArchivo = `Copia_Seguridad_Ganadero_AD_${timestamp}.xlsx`;
 
     try {
@@ -6932,7 +7064,7 @@ class ExportadorBackupService {
     const url = URL.createObjectURL(blob);
     const ahora = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const timestamp = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
+    const timestamp = `${pad(ahora.getDate())}-${pad(ahora.getMonth() + 1)}-${ahora.getFullYear()}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
     const nombreArchivo = `Respaldo_Ganadero_AD_${timestamp}.json`;
 
     const a = document.createElement('a');
@@ -7623,7 +7755,7 @@ function formatearBloqueFichaAnimalWhatsApp(animal = {}, metaFinca = {}, idFallb
     );
     const fechaPeso = animal.fecha_ultimo_pesaje || animal.fechaUltimoPesaje || '';
     const textoPeso = pesoActual > 0
-        ? (fechaPeso ? `${pesoActual} kg (${fechaPeso})` : `${pesoActual} kg`)
+        ? (fechaPeso ? `${pesoActual} kg (${formatearFecha(fechaPeso)})` : `${pesoActual} kg`)
         : 'Sin pesaje';
     const lote = animal.lote || 'General';
     const fincaNombre = metaFinca.finca_nombre || animal.finca_nombre || metaFinca.finca_id || 'Finca';
@@ -7650,7 +7782,7 @@ function formatearBloqueFichaAnimalWhatsApp(animal = {}, metaFinca = {}, idFallb
  */
 async function ejecutarComandoAlcanceWhatsApp(textoMensaje, alcance, repoOrAdapter, contexto = {}) {
     const parsed = parsearComandoTextoWhatsApp(textoMensaje);
-    const fechaHoy = contexto.fechaHoy || new Date().toISOString().split('T')[0];
+    const fechaHoy = contexto.fechaHoy || obtenerFechaHoyLocal();
     const fincasPermitidas = Array.isArray(alcance?.fincasPermitidas) ? alcance.fincasPermitidas : [];
     const mapaFincaMeta = new Map(fincasPermitidas.map((fp) => [String(fp.finca_id), fp]));
     const empresasAlcance = Array.isArray(alcance?.empresasIds) && alcance.empresasIds.length > 0
@@ -9784,6 +9916,298 @@ function conectarAutosuggestAnimales({
 
 
 // ============================================================================
+// ARCHIVO: frontend/src/ui/SelectorFechaDMY.js
+// ============================================================================
+/**
+ * GANADERO AD - SELECTOR UNIVERSAL DE FECHAS EN FORMATO DÍA/MES/AÑO (DD/MM/AAAA)
+ * Garantiza que el 100% de los campos <input type="date"> del sistema muestren y reciban
+ * siempre el formato DD/MM/AAAA (día/mes/año) sin importar el idioma del navegador o sistema
+ * operativo (evitando MM/DD/YYYY en Windows/Chrome/Android en inglés), manteniendo el valor
+ * interno ISO (YYYY-MM-DD) para compatibilidad total con cálculos y PostgreSQL/Supabase.
+ */
+
+
+
+/**
+ * Aplica máscara progresiva DD/MM/AAAA mientras el usuario escribe dígitos.
+ */
+function aplicarMascaraFechaDMY(textoCrudo = '') {
+  const limpio = String(textoCrudo || '').trim();
+  // Si el usuario escribió separadores explícitos (ej. 5/9/2026), respetar mientras edita
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{0,4}$/.test(limpio)) {
+    return limpio.replace(/-/g, '/').slice(0, 10);
+  }
+  const digitos = limpio.replace(/\D/g, '').slice(0, 8);
+  if (digitos.length <= 2) return digitos;
+  if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4, 8)}`;
+}
+
+/**
+ * Mejora un único <input type="date"> para mostrar siempre DD/MM/AAAA + botón de calendario.
+ */
+function mejorarInputFechaDMY(dateInput) {
+  if (!dateInput || dateInput.nodeType !== 1) return null;
+  if (dateInput.dataset && dateInput.dataset.dmyEnhanced === '1') {
+    if (typeof dateInput._sincronizarVistaDMY === 'function') {
+      dateInput._sincronizarVistaDMY();
+    }
+    return dateInput;
+  }
+
+  const doc = dateInput.ownerDocument;
+  if (!doc || !dateInput.parentNode) return null;
+
+  dateInput.dataset.dmyEnhanced = '1';
+
+  const clasesOriginales = dateInput.className || '';
+  const tieneAnchoCompleto = /\bw-full\b/.test(clasesOriginales);
+
+  const wrapper = doc.createElement('div');
+  wrapper.className = `bovi-dmy-wrapper relative inline-flex items-center ${tieneAnchoCompleto ? 'w-full' : ''}`.trim();
+
+  const textInput = doc.createElement('input');
+  textInput.type = 'text';
+  textInput.inputMode = 'numeric';
+  textInput.autocomplete = 'off';
+  textInput.maxLength = 10;
+  textInput.placeholder = 'dd/mm/aaaa';
+  textInput.title = dateInput.title ? `${dateInput.title} (Día/Mes/Año)` : 'Formato día/mes/año (DD/MM/AAAA)';
+  textInput.className = `${clasesOriginales} bovi-dmy-display pr-8`.trim();
+  if (dateInput.id) {
+    textInput.dataset.dmyFor = dateInput.id;
+  }
+  if (dateInput.disabled) textInput.disabled = true;
+  if (dateInput.readOnly) textInput.readOnly = true;
+  if (dateInput.required) textInput.required = true;
+
+  const calBtn = doc.createElement('button');
+  calBtn.type = 'button';
+  calBtn.tabIndex = -1;
+  calBtn.className = 'bovi-dmy-cal-btn';
+  calBtn.title = 'Elegir fecha en calendario (día/mes/año)';
+  calBtn.setAttribute('aria-label', 'Abrir calendario');
+  calBtn.textContent = '📅';
+
+  // Insertar wrapper en la posición exacta del input original
+  dateInput.parentNode.insertBefore(wrapper, dateInput);
+  wrapper.appendChild(textInput);
+  wrapper.appendChild(dateInput);
+  wrapper.appendChild(calBtn);
+
+  // Ocultar visualmente el picker nativo sin perder capacidad de showPicker() ni su ID/value
+  dateInput.className = 'bovi-dmy-native-picker';
+  dateInput.tabIndex = -1;
+  dateInput.setAttribute('aria-hidden', 'true');
+
+  // Descriptor nativo de HTMLInputElement.prototype.value para interceptar asignaciones JS
+  const proto = doc.defaultView ? doc.defaultView.HTMLInputElement?.prototype : (typeof HTMLInputElement !== 'undefined' ? HTMLInputElement.prototype : null);
+  const nativeDesc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+
+  const leerValorNativo = () => {
+    if (nativeDesc && typeof nativeDesc.get === 'function') {
+      return nativeDesc.get.call(dateInput);
+    }
+    return dateInput.getAttribute('value') || '';
+  };
+
+  const escribirValorNativo = (nuevoVal) => {
+    const str = nuevoVal === null || nuevoVal === undefined ? '' : String(nuevoVal).trim();
+    const iso = str ? (convertirFechaAISO(str) || str) : '';
+    if (nativeDesc && typeof nativeDesc.set === 'function') {
+      nativeDesc.set.call(dateInput, iso);
+    } else {
+      dateInput.setAttribute('value', iso);
+    }
+    const dmy = iso ? formatearFecha(iso, '') : '';
+    dateInput.dataset.valorDmy = dmy;
+    if (doc.activeElement !== textInput) {
+      textInput.value = dmy;
+    } else if (dmy && convertirFechaAISO(textInput.value) === iso && textInput.value.length === 10) {
+      textInput.value = dmy;
+    } else if (!iso && !textInput.value) {
+      textInput.value = '';
+    }
+  };
+
+  if (nativeDesc && nativeDesc.configurable !== false) {
+    try {
+      Object.defineProperty(dateInput, 'value', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return leerValorNativo();
+        },
+        set(v) {
+          escribirValorNativo(v);
+        }
+      });
+    } catch (_) {
+      // Ignorar en entornos restringidos
+    }
+  }
+
+  const sincronizarVistaDesdeNativo = () => {
+    const valActual = leerValorNativo();
+    const dmy = valActual ? formatearFecha(valActual, '') : '';
+    dateInput.dataset.valorDmy = dmy;
+    textInput.value = dmy;
+    textInput.disabled = Boolean(dateInput.disabled);
+    textInput.readOnly = Boolean(dateInput.readOnly);
+  };
+
+  dateInput._sincronizarVistaDMY = sincronizarVistaDesdeNativo;
+  sincronizarVistaDesdeNativo();
+
+  let disparandoInterno = false;
+  const emitirCambioNativo = (isoNuevo) => {
+    const actual = leerValorNativo();
+    if (actual === isoNuevo) return;
+    disparandoInterno = true;
+    try {
+      if (nativeDesc && typeof nativeDesc.set === 'function') {
+        nativeDesc.set.call(dateInput, isoNuevo);
+      } else {
+        dateInput.setAttribute('value', isoNuevo);
+      }
+      dateInput.dataset.valorDmy = isoNuevo ? formatearFecha(isoNuevo, '') : '';
+      const Ev = (doc.defaultView && doc.defaultView.Event) || Event;
+      dateInput.dispatchEvent(new Ev('input', { bubbles: true }));
+      dateInput.dispatchEvent(new Ev('change', { bubbles: true }));
+    } finally {
+      disparandoInterno = false;
+    }
+  };
+
+  // Cuando el usuario escribe DD/MM/AAAA
+  textInput.addEventListener('input', () => {
+    const enmascarado = aplicarMascaraFechaDMY(textInput.value);
+    if (textInput.value !== enmascarado) {
+      textInput.value = enmascarado;
+    }
+    if (enmascarado === '') {
+      if (!dateInput.required) {
+        emitirCambioNativo('');
+      }
+      return;
+    }
+    if (enmascarado.length >= 8) {
+      const iso = convertirFechaAISO(enmascarado);
+      if (iso && enmascarado.length === 10) {
+        emitirCambioNativo(iso);
+      }
+    }
+  });
+
+  // Al salir del campo: normalizar ej. 5/11/2026 -> 05/11/2026 o restaurar si es inválido
+  textInput.addEventListener('blur', () => {
+    const txt = String(textInput.value || '').trim();
+    if (!txt) {
+      if (!dateInput.required) {
+        emitirCambioNativo('');
+        textInput.value = '';
+      } else {
+        sincronizarVistaDesdeNativo();
+      }
+      return;
+    }
+    const iso = convertirFechaAISO(txt);
+    if (iso) {
+      textInput.value = formatearFecha(iso, '');
+      emitirCambioNativo(iso);
+    } else {
+      sincronizarVistaDesdeNativo();
+    }
+  });
+
+  textInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      const iso = convertirFechaAISO(textInput.value);
+      if (iso) {
+        textInput.value = formatearFecha(iso, '');
+        emitirCambioNativo(iso);
+      }
+    }
+  });
+
+  // Cuando cambia el <input type="date"> nativo (desde showPicker() o código externo)
+  const alCambiarNativo = () => {
+    if (disparandoInterno) return;
+    sincronizarVistaDesdeNativo();
+  };
+  dateInput.addEventListener('input', alCambiarNativo);
+  dateInput.addEventListener('change', alCambiarNativo);
+
+  // Botón de calendario abre el selector nativo del sistema
+  calBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (dateInput.disabled || dateInput.readOnly) return;
+    try {
+      if (typeof dateInput.showPicker === 'function') {
+        dateInput.showPicker();
+        return;
+      }
+    } catch (_) {
+      // Fallback para navegadores sin showPicker
+    }
+    textInput.focus();
+    textInput.select();
+  });
+
+  return dateInput;
+}
+
+/**
+ * Escanea un contenedor DOM y actualiza todos sus <input type="date"> a DD/MM/AAAA.
+ */
+function mejorarInputsFechaDMYEnContenedor(raiz) {
+  if (!raiz || typeof raiz.querySelectorAll !== 'function') return 0;
+  const inputs = raiz.querySelectorAll('input[type="date"]');
+  let total = 0;
+  inputs.forEach((inp) => {
+    if (mejorarInputFechaDMY(inp)) total++;
+  });
+  return total;
+}
+
+/**
+ * Inicializa el observador automático global para que cualquier <input type="date">
+ * renderizado estática o dinámicamente en modales/vistas use siempre DD/MM/AAAA.
+ */
+function inicializarInputsFechaDMYGlobal(docRef = null) {
+  const doc = docRef || (typeof document !== 'undefined' ? document : null);
+  if (!doc || !doc.body) return null;
+
+  mejorarInputsFechaDMYEnContenedor(doc.body);
+
+  if (doc.body._boviDmyObserverActivo) return doc.body._boviDmyObserverActivo;
+
+  const Obs = (doc.defaultView && doc.defaultView.MutationObserver) || (typeof MutationObserver !== 'undefined' ? MutationObserver : null);
+  if (!Obs) return null;
+
+  const observer = new Obs((mutations) => {
+    for (const m of mutations) {
+      if (m.type === 'childList' && m.addedNodes && m.addedNodes.length > 0) {
+        m.addedNodes.forEach((node) => {
+          if (!node || node.nodeType !== 1) return;
+          if (node.tagName === 'INPUT' && node.type === 'date') {
+            mejorarInputFechaDMY(node);
+          } else if (typeof node.querySelectorAll === 'function') {
+            mejorarInputsFechaDMYEnContenedor(node);
+          }
+        });
+      }
+    }
+  });
+
+  observer.observe(doc.body, { childList: true, subtree: true });
+  doc.body._boviDmyObserverActivo = observer;
+  return observer;
+}
+
+
+// ============================================================================
 // ARCHIVO: frontend/src/components/FichaAnimal.js
 // ============================================================================
 /**
@@ -10363,7 +10787,7 @@ class FichaAnimal {
   renderModalExtraer() {
     const a = this.animal;
     const tag = a.identificacionTag || a.numero;
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
 
     return `
       <div id="modal-extraer-animal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-5">
@@ -10543,7 +10967,7 @@ class FichaAnimal {
           let motivo = 'Venta';
           radios.forEach((rd) => { if (rd.checked) motivo = rd.value; });
 
-          const fecha = this.container.querySelector('#input-extraer-fecha')?.value || new Date().toISOString().split('T')[0];
+          const fecha = this.container.querySelector('#input-extraer-fecha')?.value || obtenerFechaHoyLocal();
           const observaciones = (this.container.querySelector('#input-extraer-obs')?.value || '').trim();
 
           const datos = {
@@ -13382,14 +13806,14 @@ class TablaDinamica {
   }
 
   exportarInformeActualExcel() {
-    const fechaHoyArchivo = obtenerFechaHoyLocal();
+    const fechaHoyArchivo = formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-');
 
     if (this.informeActivoId === 'utilidad_finca') {
       const data = this.calcularDatosInformeUtilidadActual();
       const r = data.principal;
       const filasPyG = [
         { Concepto: 'Finca / Alcance', Valor: r.nombreFinca },
-        { Concepto: 'Período Analizado', Valor: `${r.fechaDesde} a ${r.fechaHasta} (${r.diasPeriodo} días)` },
+        { Concepto: 'Período Analizado', Valor: `${formatearFecha(r.fechaDesde)} a ${formatearFecha(r.fechaHasta)} (${r.diasPeriodo} días)` },
         { Concepto: 'Tiene Ordeño Activo', Valor: r.leche.tieneOrdeno ? 'SÍ' : 'NO (Sin pesajes de leche registrados)' },
         { Concepto: 'Litros de Leche del Período', Valor: r.leche.litrosProducidosPeriodo },
         { Concepto: '(+) Ingreso por Leche ($ COP)', Valor: r.leche.ingresoLeche },
@@ -13452,7 +13876,7 @@ class TablaDinamica {
           Sexo: a.sexo || 'hembra',
           Lote_Registrado: a.lote || 'General',
           Ultimo_Peso_Kg: a.ultimoPesoKg || '',
-          Fecha_Ultimo_Trabajo: a.fechaUltimoTrabajoPrevio || '',
+          Fecha_Ultimo_Trabajo: formatearFecha(a.fechaUltimoTrabajoPrevio, ''),
           Dias_Sin_Trabajar: a.diasSinTrabajar ?? '',
           Causa_En_Terreno: this.causasTerrenoMap[claveCausa] || 'Pendiente verificar en terreno'
         };
@@ -13534,7 +13958,7 @@ class TablaDinamica {
         XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen_Cruce');
       }
 
-      const nombreArchivo = `Informe_${informeActual.id}_${this.filtroRaza !== 'todas' ? this.filtroRaza + '_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`;
+      const nombreArchivo = `Informe_${informeActual.id}_${this.filtroRaza !== 'todas' ? this.filtroRaza + '_' : ''}${fechaHoyArchivo}.xlsx`;
       if (typeof XLSX.writeFile === 'function') {
         XLSX.writeFile(wb, nombreArchivo);
       }
@@ -14306,7 +14730,7 @@ class ImportadorExcel {
     this.onCambiarFinca = onCambiarFinca || null;
 
     this.tipoCargue = 'inventario'; // 'inventario' | 'pesajes' | 'palpaciones' | 'leche' | 'partos' | 'destete'
-    this.fechaGlobal = new Date().toISOString().split('T')[0];
+    this.fechaGlobal = obtenerFechaHoyLocal();
     this.aplicarFechaGlobal = true;
     this.registros = [];
     this.fincaDestinoId = null;
@@ -14374,7 +14798,9 @@ class ImportadorExcel {
   descargarPlantillaCSV(tipo = this.tipoCargue) {
     let encabezados = [];
     let ejemplos = [];
-    let nombreArchivo = `plantilla_${tipo}_${this.fechaGlobal}.csv`;
+    const fechaEjemploDMY = formatearFecha(this.fechaGlobal);
+    const fechaArchivoDMY = fechaEjemploDMY.replace(/\//g, '-');
+    let nombreArchivo = `plantilla_${tipo}_${fechaArchivoDMY}.csv`;
 
     if (tipo === 'labores') {
       encabezados = [
@@ -14396,51 +14822,51 @@ class ImportadorExcel {
         'observaciones'
       ];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'Pesaje', '512.5', '3.5', '', '', '', '', '', '', '', '', '', '', 'Pesaje regular de manga'],
-        ['BV-102', this.fechaGlobal, 'Palpacion', '', '', 'Preñada', '95', 'CL activo cuerno derecho', '', '', '', '', '', '', '', 'Confirmada preñez'],
-        ['BV-208', this.fechaGlobal, 'Leche', '', '', '', '', '', '16.5', '', '', '', '', '', '', 'Control lechero diario'],
-        ['BV-301', this.fechaGlobal, 'Destete', '', '', '', '', '', '', '185.0', 'Levante Machos', '', '', '', '', 'Destete tradicional'],
-        ['BV-401', this.fechaGlobal, 'Parto', '', '', '', '', '', '', '', '', 'hembra', '36.0', 'CRIA-BV-401', 'TORO-08', 'Parto normal eutócico'],
-        ['BV-501', this.fechaGlobal, 'Pesaje y Palpacion', '480.0', '3.5', 'Preñada', '110', 'CL activo', '', '', '', '', '', '', '', 'Pesaje y palpación simultáneos en brete']
+        ['BV-101', fechaEjemploDMY, 'Pesaje', '512.5', '3.5', '', '', '', '', '', '', '', '', '', '', 'Pesaje regular de manga'],
+        ['BV-102', fechaEjemploDMY, 'Palpacion', '', '', 'Preñada', '95', 'CL activo cuerno derecho', '', '', '', '', '', '', '', 'Confirmada preñez'],
+        ['BV-208', fechaEjemploDMY, 'Leche', '', '', '', '', '', '16.5', '', '', '', '', '', '', 'Control lechero diario'],
+        ['BV-301', fechaEjemploDMY, 'Destete', '', '', '', '', '', '', '185.0', 'Levante Machos', '', '', '', '', 'Destete tradicional'],
+        ['BV-401', fechaEjemploDMY, 'Parto', '', '', '', '', '', '', '', '', 'hembra', '36.0', 'CRIA-BV-401', 'TORO-08', 'Parto normal eutócico'],
+        ['BV-501', fechaEjemploDMY, 'Pesaje y Palpacion', '480.0', '3.5', 'Preñada', '110', 'CL activo', '', '', '', '', '', '', '', 'Pesaje y palpación simultáneos en brete']
       ];
-      nombreArchivo = `plantilla_hoja_unica_labores_${this.fechaGlobal}.csv`;
+      nombreArchivo = `plantilla_hoja_unica_labores_${fechaArchivoDMY}.csv`;
     } else if (tipo === 'pesajes') {
       encabezados = ['numero_animal', 'fecha_pesaje', 'peso_kg', 'condicion_corporal', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, '512.5', '3.5', 'Pesaje regular de manga'],
-        ['BV-102', this.fechaGlobal, '498.0', '4.0', 'Excelente condición'],
-        ['BV-301', this.fechaGlobal, '465.0', '3.5', 'Lote de ceba intensiva'],
-        ['BUF-01', this.fechaGlobal, '620.0', '3.5', 'Búfala pesaje mensual']
+        ['BV-101', fechaEjemploDMY, '512.5', '3.5', 'Pesaje regular de manga'],
+        ['BV-102', fechaEjemploDMY, '498.0', '4.0', 'Excelente condición'],
+        ['BV-301', fechaEjemploDMY, '465.0', '3.5', 'Lote de ceba intensiva'],
+        ['BUF-01', fechaEjemploDMY, '620.0', '3.5', 'Búfala pesaje mensual']
       ];
     } else if (tipo === 'palpaciones') {
       encabezados = ['numero_animal', 'fecha_palpacion', 'resultado', 'dias_gestacion', 'estructura_ovario', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'Preñada', '110', 'CL activo cuerno derecho', 'Confirmada en primer celo'],
-        ['BV-102', this.fechaGlobal, 'Vacía', '0', 'Folículo 14mm ovárico', 'Apta para protocolo IATF'],
-        ['BV-208', this.fechaGlobal, 'Sospechosa', '35', 'Asimetría uterina', 'Rechequear en 15 días'],
-        ['BUF-01', this.fechaGlobal, 'Preñada', '135', 'CL activo', 'Gestación confirmada']
+        ['BV-101', fechaEjemploDMY, 'Preñada', '110', 'CL activo cuerno derecho', 'Confirmada en primer celo'],
+        ['BV-102', fechaEjemploDMY, 'Vacía', '0', 'Folículo 14mm ovárico', 'Apta para protocolo IATF'],
+        ['BV-208', fechaEjemploDMY, 'Sospechosa', '35', 'Asimetría uterina', 'Rechequear en 15 días'],
+        ['BUF-01', fechaEjemploDMY, 'Preñada', '135', 'CL activo', 'Gestación confirmada']
       ];
     } else if (tipo === 'leche') {
       encabezados = ['numero_animal', 'fecha_pesaje_leche', 'litros_manana', 'litros_tarde', 'total_litros', 'notas_ubre'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, '8.5', '6.0', '14.5', 'Ubre sana sin mastitis'],
-        ['BV-102', this.fechaGlobal, '9.2', '7.3', '16.5', 'Pico de lactancia'],
-        ['BV-208', this.fechaGlobal, '5.0', '4.0', '9.0', 'Tercio final de lactancia'],
-        ['BUF-01', this.fechaGlobal, '6.0', '4.5', '10.5', 'Leche rica en sólidos']
+        ['BV-101', fechaEjemploDMY, '8.5', '6.0', '14.5', 'Ubre sana sin mastitis'],
+        ['BV-102', fechaEjemploDMY, '9.2', '7.3', '16.5', 'Pico de lactancia'],
+        ['BV-208', fechaEjemploDMY, '5.0', '4.0', '9.0', 'Tercio final de lactancia'],
+        ['BUF-01', fechaEjemploDMY, '6.0', '4.5', '10.5', 'Leche rica en sólidos']
       ];
     } else if (tipo === 'partos') {
       encabezados = ['numero_madre', 'fecha_parto', 'sexo_cria', 'peso_cria_kg', 'tag_cria', 'padre_toro', 'observaciones'];
       ejemplos = [
-        ['BV-101', this.fechaGlobal, 'hembra', '34.5', 'CRIA-BV-101', 'TORO-08', 'Parto normal eutócico'],
-        ['BV-102', this.fechaGlobal, 'macho', '38.0', 'CRIA-BV-102', 'TORO-12', 'Cría vigorosa'],
-        ['BUF-01', this.fechaGlobal, 'hembra', '39.0', 'BUF-CRIA-01', 'BUF-TORO-01', 'Bucerro nacido en potrero']
+        ['BV-101', fechaEjemploDMY, 'hembra', '34.5', 'CRIA-BV-101', 'TORO-08', 'Parto normal eutócico'],
+        ['BV-102', fechaEjemploDMY, 'macho', '38.0', 'CRIA-BV-102', 'TORO-12', 'Cría vigorosa'],
+        ['BUF-01', fechaEjemploDMY, 'hembra', '39.0', 'BUF-CRIA-01', 'BUF-TORO-01', 'Bucerro nacido en potrero']
       ];
     } else if (tipo === 'destete') {
       encabezados = ['numero_animal', 'fecha_destete', 'peso_destete_kg', 'lote_destino', 'observaciones'];
       ejemplos = [
-        ['CRIA-BV-101', this.fechaGlobal, '185.0', 'Levante Hembras', 'Destete a los 8 meses'],
-        ['CRIA-BV-102', this.fechaGlobal, '210.5', 'Levante Machos', 'Buen desarrollo muscular'],
-        ['BUF-CRIA-01', this.fechaGlobal, '195.0', 'Búfalas Levante', 'Destete en peso ideal']
+        ['CRIA-BV-101', fechaEjemploDMY, '185.0', 'Levante Hembras', 'Destete a los 8 meses'],
+        ['CRIA-BV-102', fechaEjemploDMY, '210.5', 'Levante Machos', 'Buen desarrollo muscular'],
+        ['BUF-CRIA-01', fechaEjemploDMY, '195.0', 'Búfalas Levante', 'Destete en peso ideal']
       ];
     } else {
       // Inventario General
@@ -14464,11 +14890,11 @@ class ImportadorExcel {
         'fecha_ultimo_parto'
       ];
       ejemplos = [
-        ['BV-101', 'vacuno', 'Paloma', 'hembra', 'Brahman x Gyr', 'Vaca de Ordeño', 'Ordeño 1', '2021-04-12', 'TORO-08', 'BV-050', this.fechaGlobal, '510', '420', this.fechaGlobal, 'Preñada', '110', '2025-11-20'],
-        ['BV-102', 'vacuno', 'Candela', 'hembra', 'Gyr Puro', 'Vaca de Ordeño', 'Ordeño 1', '2020-08-05', 'TORO-12', 'BV-014', this.fechaGlobal, '500', '350', this.fechaGlobal, 'Preñada', '215', '2025-10-20'],
-        ['BV-208', 'vacuno', 'Sultana', 'hembra', 'Guzerá x Holstein', 'Vaca de Ordeño', 'Ordeño 2', '2021-01-20', 'TORO-04', 'BV-098', this.fechaGlobal, '515', '180', this.fechaGlobal, 'Vacía', '0', '2026-01-05'],
-        ['BV-301', 'vacuno', 'Centella', 'macho', 'Nelore x Angus', 'Novillo de Ceba', 'Ceba Intensiva', '2024-03-10', 'TORO-15', 'BV-210', this.fechaGlobal, '455', '650', '', 'No Aplica', '0', ''],
-        ['BUF-01', 'bufalino', 'Noche Buena', 'hembra', 'Murrah Lechero', 'Vaca de Ordeño', 'Búfalas Ordeño', '2021-09-14', 'BUF-TORO-01', 'BUF-005', this.fechaGlobal, '610', '490', this.fechaGlobal, 'Preñada', '130', '2025-12-01']
+        ['BV-101', 'vacuno', 'Paloma', 'hembra', 'Brahman x Gyr', 'Vaca de Ordeño', 'Ordeño 1', '12/04/2021', 'TORO-08', 'BV-050', fechaEjemploDMY, '510', '420', fechaEjemploDMY, 'Preñada', '110', '20/11/2025'],
+        ['BV-102', 'vacuno', 'Candela', 'hembra', 'Gyr Puro', 'Vaca de Ordeño', 'Ordeño 1', '05/08/2020', 'TORO-12', 'BV-014', fechaEjemploDMY, '500', '350', fechaEjemploDMY, 'Preñada', '215', '20/10/2025'],
+        ['BV-208', 'vacuno', 'Sultana', 'hembra', 'Guzerá x Holstein', 'Vaca de Ordeño', 'Ordeño 2', '20/01/2021', 'TORO-04', 'BV-098', fechaEjemploDMY, '515', '180', fechaEjemploDMY, 'Vacía', '0', '05/01/2026'],
+        ['BV-301', 'vacuno', 'Centella', 'macho', 'Nelore x Angus', 'Novillo de Ceba', 'Ceba Intensiva', '10/03/2024', 'TORO-15', 'BV-210', fechaEjemploDMY, '455', '650', '', 'No Aplica', '0', ''],
+        ['BUF-01', 'bufalino', 'Noche Buena', 'hembra', 'Murrah Lechero', 'Vaca de Ordeño', 'Búfalas Ordeño', '14/09/2021', 'BUF-TORO-01', 'BUF-005', fechaEjemploDMY, '610', '490', fechaEjemploDMY, 'Preñada', '130', '01/12/2025']
       ];
     }
 
@@ -14548,7 +14974,7 @@ class ImportadorExcel {
   _procesarWorkbookMultiplesHojas(workbook) {
     const registrosCombinados = [];
     let idxGlobal = 1;
-    const hoyDefecto = this.fechaGlobal || new Date().toISOString().split('T')[0];
+    const hoyDefecto = this.fechaGlobal || obtenerFechaHoyLocal();
 
     (workbook.SheetNames || []).forEach((sheetName) => {
       const sNameLower = (sheetName || '').toLowerCase();
@@ -14759,7 +15185,7 @@ class ImportadorExcel {
       return defaultIdx;
     };
 
-    const hoyDefecto = this.fechaGlobal || new Date().toISOString().split('T')[0];
+    const hoyDefecto = this.fechaGlobal || obtenerFechaHoyLocal();
 
     // Detección automática si la hoja contiene columnas unificadas de múltiples labores
     const tieneColumnaLabor = headers.some((h) => h === 'labor' || h === 'tipo_labor' || h === 'evento_labor');
@@ -15296,7 +15722,7 @@ class ImportadorExcel {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reporte_no_encontrados_${this.informeResultados.tipoCargue || 'masivo'}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `reporte_no_encontrados_${this.informeResultados.tipoCargue || 'masivo'}_${formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -17129,8 +17555,8 @@ class ModuloAdmin {
                           <span class="font-mono font-black text-slate-800">$${monto.toLocaleString('es-CO')}</span>
                         </div>
                         <div>
-                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Plazo</span>
-                          <span class="font-bold text-slate-800">${meses} Meses</span>
+                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Plazo${inv.fecha || inv.fechaInicio ? ' • Inicio' : ''}</span>
+                          <span class="font-bold text-slate-800">${meses} Meses${inv.fecha || inv.fechaInicio ? ` (${formatearFecha(inv.fecha || inv.fechaInicio)})` : ''}</span>
                         </div>
                       </div>
                     </div>
@@ -19370,7 +19796,7 @@ END $$;
           telefono: telefono || '',
           password: password || 'BoviPass123*',
           activo: true,
-          fechaCreacion: new Date().toISOString().split('T')[0]
+          fechaCreacion: obtenerFechaHoyLocal()
         };
 
         if (this.onCrearUsuario) {
@@ -19636,7 +20062,7 @@ END $$;
             plazoMesesDiferido: plazo,
             cuotaMensual: Math.round(monto / plazo),
             estado: 'Activa',
-            fechaInicio: new Date().toISOString().split('T')[0]
+            fechaInicio: obtenerFechaHoyLocal()
           });
         }
         this.modalCrearInversionAbierto = false;
@@ -20664,7 +21090,7 @@ END $$;
           registrarPesoAnimalEnFinca: async ({ animal, idAnimal, pesoKg, fecha }) => {
             const tagReal = String(animal.identificacionTag || animal.identificacion_tag || idAnimal).trim().toUpperCase();
             const fincaTarget = String(animal.fincaId || animal.finca_id || '');
-            const fechaHoy = fecha || new Date().toISOString().split('T')[0];
+            const fechaHoy = fecha || obtenerFechaHoyLocal();
 
             if (this.whatsappRepoOverride && typeof repo.registrarPesoAnimalEnFinca === 'function') {
               const resRemoto = await repo.registrarPesoAnimalEnFinca({
@@ -21584,7 +22010,7 @@ END $$;
                       <span class="font-mono font-bold text-slate-800 ml-1">+${m.telefono}</span>
                       <span class="text-slate-600 ml-1">${m.contenido_resumen}</span>
                     </div>
-                    <span class="text-[10px] font-mono text-slate-600 shrink-0">${String(m.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                    <span class="text-[10px] font-mono text-slate-600 shrink-0">${formatearFechaHora(m.created_at)}</span>
                   </div>
                 `).join('') : `
                   <div class="p-3 text-center text-slate-600">Sin mensajes registrados en Supabase para esta empresa.</div>
@@ -21608,7 +22034,7 @@ END $$;
             <table class="w-full text-xs text-left" id="tabla-wa-consumo-facturacion">
               <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
                 <tr>
-                  <th class="p-2.5">Mes (YYYY-MM)</th>
+                  <th class="p-2.5">Fecha Corte (DD/MM/AAAA)</th>
                   <th class="p-2.5">Empresa</th>
                   <th class="p-2.5 text-right">Entrantes (IN)</th>
                   <th class="p-2.5 text-right">Respuestas Texto (OUT)</th>
@@ -21619,7 +22045,7 @@ END $$;
               <tbody class="divide-y divide-slate-100">
                 ${reporteConsumo.length > 0 ? reporteConsumo.map((r) => `
                   <tr>
-                    <td class="p-2.5 font-mono font-bold text-slate-800">${r.mes}</td>
+                    <td class="p-2.5 font-mono font-bold text-slate-800">${formatearFecha(r.mes)}</td>
                     <td class="p-2.5 font-bold text-slate-800">${r.empresa_nombre} <span class="text-[10px] font-mono text-slate-600">(${r.empresa_id})</span></td>
                     <td class="p-2.5 text-right font-mono">${r.entrantes_texto}</td>
                     <td class="p-2.5 text-right font-mono">${r.salientes_texto}</td>
@@ -21663,7 +22089,7 @@ END $$;
                   const tieneError = Boolean(st.error_code || st.status === 'failed');
                   return `
                     <tr class="${tieneError ? 'bg-rose-50 text-rose-900' : ''}">
-                      <td class="p-2.5 font-mono text-[11px]">${String(st.timestamp || st.created_at || '').slice(0, 19).replace('T', ' ')}</td>
+                      <td class="p-2.5 font-mono text-[11px]">${formatearFechaHora(st.timestamp || st.created_at)}</td>
                       ${isSuper ? `<td class="p-2.5 font-bold">${mapaNombresEmpresas.get(String(st.empresa_id)) || st.empresa_id || '—'}</td>` : ''}
                       <td class="p-2.5 font-mono font-bold">+${st.recipient_id || '—'}</td>
                       <td class="p-2.5 font-mono text-[10px]">${String(st.wamid || '').slice(0, 28)}</td>
@@ -21825,7 +22251,7 @@ class ModuloReproduccion {
   }
 
   renderFormularioRegistro(hembras) {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
 
     return `
       <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -23848,7 +24274,7 @@ class PestanaAnimales {
           padre: padre,
           madre: madre,
           ultimoPesoKg: peso,
-          fechaUltimoPesaje: peso ? new Date().toISOString().split('T')[0] : null,
+          fechaUltimoPesaje: peso ? obtenerFechaHoyLocal() : null,
           estadoReproductivo: repro,
           diasGestacionActual: diasG,
           fechaUltimoParto: ultimoParto,
@@ -24228,7 +24654,7 @@ class ModuloTraslados {
 
     this.fincaOrigenId = null;
     this.fincaDestinoId = null;
-    this.fechaTraslado = new Date().toISOString().split('T')[0];
+    this.fechaTraslado = obtenerFechaHoyLocal();
     this.motivo = 'Pastoreo y Rotación de Potreros';
     this.loteDestino = 'Lote Traslado';
     this.observaciones = '';
@@ -25113,7 +25539,7 @@ class ModuloIngresosDiarios {
               <button id="btn-rango-todo" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'todo' && !this.filtroFecha ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
                 Todo
               </button>
-              <button id="btn-rango-hoy" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'hoy' || this.filtroFecha === new Date().toISOString().split('T')[0] ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
+              <button id="btn-rango-hoy" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'hoy' || this.filtroFecha === obtenerFechaHoyLocal() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
                 Hoy
               </button>
               <button id="btn-rango-7dias" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === '7dias' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
@@ -25455,7 +25881,7 @@ class ModuloIngresosDiarios {
     a.href = url;
     const tagGrupo = grupo || this.filtroAccion || 'Actividades';
     const tagFinca = this.filtroFinca || 'Todas';
-    a.download = `BoviTrack_Bitacora_${tagGrupo}_${tagFinca}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `BoviTrack_Bitacora_${tagGrupo}_${tagFinca}_${formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -25522,7 +25948,7 @@ class ModuloIngresosDiarios {
     if (btnHoy) {
       btnHoy.addEventListener('click', () => {
         this.filtroRango = 'hoy';
-        this.filtroFecha = new Date().toISOString().split('T')[0];
+        this.filtroFecha = obtenerFechaHoyLocal();
         this.render();
       });
     }
@@ -25751,7 +26177,7 @@ class ModuloNutricion {
       raza: planInicial.raza,
       razaConfirmada: planInicial.razaConfirmada,
       edadMeses: planInicial.edadMeses,
-      fechaAnalisis: new Date().toISOString().split('T')[0],
+      fechaAnalisis: obtenerFechaHoyLocal(),
       etapaProductiva: planInicial.etapaProductiva,
       tallaCm: planInicial.tallaCm,
       tallaFrame: planInicial.tallaFrame,
@@ -25999,7 +26425,7 @@ class ModuloNutricion {
       razaConfirmada: this.planGenerado.razaConfirmada,
       sincronizarRazaFicha: razaConfirmadaCheck,
       edadMeses: this.planGenerado.edadMeses,
-      fechaAnalisis: new Date().toISOString().split('T')[0],
+      fechaAnalisis: obtenerFechaHoyLocal(),
       etapaProductiva: this.planGenerado.etapaProductiva,
       tallaCm: this.planGenerado.tallaCm,
       tallaFrame: this.planGenerado.tallaFrame,
@@ -28213,7 +28639,7 @@ class ModuloContabilidad {
   }
 
   renderSeccionMovimientos({ fincas, fincaDefaultForm, categoriasForm, esSoloConsulta }) {
-    const hoyIso = new Date().toISOString().split('T')[0];
+    const hoyIso = obtenerFechaHoyLocal();
     return `
       <div class="bovi-agrotech-card bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-sm">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 mb-5 border-b border-slate-200">
@@ -28488,7 +28914,7 @@ class ModuloContabilidad {
                 return `
                   <tr class="hover:bg-slate-50 transition">
                     <td class="p-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
-                      <div>${this.escape(inv.mesInicio)} → ${this.escape(inv.mesFin)}</div>
+                      <div>${this.escape(inv.fechaInicioDMY || formatearFecha(inv.fecha || inv.mesInicio))} → ${this.escape(inv.fechaFinDMY || formatearFecha(inv.mesFin))}</div>
                       <div class="text-[10px] text-slate-600">Mes ${inv.mesesTranscurridos} de ${inv.plazoMeses} (${inv.porcentajeAvance}%)</div>
                     </td>
                     <td class="p-3 font-bold text-slate-800 whitespace-nowrap">
@@ -28536,7 +28962,7 @@ class ModuloContabilidad {
   }
 
   renderSeccionNomina({ fincas, fincaDefaultForm, trabajadoresFiltrados, pagosNominaFiltrados, esSoloConsulta }) {
-    const hoyIso = new Date().toISOString().split('T')[0];
+    const hoyIso = obtenerFechaHoyLocal();
     const primerTrab = trabajadoresFiltrados[0] || null;
     const liqInicial = calcularLiquidacionNomina({
       modalidad: primerTrab ? primerTrab.modalidad : 'Sueldo fijo mensual',
@@ -28848,7 +29274,7 @@ class ModuloContabilidad {
                   <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span class="font-bold text-slate-800">${this.escape(p.trabajadorNombre || 'Trabajador')}</span>
-                      <span class="text-slate-600"> • ${this.escape(p.periodo || 'Mensual')} (${this.escape(p.fecha)}) • 🏡 ${this.escape(fincaObj ? fincaObj.nombre : p.fincaId)}</span>
+                      <span class="text-slate-600"> • ${this.escape(p.periodo || 'Mensual')} (${this.escape(formatearFecha(p.fecha))}) • 🏡 ${this.escape(fincaObj ? fincaObj.nombre : p.fincaId)}</span>
                       <div class="text-[11px] text-slate-600 mt-0.5">
                         Neto: <strong>${formatearMonedaCOP(p.netoTrabajador)}</strong> | Seg. Social: <strong>${formatearMonedaCOP(p.totalSeguridadSocial)}</strong> | Prestaciones: <strong>${formatearMonedaCOP(p.totalPrestaciones)}</strong>
                       </div>
@@ -28895,7 +29321,8 @@ class ModuloContabilidad {
           String(m.concepto || '').toLowerCase().includes(q) ||
           String(m.categoria || '').toLowerCase().includes(q) ||
           String(m.tercero || '').toLowerCase().includes(q) ||
-          String(m.metodoPago || '').toLowerCase().includes(q);
+          String(m.metodoPago || '').toLowerCase().includes(q) ||
+          formatearFecha(m.fecha, '').toLowerCase().includes(q);
         if (!coincide) return false;
       }
       return true;
@@ -28974,7 +29401,7 @@ class ModuloContabilidad {
 
                 return `
                   <tr class="bovi-table-row-hover transition">
-                    <td class="p-3.5 font-mono font-semibold text-slate-700 whitespace-nowrap">${this.escape(m.fecha)}</td>
+                    <td class="p-3.5 font-mono font-semibold text-slate-700 whitespace-nowrap">${this.escape(formatearFecha(m.fecha))}</td>
                     <td class="p-3.5 font-bold text-slate-800 whitespace-nowrap">
                       🏡 ${this.escape(fincaObj ? fincaObj.nombre : (m.fincaNombre || m.fincaId))}
                     </td>
@@ -29473,10 +29900,10 @@ class ModuloContabilidad {
     const filas = resumen.movimientosFiltrados.map((m) => {
       const fObj = fincas.find((f) => f.id === (m.fincaId || m.finca_id));
       return {
-        Fecha: m.fecha || '',
+        Fecha: formatearFecha(m.fecha, ''),
         Finca_ID: m.fincaId || m.finca_id || '',
         Finca: fObj ? fObj.nombre : (m.fincaNombre || m.fincaId || ''),
-        Tipo: m.tipo === 'ingreso' ? 'Ingreso' : m.tipo === 'costo_directo' ? 'Costo Directo' : m.tipo === 'nomina' ? 'Nómina y Seg. Social' : 'Gasto Administrativo',
+        Tipo: m.tipo === 'ingreso' ? 'Ingreso' : m.tipo === 'costo_directo' ? 'Costo Directo' : m.tipo === 'inversion_diferida' ? 'Inversión Diferida' : m.tipo === 'nomina' ? 'Nómina y Seg. Social' : 'Gasto Administrativo',
         Categoria: m.categoria || '',
         Concepto: m.concepto || '',
         Proveedor_Tercero: m.tercero || '',
@@ -29485,6 +29912,8 @@ class ModuloContabilidad {
         Monto_COP: Number(m.monto || 0)
       };
     });
+
+    const fechaArchivoDMY = formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-');
 
     if (formato === 'xlsx' && typeof XLSX !== 'undefined') {
       const wb = XLSX.utils.book_new();
@@ -29504,8 +29933,7 @@ class ModuloContabilidad {
       ]);
       XLSX.utils.book_append_sheet(wb, wsPyG, 'Estado_Resultados_PyG');
 
-      const fechaStr = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `Contabilidad_Nomina_GanaderoAD_${fechaStr}.xlsx`);
+      XLSX.writeFile(wb, `Contabilidad_Nomina_GanaderoAD_${fechaArchivoDMY}.xlsx`);
       return { ok: true, formato: 'xlsx', filas: filas.length };
     }
 
@@ -29530,7 +29958,7 @@ class ModuloContabilidad {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Contabilidad_Nomina_GanaderoAD_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `Contabilidad_Nomina_GanaderoAD_${fechaArchivoDMY}.csv`;
       document.body.appendChild(a);
       if (typeof a.click === 'function') a.click();
       document.body.removeChild(a);
@@ -31244,6 +31672,7 @@ class CuadriculaMasiva {
 
 
 
+
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -31302,6 +31731,7 @@ class BoviTrackApp {
       this.guardarEstado();
     };
 
+    inicializarInputsFechaDMYGlobal();
     this.iniciarPWA();
     this.iniciarComponentes();
     this.iniciarSincronizacionEnLineaPermanente();
@@ -33412,7 +33842,7 @@ class BoviTrackApp {
     this._modalOfflineAbierto = true;
     const info = this.obtenerEstadoModoOffline();
     const fechaDescTxt = info.descargadoEn
-      ? new Date(info.descargadoEn).toLocaleString('es-CO')
+      ? formatearFechaHora(info.descargadoEn)
       : 'Pendiente descargar';
 
     modal.innerHTML = `
@@ -33844,7 +34274,7 @@ class BoviTrackApp {
             registros: [{
               tag: String(tag || '').trim().toUpperCase(),
               pesoNuevo: Number(pesoKg),
-              fecha: fecha || new Date().toISOString().split('T')[0],
+              fecha: fecha || obtenerFechaHoyLocal(),
               condicionCorporal: '3.5',
               observaciones: 'Pesaje registrado vía WhatsApp Cloud API'
             }]
@@ -33945,7 +34375,7 @@ class BoviTrackApp {
     const fincaId = mov.fincaId || mov.finca_id || this.state.fincaActivaId;
     const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
     const id = mov.id || `MOV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const fecha = mov.fecha || new Date().toISOString().split('T')[0];
+    const fecha = mov.fecha || obtenerFechaHoyLocal();
 
     const nuevoMov = {
       ...mov,
@@ -34052,7 +34482,7 @@ class BoviTrackApp {
     const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
     const idPago = pago.id || `NOM-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const idMovContable = `MOV-NOM-${idPago}`;
-    const fecha = pago.fecha || new Date().toISOString().split('T')[0];
+    const fecha = pago.fecha || obtenerFechaHoyLocal();
 
     const costoTotalFinca = Math.max(0, Number(pago.costoTotalFinca || pago.montoTotal || pago.netoTrabajador || 0));
 
@@ -34250,7 +34680,7 @@ class BoviTrackApp {
     if (!empresa) return false;
     if (empresa.activa === false) return true;
     if (empresa.tiempoIndefinido || empresa.fechaVencimiento === 'indefinido' || !empresa.fechaVencimiento) return false;
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaHoyLocal();
     return empresa.fechaVencimiento < hoyStr;
   }
 
@@ -34278,7 +34708,7 @@ class BoviTrackApp {
       };
     }
 
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaHoyLocal();
     const fVenc = empresa.fechaVencimiento || '2027-09-15';
 
     const hoyMs = new Date(hoyStr).getTime();
@@ -34426,7 +34856,7 @@ class BoviTrackApp {
     if (!this.state.empresas) this.state.empresas = [];
     if (!empresa.id) empresa.id = `EMP-${Date.now()}`;
     empresa.activa = empresa.activa !== false;
-    empresa.fechaCreacion = new Date().toISOString().split('T')[0];
+    empresa.fechaCreacion = obtenerFechaHoyLocal();
 
     // Calcular fecha de vencimiento según el tiempo de activación seleccionado (1, 3, 6 meses, 1 año o Indefinido)
     if (!empresa.fechaVencimiento) {
@@ -34847,7 +35277,7 @@ class BoviTrackApp {
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
 
-    const fechaExtraccion = fecha || new Date().toISOString().split('T')[0];
+    const fechaExtraccion = fecha || obtenerFechaHoyLocal();
     const motivoNorm = (motivo || 'Venta').trim();
     const tag = animal.identificacionTag || animal.numero || 'Sin Tag';
 
@@ -34950,14 +35380,14 @@ class BoviTrackApp {
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
       tipo: 'reactivacion',
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: obtenerFechaHoyLocal(),
       fincaId: fincaDestino,
       descripcion: `Reactivación e ingreso al hato activo`
     });
 
     this.registrarActividadOperacion({
       fincaId: fincaDestino,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: obtenerFechaHoyLocal(),
       modulo: 'animales',
       accion: 'reactivacion_animal',
       monto: 0,
@@ -35020,7 +35450,7 @@ class BoviTrackApp {
       animal._motivoExtraido = null;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
       tipo: 'traslado',
@@ -35273,7 +35703,7 @@ class BoviTrackApp {
         id: `PES-${animal.fincaId}-${String(animal.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_')}`,
         animalId: animal.id,
         tag: animal.identificacionTag,
-        fecha: animal.fechaUltimoPesaje || new Date().toISOString().split('T')[0],
+        fecha: animal.fechaUltimoPesaje || obtenerFechaHoyLocal(),
         peso: Number(animal.ultimoPesoKg),
         pesoNuevo: Number(animal.ultimoPesoKg),
         gdp: animal.gdpPromedioGDia ? Number(animal.gdpPromedioGDia) : null,
@@ -35338,7 +35768,7 @@ class BoviTrackApp {
 
     if (animalActualizado.ultimoPesoKg !== undefined && animalActualizado.ultimoPesoKg !== null && animalActualizado.ultimoPesoKg !== '') {
       const nuevoPeso = parseFloat(animalActualizado.ultimoPesoKg);
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = obtenerFechaHoyLocal();
       const fechaPesaje = animalActualizado.fechaUltimoPesaje || hoy;
 
       this.state.animales[idx].pesoActual = nuevoPeso;
@@ -35719,7 +36149,7 @@ class BoviTrackApp {
       const registroDirectorio = [{
         id: 'SYS_DIRECTORIO_EMPRESAS',
         empresa_id: null,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: obtenerFechaHoyLocal(),
         finca_id: null,
         finca_nombre: 'SISTEMA',
         accion: 'SYS_DIRECTORIO_EMPRESAS',
@@ -36677,7 +37107,7 @@ class BoviTrackApp {
     const fincaObj = (this.state.fincas || []).find((f) => f.id === resolvedFincaId);
     const nombreFinca = fincaObj ? fincaObj.nombre : resolvedFincaId;
     const safeFincaSuffix = String(resolvedFincaId).replace(/[^a-zA-Z0-9]/g, '').slice(-6) || 'FIN';
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const fechaSesion = fechaGlobal || hoy;
 
     // Búsqueda estrictamente aislada dentro del predio destino (con normalización de arete)
@@ -38026,7 +38456,7 @@ class BoviTrackApp {
       return false;
     }
 
-    const fechaOp = fecha || new Date().toISOString().split('T')[0];
+    const fechaOp = fecha || obtenerFechaHoyLocal();
     const horaOp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const fOrigen = (this.state.fincas || []).find((f) => f.id === fincaOrigenId);
     const fDestino = (this.state.fincas || []).find((f) => f.id === fincaDestinoId);
@@ -38137,7 +38567,7 @@ class BoviTrackApp {
       this.state.operacionesDiarias = [];
     }
     const id = op.id || `ACT-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const fecha = op.fecha || new Date().toISOString().split('T')[0];
+    const fecha = op.fecha || obtenerFechaHoyLocal();
     const hora = op.hora || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const fincaObj = (this.state.fincas || []).find((f) => f.id === op.fincaId);
     const fincaNombre = op.fincaNombre || (fincaObj ? fincaObj.nombre : op.fincaId);
@@ -38227,18 +38657,18 @@ class BoviTrackApp {
 
     // Filtro por rango relativo
     if (rango && rango !== 'todo' && !fecha) {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaHoyLocal();
       if (rango === 'hoy') {
         list = list.filter((op) => op.fecha === hoyStr);
       } else if (rango === '7dias') {
         const d = new Date();
         d.setDate(d.getDate() - 7);
-        const lim = d.toISOString().split('T')[0];
+        const lim = obtenerFechaHoyLocal(d);
         list = list.filter((op) => op.fecha >= lim);
       } else if (rango === '30dias') {
         const d = new Date();
         d.setDate(d.getDate() - 30);
-        const lim = d.toISOString().split('T')[0];
+        const lim = obtenerFechaHoyLocal(d);
         list = list.filter((op) => op.fecha >= lim);
       }
     }
@@ -38257,7 +38687,8 @@ class BoviTrackApp {
           (op.subDetalle || '').toLowerCase().includes(q) ||
           (op.observaciones || '').toLowerCase().includes(q) ||
           (op.responsable || '').toLowerCase().includes(q) ||
-          (op.fecha || '').toLowerCase().includes(q)
+          (op.fecha || '').toLowerCase().includes(q) ||
+          formatearFecha(op.fecha, '').toLowerCase().includes(q)
         );
       });
     }

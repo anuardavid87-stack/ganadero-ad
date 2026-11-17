@@ -4,7 +4,7 @@
 // Multi-Finca (whatsapp_contact_access), Búsqueda Automática, Ventana 24h y RLS
 // ============================================================================
 
-import { calcularGDPEjemplar } from './zootecnia.js';
+import { calcularGDPEjemplar, formatearFecha, obtenerFechaHoyLocal } from './zootecnia.js';
 
 export const GRAPH_API_VERSION = 'v25.0';
 
@@ -663,7 +663,7 @@ export function formatearBloqueFichaAnimalWhatsApp(animal = {}, metaFinca = {}, 
     );
     const fechaPeso = animal.fecha_ultimo_pesaje || animal.fechaUltimoPesaje || '';
     const textoPeso = pesoActual > 0
-        ? (fechaPeso ? `${pesoActual} kg (${fechaPeso})` : `${pesoActual} kg`)
+        ? (fechaPeso ? `${pesoActual} kg (${formatearFecha(fechaPeso)})` : `${pesoActual} kg`)
         : 'Sin pesaje';
     const lote = animal.lote || 'General';
     const fincaNombre = metaFinca.finca_nombre || animal.finca_nombre || metaFinca.finca_id || 'Finca';
@@ -690,7 +690,7 @@ export function formatearBloqueFichaAnimalWhatsApp(animal = {}, metaFinca = {}, 
  */
 export async function ejecutarComandoAlcanceWhatsApp(textoMensaje, alcance, repoOrAdapter, contexto = {}) {
     const parsed = parsearComandoTextoWhatsApp(textoMensaje);
-    const fechaHoy = contexto.fechaHoy || new Date().toISOString().split('T')[0];
+    const fechaHoy = contexto.fechaHoy || obtenerFechaHoyLocal();
     const fincasPermitidas = Array.isArray(alcance?.fincasPermitidas) ? alcance.fincasPermitidas : [];
     const mapaFincaMeta = new Map(fincasPermitidas.map((fp) => [String(fp.finca_id), fp]));
     const empresasAlcance = Array.isArray(alcance?.empresasIds) && alcance.empresasIds.length > 0

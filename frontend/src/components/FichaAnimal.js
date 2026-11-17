@@ -4,7 +4,7 @@
  * historial de partos, crías nacidas, pesajes previos, GDP e IEP.
  */
 
-import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha } from '../core/zootecnia.js';
+import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 
 export class FichaAnimal {
   constructor({ containerId = 'modal-ficha-animal', onCerrar, onEditar, onEliminar, onTrasladar, onExtraer, onReactivar, getRol }) {
@@ -575,7 +575,7 @@ export class FichaAnimal {
   renderModalExtraer() {
     const a = this.animal;
     const tag = a.identificacionTag || a.numero;
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
 
     return `
       <div id="modal-extraer-animal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-5">
@@ -755,7 +755,7 @@ export class FichaAnimal {
           let motivo = 'Venta';
           radios.forEach((rd) => { if (rd.checked) motivo = rd.value; });
 
-          const fecha = this.container.querySelector('#input-extraer-fecha')?.value || new Date().toISOString().split('T')[0];
+          const fecha = this.container.querySelector('#input-extraer-fecha')?.value || obtenerFechaHoyLocal();
           const observaciones = (this.container.querySelector('#input-extraer-obs')?.value || '').trim();
 
           const datos = {

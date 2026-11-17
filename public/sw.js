@@ -1,8 +1,8 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v4.7.0 (OFFLINE FIELD MODE & CACHE WARMING)
+// GANADERO AD PWA: SERVICE WORKER v4.8.0 (OFFLINE FIELD MODE & FECHAS DD/MM/AAAA)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.7.0-offline-field';
+const CACHE_NAME = 'ganadero-ad-v4.8.0-fechas-dmy';
 const CORE_FILES = [
   './',
   './index.html',

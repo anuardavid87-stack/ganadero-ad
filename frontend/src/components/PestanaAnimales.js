@@ -7,7 +7,7 @@
  * Incluye búsqueda en vivo, filtros combinados, modal de "+ Nuevo Animal" y apertura de Ficha Técnica.
  */
 
-import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha } from '../core/zootecnia.js';
+import { calcularDiasAbiertos, calcularDEL, calcularIEP, calcularEdadMeses, formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 import { conectarAutosuggestAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class PestanaAnimales {
@@ -1082,7 +1082,7 @@ export class PestanaAnimales {
           padre: padre,
           madre: madre,
           ultimoPesoKg: peso,
-          fechaUltimoPesaje: peso ? new Date().toISOString().split('T')[0] : null,
+          fechaUltimoPesaje: peso ? obtenerFechaHoyLocal() : null,
           estadoReproductivo: repro,
           diasGestacionActual: diasG,
           fechaUltimoParto: ultimoParto,

@@ -29,7 +29,7 @@ import {
   calcularReporteConsumoWhatsAppDesdeLogs,
   obtenerTextoAyudaWhatsApp
 } from '../core/whatsappCloudService.js';
-import { formatearFecha } from '../core/zootecnia.js';
+import { formatearFecha, formatearFechaHora, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 
 export class ModuloAdmin {
   constructor({
@@ -1175,8 +1175,8 @@ export class ModuloAdmin {
                           <span class="font-mono font-black text-slate-800">$${monto.toLocaleString('es-CO')}</span>
                         </div>
                         <div>
-                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Plazo</span>
-                          <span class="font-bold text-slate-800">${meses} Meses</span>
+                          <span class="text-slate-600 block text-[10px] uppercase font-bold">Plazo${inv.fecha || inv.fechaInicio ? ' • Inicio' : ''}</span>
+                          <span class="font-bold text-slate-800">${meses} Meses${inv.fecha || inv.fechaInicio ? ` (${formatearFecha(inv.fecha || inv.fechaInicio)})` : ''}</span>
                         </div>
                       </div>
                     </div>
@@ -3416,7 +3416,7 @@ END $$;
           telefono: telefono || '',
           password: password || 'BoviPass123*',
           activo: true,
-          fechaCreacion: new Date().toISOString().split('T')[0]
+          fechaCreacion: obtenerFechaHoyLocal()
         };
 
         if (this.onCrearUsuario) {
@@ -3682,7 +3682,7 @@ END $$;
             plazoMesesDiferido: plazo,
             cuotaMensual: Math.round(monto / plazo),
             estado: 'Activa',
-            fechaInicio: new Date().toISOString().split('T')[0]
+            fechaInicio: obtenerFechaHoyLocal()
           });
         }
         this.modalCrearInversionAbierto = false;
@@ -4710,7 +4710,7 @@ END $$;
           registrarPesoAnimalEnFinca: async ({ animal, idAnimal, pesoKg, fecha }) => {
             const tagReal = String(animal.identificacionTag || animal.identificacion_tag || idAnimal).trim().toUpperCase();
             const fincaTarget = String(animal.fincaId || animal.finca_id || '');
-            const fechaHoy = fecha || new Date().toISOString().split('T')[0];
+            const fechaHoy = fecha || obtenerFechaHoyLocal();
 
             if (this.whatsappRepoOverride && typeof repo.registrarPesoAnimalEnFinca === 'function') {
               const resRemoto = await repo.registrarPesoAnimalEnFinca({
@@ -5630,7 +5630,7 @@ END $$;
                       <span class="font-mono font-bold text-slate-800 ml-1">+${m.telefono}</span>
                       <span class="text-slate-600 ml-1">${m.contenido_resumen}</span>
                     </div>
-                    <span class="text-[10px] font-mono text-slate-600 shrink-0">${String(m.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                    <span class="text-[10px] font-mono text-slate-600 shrink-0">${formatearFechaHora(m.created_at)}</span>
                   </div>
                 `).join('') : `
                   <div class="p-3 text-center text-slate-600">Sin mensajes registrados en Supabase para esta empresa.</div>
@@ -5654,7 +5654,7 @@ END $$;
             <table class="w-full text-xs text-left" id="tabla-wa-consumo-facturacion">
               <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-200">
                 <tr>
-                  <th class="p-2.5">Mes (YYYY-MM)</th>
+                  <th class="p-2.5">Fecha Corte (DD/MM/AAAA)</th>
                   <th class="p-2.5">Empresa</th>
                   <th class="p-2.5 text-right">Entrantes (IN)</th>
                   <th class="p-2.5 text-right">Respuestas Texto (OUT)</th>
@@ -5665,7 +5665,7 @@ END $$;
               <tbody class="divide-y divide-slate-100">
                 ${reporteConsumo.length > 0 ? reporteConsumo.map((r) => `
                   <tr>
-                    <td class="p-2.5 font-mono font-bold text-slate-800">${r.mes}</td>
+                    <td class="p-2.5 font-mono font-bold text-slate-800">${formatearFecha(r.mes)}</td>
                     <td class="p-2.5 font-bold text-slate-800">${r.empresa_nombre} <span class="text-[10px] font-mono text-slate-600">(${r.empresa_id})</span></td>
                     <td class="p-2.5 text-right font-mono">${r.entrantes_texto}</td>
                     <td class="p-2.5 text-right font-mono">${r.salientes_texto}</td>
@@ -5709,7 +5709,7 @@ END $$;
                   const tieneError = Boolean(st.error_code || st.status === 'failed');
                   return `
                     <tr class="${tieneError ? 'bg-rose-50 text-rose-900' : ''}">
-                      <td class="p-2.5 font-mono text-[11px]">${String(st.timestamp || st.created_at || '').slice(0, 19).replace('T', ' ')}</td>
+                      <td class="p-2.5 font-mono text-[11px]">${formatearFechaHora(st.timestamp || st.created_at)}</td>
                       ${isSuper ? `<td class="p-2.5 font-bold">${mapaNombresEmpresas.get(String(st.empresa_id)) || st.empresa_id || '—'}</td>` : ''}
                       <td class="p-2.5 font-mono font-bold">+${st.recipient_id || '—'}</td>
                       <td class="p-2.5 font-mono text-[10px]">${String(st.wamid || '').slice(0, 28)}</td>

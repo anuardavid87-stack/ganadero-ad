@@ -22,7 +22,7 @@ import {
   obtenerModeloGeminiActivo,
   generarDiagnosticoNutricionalGemini
 } from '../core/nutricionIA.js';
-import { calcularEdadMeses, obtenerEdadMesesAnimal, obtenerPesoActualAnimal, formatearFecha } from '../core/zootecnia.js';
+import { calcularEdadMeses, obtenerEdadMesesAnimal, obtenerPesoActualAnimal, formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 import { conectarAutosuggestAnimales, buscarCoincidenciasAnimales } from '../ui/AutosuggestAnimales.js';
 
 export class ModuloNutricion {
@@ -169,7 +169,7 @@ export class ModuloNutricion {
       raza: planInicial.raza,
       razaConfirmada: planInicial.razaConfirmada,
       edadMeses: planInicial.edadMeses,
-      fechaAnalisis: new Date().toISOString().split('T')[0],
+      fechaAnalisis: obtenerFechaHoyLocal(),
       etapaProductiva: planInicial.etapaProductiva,
       tallaCm: planInicial.tallaCm,
       tallaFrame: planInicial.tallaFrame,
@@ -417,7 +417,7 @@ export class ModuloNutricion {
       razaConfirmada: this.planGenerado.razaConfirmada,
       sincronizarRazaFicha: razaConfirmadaCheck,
       edadMeses: this.planGenerado.edadMeses,
-      fechaAnalisis: new Date().toISOString().split('T')[0],
+      fechaAnalisis: obtenerFechaHoyLocal(),
       etapaProductiva: this.planGenerado.etapaProductiva,
       tallaCm: this.planGenerado.tallaCm,
       tallaFrame: this.planGenerado.tallaFrame,

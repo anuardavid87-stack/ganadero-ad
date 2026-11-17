@@ -248,8 +248,43 @@ export function verificarSecado7Meses(diasGestacion, especie = 'bovino') {
  * Tolera cadenas ISO (YYYY-MM-DD), fechas con barra o guión, timestamps y objetos Date.
  * Si el valor es nulo, vacío o inválido, retorna el fallback (por defecto '-').
  */
+export function convertirFechaAISO(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return null;
+
+  const validarYArmar = (yNum, mNum, dNum) => {
+    if (yNum < 1900 || yNum > 2199) return null;
+    if (mNum < 1 || mNum > 12) return null;
+    const maxDias = new Date(yNum, mNum, 0).getDate();
+    if (dNum < 1 || dNum > maxDias) return null;
+    return `${String(yNum).padStart(4, '0')}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+  };
+
+  // DD/MM/YYYY o DD-MM-YYYY
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (matchDmy) {
+    return validarYArmar(parseInt(matchDmy[3], 10), parseInt(matchDmy[2], 10), parseInt(matchDmy[1], 10));
+  }
+
+  // YYYY-MM-DD (con o sin hora ISO)
+  const matchIso = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
+  if (matchIso) {
+    return validarYArmar(parseInt(matchIso[1], 10), parseInt(matchIso[2], 10), parseInt(matchIso[3], 10));
+  }
+
+  return null;
+}
+
 export function formatearFecha(val, fallback = '-') {
-  if (!val) return fallback;
+  if (val === null || val === undefined || val === '') return fallback;
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return fallback;
     const d = String(val.getDate()).padStart(2, '0');
@@ -259,9 +294,10 @@ export function formatearFecha(val, fallback = '-') {
   }
   const s = String(val).trim();
   if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+  if (s.toLowerCase() === 'indefinido') return 'Indefinido';
 
-  // Si ya viene en formato DD/MM/YYYY con 2 dígitos
-  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  // Si ya viene en formato DD/MM/YYYY (con o sin hora al final)
+  const matchDmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:\s+.*)?$/);
   if (matchDmy) {
     const d = matchDmy[1].padStart(2, '0');
     const m = matchDmy[2].padStart(2, '0');
@@ -278,6 +314,22 @@ export function formatearFecha(val, fallback = '-') {
     return `${d}/${m}/${y}`;
   }
 
+  // Cadena YYYY-MM (mes/año) -> primer día del mes en formato DD/MM/YYYY
+  const matchYm = s.match(/^(\d{4})[-/.](\d{1,2})$/);
+  if (matchYm) {
+    const y = matchYm[1];
+    const m = matchYm[2].padStart(2, '0');
+    return `01/${m}/${y}`;
+  }
+
+  // Timestamp numérico Unix (segundos de 10 dígitos o milisegundos de 13 dígitos)
+  if (/^\d{10}$/.test(s)) {
+    return formatearFecha(new Date(Number(s) * 1000), fallback);
+  }
+  if (/^\d{13}$/.test(s)) {
+    return formatearFecha(new Date(Number(s)), fallback);
+  }
+
   const dt = new Date(s);
   if (!isNaN(dt.getTime())) {
     const d = String(dt.getDate()).padStart(2, '0');
@@ -287,6 +339,62 @@ export function formatearFecha(val, fallback = '-') {
   }
 
   return s;
+}
+
+/**
+ * Formatea una fecha con hora siempre en formato DD/MM/YYYY HH:mm (día/mes/año hora:minuto).
+ * Si la entrada no contiene hora (solo fecha), retorna DD/MM/YYYY.
+ */
+export function formatearFechaHora(val, fallback = '-') {
+  if (val === null || val === undefined || val === '') return fallback;
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return fallback;
+    return `${pad2(val.getDate())}/${pad2(val.getMonth() + 1)}/${val.getFullYear()} ${pad2(val.getHours())}:${pad2(val.getMinutes())}`;
+  }
+
+  const s = String(val).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === '-') return fallback;
+
+  // Timestamp Unix en segundos (ej. Meta WhatsApp statuses) o milisegundos
+  if (/^\d{10}$/.test(s)) {
+    const dt = new Date(Number(s) * 1000);
+    if (!isNaN(dt.getTime())) {
+      return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+    }
+  }
+  if (/^\d{13}$/.test(s)) {
+    const dt = new Date(Number(s));
+    if (!isNaN(dt.getTime())) {
+      return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+    }
+  }
+
+  // Solo fecha sin hora (YYYY-MM-DD o DD/MM/YYYY)
+  if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(s) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(s)) {
+    return formatearFecha(s, fallback);
+  }
+
+  // DD/MM/YYYY HH:mm(:ss)
+  const matchDmyHora = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})[T\s]+(\d{1,2}):(\d{2})/);
+  if (matchDmyHora) {
+    return `${pad2(matchDmyHora[1])}/${pad2(matchDmyHora[2])}/${matchDmyHora[3]} ${pad2(matchDmyHora[4])}:${matchDmyHora[5]}`;
+  }
+
+  // ISO con zona horaria o T (convertir a fecha/hora local DD/MM/YYYY HH:mm)
+  const dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  }
+
+  // Fallback si es YYYY-MM-DD HH:mm sin parseo estándar
+  const matchIsoHora = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[T\s]+(\d{1,2}):(\d{2})/);
+  if (matchIsoHora) {
+    return `${pad2(matchIsoHora[3])}/${pad2(matchIsoHora[2])}/${matchIsoHora[1]} ${pad2(matchIsoHora[4])}:${matchIsoHora[5]}`;
+  }
+
+  return formatearFecha(s, fallback);
 }
 
 /**

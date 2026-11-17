@@ -5,7 +5,7 @@
  * Con buscador superior en tiempo real, filtro por fecha o acción, y exportación a Excel (.CSV).
  */
 
-import { formatearFecha } from '../core/zootecnia.js';
+import { formatearFecha, obtenerFechaHoyLocal } from '../core/zootecnia.js';
 
 export class ModuloIngresosDiarios {
   constructor({
@@ -199,7 +199,7 @@ export class ModuloIngresosDiarios {
               <button id="btn-rango-todo" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'todo' && !this.filtroFecha ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
                 Todo
               </button>
-              <button id="btn-rango-hoy" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'hoy' || this.filtroFecha === new Date().toISOString().split('T')[0] ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
+              <button id="btn-rango-hoy" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === 'hoy' || this.filtroFecha === obtenerFechaHoyLocal() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
                 Hoy
               </button>
               <button id="btn-rango-7dias" class="px-2.5 py-1 rounded-lg border font-bold text-[11px] transition cursor-pointer ${this.filtroRango === '7dias' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}">
@@ -541,7 +541,7 @@ export class ModuloIngresosDiarios {
     a.href = url;
     const tagGrupo = grupo || this.filtroAccion || 'Actividades';
     const tagFinca = this.filtroFinca || 'Todas';
-    a.download = `BoviTrack_Bitacora_${tagGrupo}_${tagFinca}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `BoviTrack_Bitacora_${tagGrupo}_${tagFinca}_${formatearFecha(obtenerFechaHoyLocal()).replace(/\//g, '-')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -608,7 +608,7 @@ export class ModuloIngresosDiarios {
     if (btnHoy) {
       btnHoy.addEventListener('click', () => {
         this.filtroRango = 'hoy';
-        this.filtroFecha = new Date().toISOString().split('T')[0];
+        this.filtroFecha = obtenerFechaHoyLocal();
         this.render();
       });
     }

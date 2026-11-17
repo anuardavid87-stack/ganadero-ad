@@ -20,7 +20,8 @@ import { SupabaseSyncService } from './core/supabaseSync.js';
 import { detectarAlertasZootecnicas } from './core/auditorIA.js';
 import { ExportadorBackupService } from './core/exportadorBackup.js';
 import { OfflineFieldManager } from './core/offlineManager.js';
-import { calcularGDP, calcularGDPEjemplar, formatearFecha, obtenerFechaHoyLocal } from './core/zootecnia.js';
+import { calcularGDP, calcularGDPEjemplar, formatearFecha, formatearFechaHora, obtenerFechaHoyLocal } from './core/zootecnia.js';
+import { inicializarInputsFechaDMYGlobal } from './ui/SelectorFechaDMY.js';
 
 export function escapeHTML(str) {
   if (str === null || str === undefined) return '';
@@ -80,6 +81,7 @@ class BoviTrackApp {
       this.guardarEstado();
     };
 
+    inicializarInputsFechaDMYGlobal();
     this.iniciarPWA();
     this.iniciarComponentes();
     this.iniciarSincronizacionEnLineaPermanente();
@@ -2190,7 +2192,7 @@ class BoviTrackApp {
     this._modalOfflineAbierto = true;
     const info = this.obtenerEstadoModoOffline();
     const fechaDescTxt = info.descargadoEn
-      ? new Date(info.descargadoEn).toLocaleString('es-CO')
+      ? formatearFechaHora(info.descargadoEn)
       : 'Pendiente descargar';
 
     modal.innerHTML = `
@@ -2622,7 +2624,7 @@ class BoviTrackApp {
             registros: [{
               tag: String(tag || '').trim().toUpperCase(),
               pesoNuevo: Number(pesoKg),
-              fecha: fecha || new Date().toISOString().split('T')[0],
+              fecha: fecha || obtenerFechaHoyLocal(),
               condicionCorporal: '3.5',
               observaciones: 'Pesaje registrado vía WhatsApp Cloud API'
             }]
@@ -2723,7 +2725,7 @@ class BoviTrackApp {
     const fincaId = mov.fincaId || mov.finca_id || this.state.fincaActivaId;
     const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
     const id = mov.id || `MOV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const fecha = mov.fecha || new Date().toISOString().split('T')[0];
+    const fecha = mov.fecha || obtenerFechaHoyLocal();
 
     const nuevoMov = {
       ...mov,
@@ -2830,7 +2832,7 @@ class BoviTrackApp {
     const fincaObj = (this.state.fincas || []).find((f) => f.id === fincaId);
     const idPago = pago.id || `NOM-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const idMovContable = `MOV-NOM-${idPago}`;
-    const fecha = pago.fecha || new Date().toISOString().split('T')[0];
+    const fecha = pago.fecha || obtenerFechaHoyLocal();
 
     const costoTotalFinca = Math.max(0, Number(pago.costoTotalFinca || pago.montoTotal || pago.netoTrabajador || 0));
 
@@ -3028,7 +3030,7 @@ class BoviTrackApp {
     if (!empresa) return false;
     if (empresa.activa === false) return true;
     if (empresa.tiempoIndefinido || empresa.fechaVencimiento === 'indefinido' || !empresa.fechaVencimiento) return false;
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaHoyLocal();
     return empresa.fechaVencimiento < hoyStr;
   }
 
@@ -3056,7 +3058,7 @@ class BoviTrackApp {
       };
     }
 
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaHoyLocal();
     const fVenc = empresa.fechaVencimiento || '2027-09-15';
 
     const hoyMs = new Date(hoyStr).getTime();
@@ -3204,7 +3206,7 @@ class BoviTrackApp {
     if (!this.state.empresas) this.state.empresas = [];
     if (!empresa.id) empresa.id = `EMP-${Date.now()}`;
     empresa.activa = empresa.activa !== false;
-    empresa.fechaCreacion = new Date().toISOString().split('T')[0];
+    empresa.fechaCreacion = obtenerFechaHoyLocal();
 
     // Calcular fecha de vencimiento según el tiempo de activación seleccionado (1, 3, 6 meses, 1 año o Indefinido)
     if (!empresa.fechaVencimiento) {
@@ -3625,7 +3627,7 @@ class BoviTrackApp {
     const animal = (this.state.animales || []).find((a) => a.id === animalId);
     if (!animal) return;
 
-    const fechaExtraccion = fecha || new Date().toISOString().split('T')[0];
+    const fechaExtraccion = fecha || obtenerFechaHoyLocal();
     const motivoNorm = (motivo || 'Venta').trim();
     const tag = animal.identificacionTag || animal.numero || 'Sin Tag';
 
@@ -3728,14 +3730,14 @@ class BoviTrackApp {
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
       tipo: 'reactivacion',
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: obtenerFechaHoyLocal(),
       fincaId: fincaDestino,
       descripcion: `Reactivación e ingreso al hato activo`
     });
 
     this.registrarActividadOperacion({
       fincaId: fincaDestino,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: obtenerFechaHoyLocal(),
       modulo: 'animales',
       accion: 'reactivacion_animal',
       monto: 0,
@@ -3798,7 +3800,7 @@ class BoviTrackApp {
       animal._motivoExtraido = null;
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     if (!animal.historialEventos) animal.historialEventos = [];
     animal.historialEventos.unshift({
       tipo: 'traslado',
@@ -4051,7 +4053,7 @@ class BoviTrackApp {
         id: `PES-${animal.fincaId}-${String(animal.identificacionTag).replace(/[^A-Za-z0-9_-]/g, '_')}`,
         animalId: animal.id,
         tag: animal.identificacionTag,
-        fecha: animal.fechaUltimoPesaje || new Date().toISOString().split('T')[0],
+        fecha: animal.fechaUltimoPesaje || obtenerFechaHoyLocal(),
         peso: Number(animal.ultimoPesoKg),
         pesoNuevo: Number(animal.ultimoPesoKg),
         gdp: animal.gdpPromedioGDia ? Number(animal.gdpPromedioGDia) : null,
@@ -4116,7 +4118,7 @@ class BoviTrackApp {
 
     if (animalActualizado.ultimoPesoKg !== undefined && animalActualizado.ultimoPesoKg !== null && animalActualizado.ultimoPesoKg !== '') {
       const nuevoPeso = parseFloat(animalActualizado.ultimoPesoKg);
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = obtenerFechaHoyLocal();
       const fechaPesaje = animalActualizado.fechaUltimoPesaje || hoy;
 
       this.state.animales[idx].pesoActual = nuevoPeso;
@@ -4497,7 +4499,7 @@ class BoviTrackApp {
       const registroDirectorio = [{
         id: 'SYS_DIRECTORIO_EMPRESAS',
         empresa_id: null,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: obtenerFechaHoyLocal(),
         finca_id: null,
         finca_nombre: 'SISTEMA',
         accion: 'SYS_DIRECTORIO_EMPRESAS',
@@ -5455,7 +5457,7 @@ class BoviTrackApp {
     const fincaObj = (this.state.fincas || []).find((f) => f.id === resolvedFincaId);
     const nombreFinca = fincaObj ? fincaObj.nombre : resolvedFincaId;
     const safeFincaSuffix = String(resolvedFincaId).replace(/[^a-zA-Z0-9]/g, '').slice(-6) || 'FIN';
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaHoyLocal();
     const fechaSesion = fechaGlobal || hoy;
 
     // Búsqueda estrictamente aislada dentro del predio destino (con normalización de arete)
@@ -6804,7 +6806,7 @@ class BoviTrackApp {
       return false;
     }
 
-    const fechaOp = fecha || new Date().toISOString().split('T')[0];
+    const fechaOp = fecha || obtenerFechaHoyLocal();
     const horaOp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const fOrigen = (this.state.fincas || []).find((f) => f.id === fincaOrigenId);
     const fDestino = (this.state.fincas || []).find((f) => f.id === fincaDestinoId);
@@ -6915,7 +6917,7 @@ class BoviTrackApp {
       this.state.operacionesDiarias = [];
     }
     const id = op.id || `ACT-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const fecha = op.fecha || new Date().toISOString().split('T')[0];
+    const fecha = op.fecha || obtenerFechaHoyLocal();
     const hora = op.hora || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const fincaObj = (this.state.fincas || []).find((f) => f.id === op.fincaId);
     const fincaNombre = op.fincaNombre || (fincaObj ? fincaObj.nombre : op.fincaId);
@@ -7005,18 +7007,18 @@ class BoviTrackApp {
 
     // Filtro por rango relativo
     if (rango && rango !== 'todo' && !fecha) {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaHoyLocal();
       if (rango === 'hoy') {
         list = list.filter((op) => op.fecha === hoyStr);
       } else if (rango === '7dias') {
         const d = new Date();
         d.setDate(d.getDate() - 7);
-        const lim = d.toISOString().split('T')[0];
+        const lim = obtenerFechaHoyLocal(d);
         list = list.filter((op) => op.fecha >= lim);
       } else if (rango === '30dias') {
         const d = new Date();
         d.setDate(d.getDate() - 30);
-        const lim = d.toISOString().split('T')[0];
+        const lim = obtenerFechaHoyLocal(d);
         list = list.filter((op) => op.fecha >= lim);
       }
     }
@@ -7035,7 +7037,8 @@ class BoviTrackApp {
           (op.subDetalle || '').toLowerCase().includes(q) ||
           (op.observaciones || '').toLowerCase().includes(q) ||
           (op.responsable || '').toLowerCase().includes(q) ||
-          (op.fecha || '').toLowerCase().includes(q)
+          (op.fecha || '').toLowerCase().includes(q) ||
+          formatearFecha(op.fecha, '').toLowerCase().includes(q)
         );
       });
     }

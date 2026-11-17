@@ -195,6 +195,7 @@ export class ExportadorBackupService {
     // 9. HOJA: Inversiones Diferidas
     const rowsInversiones = (appState.inversiones || []).map(i => ({
       'ID Inversión': i.id,
+      'Fecha Inicio': formatearFecha(i.fecha || i.fechaInicio, ''),
       'Finca / Predio': mapaFincas.get(i.fincaId) || i.fincaId || '',
       'Descripción del Activo': i.descripcionActivo || '',
       'Monto Total Inversión ($)': Number(i.montoTotalInversion || 0),
@@ -243,10 +244,10 @@ export class ExportadorBackupService {
     const wsOperaciones = XLSX.utils.json_to_sheet(rowsOperaciones.length ? rowsOperaciones : [{ 'Mensaje': 'Sin operaciones registradas' }]);
     XLSX.utils.book_append_sheet(wb, wsOperaciones, '11. Bitácora Operaciones');
 
-    // Generar nombre de archivo con fecha y hora actual
+    // Generar nombre de archivo con fecha (día-mes-año) y hora actual
     const ahora = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const timestamp = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
+    const timestamp = `${pad(ahora.getDate())}-${pad(ahora.getMonth() + 1)}-${ahora.getFullYear()}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
     const nombreArchivo = `Copia_Seguridad_Ganadero_AD_${timestamp}.xlsx`;
 
     try {
@@ -308,7 +309,7 @@ export class ExportadorBackupService {
     const url = URL.createObjectURL(blob);
     const ahora = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const timestamp = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
+    const timestamp = `${pad(ahora.getDate())}-${pad(ahora.getMonth() + 1)}-${ahora.getFullYear()}_${pad(ahora.getHours())}-${pad(ahora.getMinutes())}`;
     const nombreArchivo = `Respaldo_Ganadero_AD_${timestamp}.json`;
 
     const a = document.createElement('a');
