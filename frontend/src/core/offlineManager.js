@@ -75,20 +75,87 @@ export class OfflineFieldManager {
       return { ok: true, via: 'localStorage', meta: state._offlineMeta };
     }
 
+    const escribirSnapshot = () => new Promise((resolve) => {
+      try {
+        const tx = db.transaction([STORE_SNAPSHOT], 'readwrite');
+        const store = tx.objectStore(STORE_SNAPSHOT);
+        // Usar clonación estructurada nativa de IndexedDB para evitar congelar el hilo principal con JSON.parse(JSON.stringify)
+        let payloadState = state;
+        try {
+          store.put({
+            id: 'SNAPSHOT_PRINCIPAL',
+            actualizadoEn: ahoraIso,
+            meta: state._offlineMeta,
+            state: payloadState
+          });
+        } catch (_cloneErr) {
+          store.put({
+            id: 'SNAPSHOT_PRINCIPAL',
+            actualizadoEn: ahoraIso,
+            meta: state._offlineMeta,
+            state: JSON.parse(JSON.stringify(state))
+          });
+        }
+        tx.oncomplete = () => resolve({ ok: true, via: 'IndexedDB', meta: state._offlineMeta });
+        tx.onerror = () => resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      } catch (_err) {
+        resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      }
+    });
+
+    if (metaExtra.inmediato || metaExtra.descargadoEn) {
+      if (this._snapshotDebounceTimer) {
+        clearTimeout(this._snapshotDebounceTimer);
+        this._snapshotDebounceTimer = null;
+      }
+      return await escribirSnapshot();
+    }
+
+    // Debounce de 600ms para evitar escrituras masivas repetitivas en IndexedDB durante ráfagas de cambios
+    if (this._snapshotDebounceTimer) clearTimeout(this._snapshotDebounceTimer);
+    return new Promise((resolve) => {
+      this._snapshotDebounceTimer = setTimeout(async () => {
+        this._snapshotDebounceTimer = null;
+        const r = await escribirSnapshot();
+        resolve(r);
+      }, 600);
+    });
+  }
+
+  /**
+   * Guarda un respaldo inmutable de emergencia en IndexedDB antes de cualquier acción destructiva
+   * (eliminar finca, purgar hato o importar con reemplazo), conservando los últimos 5 respaldos.
+   */
+  async guardarRespaldoEmergencia(state, motivo = 'respaldo_automatico') {
+    if (!state || typeof state !== 'object') return { ok: false };
+    const ahoraIso = new Date().toISOString();
+    const idBackup = `BACKUP_EMERGENCIA_${Date.now()}`;
+    const resumen = {
+      id: idBackup,
+      motivo,
+      creadoEn: ahoraIso,
+      totalFincas: Array.isArray(state.fincas) ? state.fincas.length : 0,
+      totalAnimales: Array.isArray(state.animales) ? state.animales.length : 0,
+      totalPesajes: Array.isArray(state.pesajes) ? state.pesajes.length : 0
+    };
+
+    const db = await this._abrirDB();
+    if (!db) return { ok: false, motivo: 'Sin IndexedDB', resumen };
+
     return new Promise((resolve) => {
       try {
         const tx = db.transaction([STORE_SNAPSHOT], 'readwrite');
         const store = tx.objectStore(STORE_SNAPSHOT);
         store.put({
-          id: 'SNAPSHOT_PRINCIPAL',
+          id: idBackup,
           actualizadoEn: ahoraIso,
-          meta: state._offlineMeta,
-          state: JSON.parse(JSON.stringify(state))
+          meta: resumen,
+          state
         });
-        tx.oncomplete = () => resolve({ ok: true, via: 'IndexedDB', meta: state._offlineMeta });
-        tx.onerror = () => resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+        tx.oncomplete = () => resolve({ ok: true, id: idBackup, resumen });
+        tx.onerror = () => resolve({ ok: false, resumen });
       } catch (_err) {
-        resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+        resolve({ ok: false, resumen });
       }
     });
   }

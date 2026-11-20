@@ -8323,6 +8323,102 @@ console.log('\n--- 63. Formato Universal de Fechas Día/Mes/Año (DD/MM/AAAA) --
   );
 }
 
+// ============================================================================
+// 64. Blindaje Anti-Borrado, Sincronización Cloud de Contabilidad/Nómina y Ahorro Egress
+// ============================================================================
+console.log('\n--- 64. Blindaje Anti-Borrado, Sync Cloud de Contabilidad/Nómina y Estabilidad ---');
+{
+  // 64.1: ImportadorExcel arranca en Modo Seguro (modoReemplazo = false) y refrescarVistas existe en BoviTrackApp
+  const impSeguro64 = new ImportadorExcel({
+    containerId: 'inexistente-64',
+    getFincas: () => [{ id: 'FIN-64', nombre: 'Vesubio' }],
+    getFincaActiva: () => ({ id: 'FIN-64', nombre: 'Vesubio' })
+  });
+  test(
+    impSeguro64.modoReemplazo === false &&
+    typeof BoviTrackApp.prototype.refrescarVistas === 'function',
+    'Blindaje Anti-Borrado & Estabilidad: ImportadorExcel usa modo seguro (sin purga) por defecto y BoviTrackApp.refrescarVistas() está definido'
+  );
+
+  // 64.2: Blindaje Anti-Sobrescritura Vacía de SYS_DIRECTORIO_EMPRESAS (incluso como Super Admin)
+  const sync64 = new SupabaseSyncService();
+  sync64.guardarConfig({ url: 'https://bovitrack-test.supabase.co', anonKey: 'test-anon-key' });
+  sync64._ultimoDirectorioCloud = {
+    empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES' }, { id: 'EMP-02', nombre: 'VACUNO INVERSIONES' }],
+    fincasEmpresaMap: { 'FIN-1': 'EMP-01', 'FIN-2': 'EMP-02' }
+  };
+  const llamadasUpsert64 = [];
+  sync64._postgrestUpsert = async (tabla, rows) => {
+    llamadasUpsert64.push({ tabla, rows });
+    return true;
+  };
+  await sync64.subirDatosASupabase({
+    usuarioActual: { rol: 'superadmin', usuario: 'anuardavid' },
+    empresaActivaId: 'EMP-01',
+    empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
+    fincas: [], // Dispositivo vacío recién abierto
+    animales: [],
+    pesajes: [],
+    operacionesDiarias: []
+  });
+  const sobrescribioDirVacio = llamadasUpsert64.some(
+    (c) => c.tabla === 'operaciones_diarias' && c.rows.some((r) => r.id === 'SYS_DIRECTORIO_EMPRESAS')
+  );
+  test(
+    sobrescribioDirVacio === false,
+    'Blindaje Anti-Sobrescritura Vacía: Impide sobrescribir SYS_DIRECTORIO_EMPRESAS en la nube cuando el dispositivo tiene 0 fincas cargadas'
+  );
+
+  // 64.3: Sincronización Cloud de Contabilidad, Inversiones Diferidas y Nómina (subida + descarga aislada de bitácora)
+  const syncContab64 = new SupabaseSyncService();
+  syncContab64.guardarConfig({ url: 'https://bovitrack-test.supabase.co', anonKey: 'test-anon-key' });
+  const nubeOps64 = [];
+  syncContab64._postgrestUpsert = async (tabla, rows) => {
+    if (tabla === 'operaciones_diarias') nubeOps64.push(...rows);
+    return true;
+  };
+  await syncContab64.subirDatosASupabase({
+    usuarioActual: { rol: 'superadmin', usuario: 'anuardavid' },
+    empresaActivaId: 'EMP-01',
+    empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES' }],
+    fincas: [{ id: 'FIN-VES', nombre: 'Vesubio', empresaId: 'EMP-01' }],
+    animales: [],
+    pesajes: [],
+    operacionesDiarias: [],
+    contabilidadMovimientos: [
+      { id: 'MOV-64-1', fincaId: 'FIN-VES', empresaId: 'EMP-01', fecha: '2026-11-20', tipo: 'inversion_diferida', concepto: 'Cerca eléctrica', monto: 6000000, plazoMeses: 6 }
+    ],
+    nominaTrabajadores: [
+      { id: 'TRAB-64-1', fincaId: 'FIN-VES', empresaId: 'EMP-01', nombre: 'Juan Campo', cargo: 'Mayordomo', valorBase: 1800000 }
+    ],
+    nominaPagos: [
+      { id: 'NOM-64-1', fincaId: 'FIN-VES', empresaId: 'EMP-01', fecha: '2026-11-15', trabajadorNombre: 'Juan Campo', costoTotalFinca: 2200000 }
+    ]
+  });
+
+  syncContab64._postgrestGet = async (tabla) => {
+    if (tabla === 'empresas') return [{ id: 'EMP-01', nombre: 'INVERSIONES', activa: true }];
+    if (tabla === 'fincas') return [{ id: 'FIN-VES', nombre: 'Vesubio', empresa_id: 'EMP-01' }];
+    if (tabla === 'operaciones_diarias') return nubeOps64;
+    return [];
+  };
+  syncContab64.setTenantContext({ empresaId: 'EMP-01', esSuperAdmin: true, fincasIds: ['FIN-VES'] });
+  const desc64 = await syncContab64.descargarDatosDeSupabase(10000);
+
+  test(
+    nubeOps64.some((r) => r.id === 'SYS_CONTAB_MOV_MOV-64-1') &&
+    nubeOps64.some((r) => r.id === 'SYS_NOMINA_TRAB_TRAB-64-1') &&
+    nubeOps64.some((r) => r.id === 'SYS_NOMINA_PAGO_NOM-64-1') &&
+    desc64.ok === true &&
+    desc64.datos.contabilidadMovimientos.length === 1 &&
+    desc64.datos.contabilidadMovimientos[0].concepto === 'Cerca eléctrica' &&
+    desc64.datos.nominaTrabajadores.length === 1 &&
+    desc64.datos.nominaPagos.length === 1 &&
+    desc64.datos.operacionesDiarias.length === 0,
+    'Persistencia Cloud Contabilidad & Nómina: Sube y restaura movimientos, inversiones diferidas, trabajadores y pagos sin contaminar la bitácora'
+  );
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

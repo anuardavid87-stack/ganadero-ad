@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-17T20:08:56.122Z
+ * Generado automáticamente: 2026-11-20T19:08:46.582Z
  */
 (function() {
   "use strict";
@@ -525,20 +525,87 @@ class OfflineFieldManager {
       return { ok: true, via: 'localStorage', meta: state._offlineMeta };
     }
 
+    const escribirSnapshot = () => new Promise((resolve) => {
+      try {
+        const tx = db.transaction([STORE_SNAPSHOT], 'readwrite');
+        const store = tx.objectStore(STORE_SNAPSHOT);
+        // Usar clonación estructurada nativa de IndexedDB para evitar congelar el hilo principal con JSON.parse(JSON.stringify)
+        let payloadState = state;
+        try {
+          store.put({
+            id: 'SNAPSHOT_PRINCIPAL',
+            actualizadoEn: ahoraIso,
+            meta: state._offlineMeta,
+            state: payloadState
+          });
+        } catch (_cloneErr) {
+          store.put({
+            id: 'SNAPSHOT_PRINCIPAL',
+            actualizadoEn: ahoraIso,
+            meta: state._offlineMeta,
+            state: JSON.parse(JSON.stringify(state))
+          });
+        }
+        tx.oncomplete = () => resolve({ ok: true, via: 'IndexedDB', meta: state._offlineMeta });
+        tx.onerror = () => resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      } catch (_err) {
+        resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+      }
+    });
+
+    if (metaExtra.inmediato || metaExtra.descargadoEn) {
+      if (this._snapshotDebounceTimer) {
+        clearTimeout(this._snapshotDebounceTimer);
+        this._snapshotDebounceTimer = null;
+      }
+      return await escribirSnapshot();
+    }
+
+    // Debounce de 600ms para evitar escrituras masivas repetitivas en IndexedDB durante ráfagas de cambios
+    if (this._snapshotDebounceTimer) clearTimeout(this._snapshotDebounceTimer);
+    return new Promise((resolve) => {
+      this._snapshotDebounceTimer = setTimeout(async () => {
+        this._snapshotDebounceTimer = null;
+        const r = await escribirSnapshot();
+        resolve(r);
+      }, 600);
+    });
+  }
+
+  /**
+   * Guarda un respaldo inmutable de emergencia en IndexedDB antes de cualquier acción destructiva
+   * (eliminar finca, purgar hato o importar con reemplazo), conservando los últimos 5 respaldos.
+   */
+  async guardarRespaldoEmergencia(state, motivo = 'respaldo_automatico') {
+    if (!state || typeof state !== 'object') return { ok: false };
+    const ahoraIso = new Date().toISOString();
+    const idBackup = `BACKUP_EMERGENCIA_${Date.now()}`;
+    const resumen = {
+      id: idBackup,
+      motivo,
+      creadoEn: ahoraIso,
+      totalFincas: Array.isArray(state.fincas) ? state.fincas.length : 0,
+      totalAnimales: Array.isArray(state.animales) ? state.animales.length : 0,
+      totalPesajes: Array.isArray(state.pesajes) ? state.pesajes.length : 0
+    };
+
+    const db = await this._abrirDB();
+    if (!db) return { ok: false, motivo: 'Sin IndexedDB', resumen };
+
     return new Promise((resolve) => {
       try {
         const tx = db.transaction([STORE_SNAPSHOT], 'readwrite');
         const store = tx.objectStore(STORE_SNAPSHOT);
         store.put({
-          id: 'SNAPSHOT_PRINCIPAL',
+          id: idBackup,
           actualizadoEn: ahoraIso,
-          meta: state._offlineMeta,
-          state: JSON.parse(JSON.stringify(state))
+          meta: resumen,
+          state
         });
-        tx.oncomplete = () => resolve({ ok: true, via: 'IndexedDB', meta: state._offlineMeta });
-        tx.onerror = () => resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+        tx.oncomplete = () => resolve({ ok: true, id: idBackup, resumen });
+        tx.onerror = () => resolve({ ok: false, resumen });
       } catch (_err) {
-        resolve({ ok: true, via: 'localStorage', meta: state._offlineMeta });
+        resolve({ ok: false, resumen });
       }
     });
   }
@@ -2244,12 +2311,52 @@ class SupabaseSyncService {
   constructor() {
     this.storageKey = 'bovitrack_supabase_config';
     this.storageSyncKey = 'bovitrack_supabase_ultimo_sync';
+    this.storageFirmaKey = 'bovitrack_ultima_firma_remota_v1';
     this.config = this.cargarConfig();
     this.estadoConexion = 'desconectado'; // 'desconectado' | 'conectado' | 'error' | 'sincronizando'
     this.ultimoSync = typeof localStorage !== 'undefined' ? (localStorage.getItem(this.storageSyncKey) || null) : null;
     this.tenantContext = null; // { empresaId, esSuperAdmin, fincasIds, token }
     this._cacheHuellasCloud = new Map(); // tabla -> Map(clave -> jsonStr) para evitar re-subir registros idénticos
     this._ultimaFirmaRemota = null; // firma ultraligera (< 350 bytes) para evitar descargas completas innecesarias
+  }
+
+  _obtenerClaveFirmaTenant(ctx = null) {
+    const c = ctx || this.tenantContext || {};
+    const fincasKey = Array.isArray(c.fincasIds) ? [...c.fincasIds].sort().join(',') : '';
+    return `${c.esSuperAdmin ? 'SA' : 'T'}:${c.empresaId || 'ALL'}:${c.usuario || ''}:${fincasKey}`;
+  }
+
+  _leerFirmaPersistida(ctx = null) {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(this.storageFirmaKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const k = this._obtenerClaveFirmaTenant(ctx);
+      if (parsed && parsed.key === k && typeof parsed.firma === 'string' && parsed.firma.length > 0) {
+        return parsed.firma;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  _persistirFirmaRemota(firma, ctx = null) {
+    if (!firma || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(this.storageFirmaKey, JSON.stringify({
+        key: this._obtenerClaveFirmaTenant(ctx),
+        firma,
+        actualizadoEn: Date.now()
+      }));
+    } catch (_) {}
+  }
+
+  _limpiarFirmaPersistida() {
+    this._ultimaFirmaRemota = null;
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.removeItem(this.storageFirmaKey);
+    } catch (_) {}
   }
 
   _filtrarRegistrosModificados(tabla, registros, fnClave, forzarCompleta = false) {
@@ -2364,6 +2471,54 @@ class SupabaseSyncService {
       notas: p.observaciones || p.responsable || 'Registro de Manga'
     }), (r) => r.id);
     guardarMapa('nutricion_animales', datosLocales.nutricion, (n) => this.mapearNutricionLocalACloud(n, fincaActivaFallback), (r) => `${r.finca_id}__${r.animal_tag}`);
+    guardarMapa('sys_contabilidad_mov', datosLocales.contabilidadMovimientos, (m) => this._mapearContabMovACloud(m), (r) => r.id);
+    guardarMapa('sys_nomina_trab', datosLocales.nominaTrabajadores, (t) => this._mapearNominaTrabACloud(t), (r) => r.id);
+    guardarMapa('sys_nomina_pago', datosLocales.nominaPagos, (p) => this._mapearNominaPagoACloud(p), (r) => r.id);
+  }
+
+  _mapearContabMovACloud(m, empresaFallback = null) {
+    const empRef = m.empresaId || empresaFallback || null;
+    return {
+      id: `SYS_CONTAB_MOV_${m.id}`,
+      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      fecha: normalizarFechaISO(m.fecha) || new Date().toISOString().split('T')[0],
+      finca_id: m.fincaId || m.finca_id || null,
+      finca_nombre: m.fincaNombre || '',
+      accion: 'SYS_CONTAB_MOV',
+      modulo: 'sistema_contabilidad',
+      detalles: { ...m, _tipoRegistroSistema: 'contabilidad_movimiento' },
+      usuario: m.responsable || m.tercero || 'Contabilidad'
+    };
+  }
+
+  _mapearNominaTrabACloud(t, empresaFallback = null) {
+    const empRef = t.empresaId || empresaFallback || null;
+    return {
+      id: `SYS_NOMINA_TRAB_${t.id}`,
+      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      fecha: normalizarFechaISO(t.fechaIngreso || t.creadoEn) || new Date().toISOString().split('T')[0],
+      finca_id: t.fincaId || t.finca_id || null,
+      finca_nombre: t.fincaNombre || '',
+      accion: 'SYS_NOMINA_TRAB',
+      modulo: 'sistema_nomina',
+      detalles: { ...t, _tipoRegistroSistema: 'nomina_trabajador' },
+      usuario: t.nombre || 'Nómina'
+    };
+  }
+
+  _mapearNominaPagoACloud(p, empresaFallback = null) {
+    const empRef = p.empresaId || empresaFallback || null;
+    return {
+      id: `SYS_NOMINA_PAGO_${p.id}`,
+      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      fecha: normalizarFechaISO(p.fecha) || new Date().toISOString().split('T')[0],
+      finca_id: p.fincaId || p.finca_id || null,
+      finca_nombre: p.fincaNombre || '',
+      accion: 'SYS_NOMINA_PAGO',
+      modulo: 'sistema_nomina',
+      detalles: { ...p, _tipoRegistroSistema: 'nomina_pago' },
+      usuario: p.trabajadorNombre || 'Nómina'
+    };
   }
 
   setTenantContext(context) {
@@ -2873,48 +3028,58 @@ class SupabaseSyncService {
           if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
         });
 
-        // Proteger el directorio global contra sobrescritura accidental desde una sesión recién abierta sin fincas cargadas
-        if (esSuperAdmin || (Array.isArray(appState.fincas) && appState.fincas.length > 0 && Object.keys(prevDir).length > 0)) {
+        // BLINDAJE ANTI-SOBRESCRITURA VACÍA:
+        // Jamás sobrescribir SYS_DIRECTORIO_EMPRESAS desde un dispositivo vacío (0 fincas)
+        // ni borrar empresas/mapas existentes en la nube que no estén explícitamente eliminados.
+        const tieneFincasLocales = Array.isArray(appState.fincas) && appState.fincas.length > 0;
+        const permitirActualizarDir = tieneFincasLocales || Boolean(appState._permitirDirectorioVacioExplicito);
+        if (permitirActualizarDir && (esSuperAdmin || Object.keys(prevDir).length > 0)) {
           const empresasDirMap = new Map();
           if (Array.isArray(prevDir.empresas)) {
             prevDir.empresas.forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
           }
           (appState.empresas || []).forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
-          const elimEmpSet = new Set(appState._empresasEliminadas || prevDir.empresasEliminadas || []);
-          const empresasFusionadas = esSuperAdmin
-            ? appState.empresas
-            : Array.from(empresasDirMap.values()).filter(e => !elimEmpSet.has(e.id));
+
+          const unionArrays = (a, b) => Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].filter(Boolean)));
+          const empresasElimMerged = unionArrays(prevDir.empresasEliminadas, appState._empresasEliminadas);
+          const fincasElimMerged = unionArrays(prevDir.fincasEliminadas, appState._fincasEliminadas);
+          const usuariosElimMerged = unionArrays(prevDir.usuariosEliminados, appState._usuariosEliminados);
+          const animalesElimMerged = unionArrays(prevDir.animalesEliminados, appState._animalesEliminados).slice(-1000);
+
+          const elimEmpSet = new Set(empresasElimMerged);
+          const empresasFusionadas = Array.from(empresasDirMap.values()).filter(e => !elimEmpSet.has(e.id));
 
           const detallesDir = {
             _esSistemaDirectorio: true,
             empresas: empresasFusionadas,
-            empresasEliminadas: appState._empresasEliminadas || prevDir.empresasEliminadas || [],
-            fincasEliminadas: appState._fincasEliminadas || prevDir.fincasEliminadas || [],
-            usuariosEliminados: appState._usuariosEliminados || prevDir.usuariosEliminados || [],
+            empresasEliminadas: empresasElimMerged,
+            fincasEliminadas: fincasElimMerged,
+            usuariosEliminados: usuariosElimMerged,
             fincasPurgadas: { ...(prevDir.fincasPurgadas || {}), ...(appState._fincasPurgadas || {}) },
-            animalesEliminados: (appState._animalesEliminados || prevDir.animalesEliminados || []).slice(-1000),
+            animalesEliminados: animalesElimMerged,
             fincasEmpresaMap,
             fincasOrdenosMap,
             usuariosEmpresaMap
           };
           this._ultimoDirectorioCloud = detallesDir;
-          const registroDirectorioFull = [{
-            id: 'SYS_DIRECTORIO_EMPRESAS',
-            empresa_id: null,
-            fecha: new Date().toISOString().split('T')[0],
-            finca_id: null,
-            finca_nombre: 'SISTEMA',
-            accion: 'SYS_DIRECTORIO_EMPRESAS',
-            modulo: 'sistema_empresas',
-            detalles: detallesDir,
-            usuario: 'Sistema'
-          }];
-          const { pendientes: registroDirectorio, confirmarSubida: confirmarDir } =
-            this._filtrarRegistrosModificados('sys_directorio', registroDirectorioFull, (r) => r.id, forzarCompleta);
-          if (registroDirectorio.length > 0) {
+          const huellaDetallesDir = [{ id: 'SYS_DIRECTORIO_EMPRESAS', detalles: detallesDir }];
+          const { pendientes: dirPendiente, confirmarSubida: confirmarDir } =
+            this._filtrarRegistrosModificados('sys_directorio', huellaDetallesDir, (r) => r.id, forzarCompleta);
+          if (dirPendiente.length > 0) {
+            const registroDirectorio = [{
+              id: 'SYS_DIRECTORIO_EMPRESAS',
+              empresa_id: null,
+              fecha: new Date().toISOString().split('T')[0],
+              finca_id: null,
+              finca_nombre: 'SISTEMA',
+              accion: 'SYS_DIRECTORIO_EMPRESAS',
+              modulo: 'sistema_empresas',
+              detalles: detallesDir,
+              usuario: 'Sistema'
+            }];
             tareasOla1.push(
               this._postgrestUpsert('operaciones_diarias', registroDirectorio, 'id', 10000)
-                .then(() => { confirmarDir(); if (!resultados.empresas) resultados.empresas = appState.empresas.length; })
+                .then(() => { confirmarDir(); if (!resultados.empresas) resultados.empresas = empresasFusionadas.length; })
                 .catch(() => {})
             );
           }
@@ -3245,6 +3410,39 @@ class SupabaseSyncService {
         }
       }
 
+      // 11. Contabilidad, Inversiones Diferidas y Nómina Multi-Finca (Persistencia 100% en la nube)
+      const subirBloqueSistema = (cacheKey, lista, fnMap) => {
+        if (!Array.isArray(lista) || lista.length === 0) return;
+        const filtrados = (esSuperAdmin
+          ? lista
+          : lista.filter(item => item && (item.empresaId === empresaIdActiva || (item.fincaId && fincasIdsValidas.has(item.fincaId))))
+        ).filter(item => item && item.id && (!item.fincaId || todasFincasIdsLocal.has(item.fincaId)));
+        if (filtrados.length === 0) return;
+        const payloadFull = filtrados.map(item => fnMap(item, empresaIdActiva));
+        const { pendientes, confirmarSubida } =
+          this._filtrarRegistrosModificados(cacheKey, payloadFull, (r) => r.id, forzarCompleta);
+        if (pendientes.length === 0) return;
+        const BATCH = 50;
+        const totalB = Math.ceil(pendientes.length / BATCH);
+        let okB = 0;
+        for (let b = 0; b < totalB; b++) {
+          const chunk = pendientes.slice(b * BATCH, (b + 1) * BATCH);
+          tareasOla2.push(
+            this._postgrestUpsert('operaciones_diarias', chunk, 'id', 12000)
+              .then(() => {
+                resultados.operacionesDiarias += chunk.length;
+                okB++;
+                if (okB === totalB) confirmarSubida();
+              })
+              .catch(err => { console.warn(`Supabase Sync ${cacheKey}:`, err.message); })
+          );
+        }
+      };
+
+      subirBloqueSistema('sys_contabilidad_mov', appState.contabilidadMovimientos, (m, emp) => this._mapearContabMovACloud(m, emp));
+      subirBloqueSistema('sys_nomina_trab', appState.nominaTrabajadores, (t, emp) => this._mapearNominaTrabACloud(t, emp));
+      subirBloqueSistema('sys_nomina_pago', appState.nominaPagos, (p, emp) => this._mapearNominaPagoACloud(p, emp));
+
       if (tareasOla2.length > 0) {
         await Promise.allSettled(tareasOla2);
       }
@@ -3252,7 +3450,7 @@ class SupabaseSyncService {
       // Si hubo al menos un registro modificado y subido, invalidar la firma remota para refrescar el sello local
       const totalSubidos = Object.values(resultados).reduce((acc, v) => acc + Number(v || 0), 0);
       if (totalSubidos > 0) {
-        this._ultimaFirmaRemota = null;
+        this._limpiarFirmaPersistida();
       }
 
       // Registrar marca de tiempo de sincronización
@@ -3509,9 +3707,53 @@ class SupabaseSyncService {
         nombreAlias: (r.animales && r.animales[0]) ? r.animales[0].alias : ''
       }));
 
+      // Extraer registros de Contabilidad y Nómina persistidos en la nube (SYS_CONTAB_MOV_*, SYS_NOMINA_TRAB_*, SYS_NOMINA_PAGO_*)
+      const contabilidadMovimientos = [];
+      const nominaTrabajadores = [];
+      const nominaPagos = [];
+      const fincasSetDesc = new Set(fincas.map(f => f && f.id).filter(Boolean));
+      const perteneceTenantRegistro = (r, det) => {
+        if (esSuperAdmin) return true;
+        const fid = r.finca_id || det?.fincaId || det?.finca_id;
+        const eid = det?.empresaId || r.empresa_id;
+        if (fid && fincasSetDesc.size > 0) return fincasSetDesc.has(fid);
+        if (empId && eid) return eid === empId;
+        return !empId;
+      };
+
+      for (const r of (operacionesRes || [])) {
+        if (!r || !r.id) continue;
+        const idStr = String(r.id);
+        const det = (r.detalles && typeof r.detalles === 'object') ? r.detalles : null;
+        if (idStr.startsWith('SYS_CONTAB_MOV_') || det?._tipoRegistroSistema === 'contabilidad_movimiento') {
+          if (det && perteneceTenantRegistro(r, det)) {
+            const { _tipoRegistroSistema, ...limpio } = det;
+            contabilidadMovimientos.push({ ...limpio, id: limpio.id || idStr.replace(/^SYS_CONTAB_MOV_/, '') });
+          }
+        } else if (idStr.startsWith('SYS_NOMINA_TRAB_') || det?._tipoRegistroSistema === 'nomina_trabajador') {
+          if (det && perteneceTenantRegistro(r, det)) {
+            const { _tipoRegistroSistema, ...limpio } = det;
+            nominaTrabajadores.push({ ...limpio, id: limpio.id || idStr.replace(/^SYS_NOMINA_TRAB_/, '') });
+          }
+        } else if (idStr.startsWith('SYS_NOMINA_PAGO_') || det?._tipoRegistroSistema === 'nomina_pago') {
+          if (det && perteneceTenantRegistro(r, det)) {
+            const { _tipoRegistroSistema, ...limpio } = det;
+            nominaPagos.push({ ...limpio, id: limpio.id || idStr.replace(/^SYS_NOMINA_PAGO_/, '') });
+          }
+        }
+      }
+
       // Operaciones Diarias (excluyendo registros internos de sistema y copias redundantes ACT-PES-*)
       const operacionesDiarias = (operacionesRes || [])
-        .filter(r => r && r.id !== 'SYS_DIRECTORIO_EMPRESAS' && r.accion !== 'SYS_DIRECTORIO_EMPRESAS' && !(r.detalles && r.detalles._esSistemaDirectorio) && !String(r.id || '').startsWith('ACT-PES-'))
+        .filter(r => {
+          if (!r) return false;
+          const idStr = String(r.id || '');
+          if (idStr === 'SYS_DIRECTORIO_EMPRESAS' || r.accion === 'SYS_DIRECTORIO_EMPRESAS' || (r.detalles && r.detalles._esSistemaDirectorio)) return false;
+          if (idStr.startsWith('SYS_CONTAB_MOV_') || idStr.startsWith('SYS_NOMINA_TRAB_') || idStr.startsWith('SYS_NOMINA_PAGO_')) return false;
+          if (r.detalles && r.detalles._tipoRegistroSistema) return false;
+          if (idStr.startsWith('ACT-PES-')) return false;
+          return true;
+        })
         .map(r => {
         if (r.detalles && typeof r.detalles === 'object' && Object.keys(r.detalles).length > 0) {
           return {
@@ -3565,6 +3807,9 @@ class SupabaseSyncService {
         operacionesDiarias,
         pesajes,
         nutricion,
+        contabilidadMovimientos,
+        nominaTrabajadores,
+        nominaPagos,
         empresasEliminadas: empresasEliminadasCloud,
         fincasEliminadas: fincasEliminadasCloud,
         _fincasPurgadas: fincasPurgadasCloud,
@@ -3599,7 +3844,7 @@ class SupabaseSyncService {
    * Consulta únicamente el conteo exacto y el último registro modificado de las tablas clave.
    * Si la firma no cambió respecto a la última revisión, evita descargar las tablas completas en el heartbeat.
    */
-  async verificarCambiosRemotosLiviano(timeoutMs = 6000, tenantContext = null) {
+  async verificarCambiosRemotosLiviano(timeoutMs = 6000, tenantContext = null, opciones = {}) {
     if (!this.estaConfigurado()) {
       return { ok: false, hayCambios: false };
     }
@@ -3640,13 +3885,22 @@ class SupabaseSyncService {
       ]);
 
       const firmaActual = [sigFincas, sigAnimales, sigPesajes, sigOps, sigDir].join('||');
+      if (this._ultimaFirmaRemota === null && opciones && opciones.usarFirmaPersistida) {
+        const persistida = this._leerFirmaPersistida(ctx);
+        if (persistida) {
+          this._ultimaFirmaRemota = persistida;
+        }
+      }
+
       if (this._ultimaFirmaRemota === null) {
         this._ultimaFirmaRemota = firmaActual;
+        this._persistirFirmaRemota(firmaActual, ctx);
         return { ok: true, hayCambios: false, firma: firmaActual, inicializada: true };
       }
 
       const hayCambios = firmaActual !== this._ultimaFirmaRemota;
       this._ultimaFirmaRemota = firmaActual;
+      this._persistirFirmaRemota(firmaActual, ctx);
       return { ok: true, hayCambios, firma: firmaActual };
     } catch (err) {
       return { ok: false, hayCambios: false, error: err.message };
@@ -4009,6 +4263,7 @@ class SupabaseSyncService {
 
     try {
       // 1. Eliminar primero eventos e historiales zootécnicos vinculados al predio
+      //    (preservando siempre registros SYS_CONTAB_* / SYS_NOMINA_* / SYS_DIRECTORIO_*)
       await Promise.allSettled([
         this._postgrestDelete('pesajes_animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('servicios_reproductivos', `finca_id=eq.${fid}`),
@@ -4016,13 +4271,46 @@ class SupabaseSyncService {
         this._postgrestDelete('controles_lecheros', `finca_id=eq.${fid}`),
         this._postgrestDelete('nutricion_animales', `finca_id=eq.${fid}`),
         this._postgrestDelete('inversiones_diferidas', `finca_id=eq.${fid}`),
-        this._postgrestDelete('operaciones_diarias', `finca_id=eq.${fid}`)
+        this._postgrestDelete('operaciones_diarias', `finca_id=eq.${fid}&id=not.like.SYS_*`)
       ]);
       // 2. Eliminar la tabla principal de animales
       await this._postgrestDelete('animales', `finca_id=eq.${fid}`);
+      this._limpiarFirmaPersistida();
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando finca en cloud:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Reemplaza únicamente el listado de animales de una finca preservando 100% de pesajes,
+   * operaciones históricas, contabilidad, nómina e inversiones.
+   */
+  async reemplazarSoloAnimalesFincaCloud(fincaId) {
+    if (!this.estaConfigurado() || !fincaId) return { ok: false };
+    const fid = encodeURIComponent(fincaId);
+    try {
+      await this._postgrestDelete('animales', `finca_id=eq.${fid}`);
+      this._limpiarFirmaPersistida();
+      return { ok: true };
+    } catch (err) {
+      console.warn('Advertencia reemplazando animales de finca en cloud:', err.message);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /**
+   * Elimina un registro individual de Contabilidad o Nómina (SYS_CONTAB_MOV_*, SYS_NOMINA_TRAB_*, SYS_NOMINA_PAGO_*) en Supabase.
+   */
+  async eliminarRegistroSistemaCloud(idCompleto) {
+    if (!this.estaConfigurado() || !idCompleto) return { ok: false };
+    try {
+      await this._postgrestDelete('operaciones_diarias', `id=eq.${encodeURIComponent(idCompleto)}`);
+      this._limpiarFirmaPersistida();
+      return { ok: true };
+    } catch (err) {
+      console.warn('Advertencia eliminando registro de sistema en cloud:', err.message);
       return { ok: false, error: err.message };
     }
   }
@@ -4043,9 +4331,10 @@ class SupabaseSyncService {
         this._postgrestDelete('controles_lecheros', queryIn),
         this._postgrestDelete('nutricion_animales', queryIn),
         this._postgrestDelete('inversiones_diferidas', queryIn),
-        this._postgrestDelete('operaciones_diarias', queryIn)
+        this._postgrestDelete('operaciones_diarias', `${queryIn}&id=not.like.SYS_*`)
       ]);
       await this._postgrestDelete('animales', queryIn);
+      this._limpiarFirmaPersistida();
       return { ok: true };
     } catch (err) {
       console.warn('Advertencia purgando fincas en cloud:', err.message);
@@ -10186,19 +10475,56 @@ function inicializarInputsFechaDMYGlobal(docRef = null) {
   const Obs = (doc.defaultView && doc.defaultView.MutationObserver) || (typeof MutationObserver !== 'undefined' ? MutationObserver : null);
   if (!Obs) return null;
 
+  const nodosPendientes = new Set();
+  let framePendiente = null;
+  let procesandoLote = false;
+
+  const procesarPendientes = () => {
+    framePendiente = null;
+    if (procesandoLote || nodosPendientes.size === 0) return;
+    procesandoLote = true;
+    try {
+      const lote = Array.from(nodosPendientes);
+      nodosPendientes.clear();
+      for (const node of lote) {
+        if (!node || !node.isConnected) continue;
+        if (node.tagName === 'INPUT' && node.type === 'date') {
+          mejorarInputFechaDMY(node);
+        } else if (typeof node.querySelectorAll === 'function') {
+          mejorarInputsFechaDMYEnContenedor(node);
+        }
+      }
+    } finally {
+      procesandoLote = false;
+    }
+  };
+
+  const programarProcesamiento = () => {
+    if (framePendiente !== null) return;
+    const raf = (doc.defaultView && doc.defaultView.requestAnimationFrame) || (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
+    if (raf) {
+      framePendiente = raf(procesarPendientes);
+    } else {
+      framePendiente = setTimeout(procesarPendientes, 0);
+    }
+  };
+
   const observer = new Obs((mutations) => {
+    if (procesandoLote) return;
+    let agrego = false;
     for (const m of mutations) {
       if (m.type === 'childList' && m.addedNodes && m.addedNodes.length > 0) {
-        m.addedNodes.forEach((node) => {
-          if (!node || node.nodeType !== 1) return;
-          if (node.tagName === 'INPUT' && node.type === 'date') {
-            mejorarInputFechaDMY(node);
-          } else if (typeof node.querySelectorAll === 'function') {
-            mejorarInputsFechaDMYEnContenedor(node);
-          }
-        });
+        for (let i = 0; i < m.addedNodes.length; i++) {
+          const node = m.addedNodes[i];
+          if (!node || node.nodeType !== 1) continue;
+          if (node.classList && node.classList.contains('bovi-dmy-wrapper')) continue;
+          if (node.tagName === 'TR' || node.tagName === 'TD' || node.tagName === 'SPAN' || node.tagName === 'OPTION') continue;
+          nodosPendientes.add(node);
+          agrego = true;
+        }
       }
     }
+    if (agrego) programarProcesamiento();
   });
 
   observer.observe(doc.body, { childList: true, subtree: true });
@@ -14736,7 +15062,7 @@ class ImportadorExcel {
     this.fincaDestinoId = null;
     this._ultimaFincaActivaGlobal = null;
     this.informeResultados = null;
-    this.modoReemplazo = true; // Por defecto en inventario: reemplazar para garantizar que el predio quede exactamente con el archivo
+    this.modoReemplazo = false; // Modo seguro por defecto: agregar/actualizar sin borrar animales ni históricos existentes
     this.especiePredeterminada = null;
     this._especieFijadaManual = false;
   }
@@ -15681,7 +16007,17 @@ class ImportadorExcel {
     if (this.onImportConfirmada) {
       const filasAImportar = [...validos];
       const especieF = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
-      const modoR = Boolean(this.modoReemplazo);
+      let modoR = Boolean(this.modoReemplazo && this.tipoCargue === 'inventario');
+      if (modoR && typeof prompt === 'function') {
+        const confirmTxt = prompt(
+          `⚠️ PROTECCIÓN ANTI-BORRADO:\n\nEstás a punto de REEMPLAZAR el inventario actual de la finca "${fincaConfirmada.nombre}" por los ${filasAImportar.length} registros del archivo.\n\nEscribe exactamente la palabra REEMPLAZAR para confirmar (o Cancela para importar de forma segura sin borrar animales previos):`,
+          ''
+        );
+        if (String(confirmTxt || '').trim().toUpperCase() !== 'REEMPLAZAR') {
+          alert('🛡️ Reemplazo total cancelado. No se borró ningún animal. Desmarca la casilla si deseas agregar/actualizar sin borrar.');
+          return;
+        }
+      }
       this.registros = [];
       this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal, {
         modoReemplazo: modoR,
@@ -15962,10 +16298,10 @@ class ImportadorExcel {
             <!-- MODO DE CARGUE (SOLO PARA INVENTARIO) -->
             ${this.tipoCargue === 'inventario' ? `
               <div class="flex items-center gap-2">
-                <label class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-emerald-100/60 transition">
-                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded cursor-pointer">
-                  <span class="text-xs font-black text-emerald-950">
-                    🔄 Reemplazar inventario completo (dejar exactamente los ejemplares de este archivo)
+                <label class="inline-flex items-center gap-2 ${this.modoReemplazo ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'} border px-3 py-1.5 rounded-xl cursor-pointer hover:bg-amber-50/70 transition">
+                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-amber-600 rounded cursor-pointer">
+                  <span class="text-xs font-black ${this.modoReemplazo ? 'text-amber-950' : 'text-slate-700'}">
+                    ${this.modoReemplazo ? '⚠️ Reemplazar inventario de animales (requiere confirmación)' : '🛡️ Modo Seguro Activo: Agregar/actualizar sin borrar animales previos (marcar solo para reemplazo total)'}
                   </span>
                 </label>
               </div>
@@ -32748,7 +33084,7 @@ class BoviTrackApp {
     return huboCambios;
   }
 
-  async sincronizarConSupabaseInicial() {
+  async sincronizarConSupabaseInicial(forzarDescarga = false, intento = 1) {
     if (!this.supabase || !this.supabase.estaConfigurado()) {
       this.actualizarBadgeConexion();
       return;
@@ -32766,6 +33102,7 @@ class BoviTrackApp {
 
     this._syncEnCurso = true;
     const inicioSinSesion = !this.state?.usuarioActual;
+    let reintentarEnMs = 0;
     try {
       this.actualizarBadgeConexion('descargando');
 
@@ -32801,8 +33138,15 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar, subirlos ANTES de descargar
-      if (this.state._hayCambiosOfflinePendientes || (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)) {
+      const hayPendientesOffline = Boolean(
+        this.state._hayCambiosOfflinePendientes ||
+        (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)
+      );
+      const tieneInventarioLocal = Array.isArray(this.state.fincas) && this.state.fincas.length > 0 &&
+        Array.isArray(this.state.animales) && this.state.animales.length > 0;
+
+      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar (y hay datos locales), subirlos ANTES de descargar
+      if (hayPendientesOffline && tieneInventarioLocal) {
         const pushPend = await this.supabase.subirDatosASupabase(this.state);
         if (pushPend && pushPend.ok && this.offlineManager) {
           const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
@@ -32812,7 +33156,24 @@ class BoviTrackApp {
         }
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+      // AHORRO DE CUOTA EGRESS (SONDA 350 BYTES):
+      // Si el dispositivo YA tiene fincas y animales en caché local y nada cambió en Supabase,
+      // omitir la descarga pesada (~2.6 MB) en recargas de página.
+      if (!forzarDescarga && !hayPendientesOffline && tieneInventarioLocal && typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+        const sonda = await this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext, { usarFirmaPersistida: true });
+        if (sonda && sonda.ok && !sonda.hayCambios && !sonda.inicializada) {
+          this.online = true;
+          this._descargaCompletaRealizada = true;
+          this.actualizarBadgeConexion('sincronizado');
+          return;
+        }
+      }
+
+      if (!tieneInventarioLocal && intento === 1) {
+        this.mostrarNotificacionToast('☁️ Descargando fincas e inventario desde la base de datos...', 'info');
+      }
+
+      const res = await this.supabase.descargarDatosDeSupabase(22000, tenantContext);
       if (res.ok && res.datos) {
         this.online = true;
         this._descargaCompletaRealizada = true;
@@ -32822,29 +33183,39 @@ class BoviTrackApp {
         if (this.offlineManager) {
           this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() }).catch(() => {});
         }
+        // Registrar firma liviana actual en segundo plano para ahorrar Egress en próximas recargas
+        if (typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+          this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext).catch(() => {});
+        }
         this.actualizarHeader();
         this.actualizarIndicadoresOfflineUI();
         if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
           this.compCuadricula.cargarFilasDesdeInventario();
-        }
-        if (typeof this.refrescarVistas === 'function') {
-          this.refrescarVistas();
         }
         this.mostrarVistaActiva();
         this.actualizarContadorAlertas();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         this.actualizarBadgeConexion();
+        if (!tieneInventarioLocal && intento < 3) {
+          reintentarEnMs = intento * 2500;
+        }
       }
     } catch (err) {
       console.warn('Error en descarga inicial de Supabase:', err);
       this.actualizarBadgeConexion();
+      const sinDatosLocales = !Array.isArray(this.state?.fincas) || this.state.fincas.length === 0;
+      if (sinDatosLocales && intento < 3) {
+        reintentarEnMs = intento * 2500;
+      }
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
       if (this._pullInicialPendiente && this.state?.usuarioActual) {
         this._pullInicialPendiente = false;
-        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+        setTimeout(() => this.sincronizarConSupabaseInicial(true, 1), 10);
+      } else if (reintentarEnMs > 0 && this.state?.usuarioActual) {
+        setTimeout(() => this.sincronizarConSupabaseInicial(true, intento + 1), reintentarEnMs);
       } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
@@ -32975,20 +33346,31 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       } : null;
 
-      const pushRes = await this.supabase.subirDatosASupabase(this.state);
-      if (pushRes.ok && this.offlineManager && this.state) {
-        const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
-        if (cantEnviados > 0) {
-          this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+      // BLINDAJE ANTI-SOBRESCRITURA: Si el dispositivo está vacío (0 fincas / 0 animales) y sin cola offline,
+      // descargar primero desde la nube antes de intentar subir cualquier dato.
+      const hayDatosLocales = Array.isArray(this.state?.fincas) && this.state.fincas.length > 0;
+      const hayColaOffline = Array.isArray(this.state?._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0;
+      let pushRes = { ok: true };
+      if (hayDatosLocales || hayColaOffline) {
+        pushRes = await this.supabase.subirDatosASupabase(this.state);
+        if (pushRes.ok && this.offlineManager && this.state) {
+          const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          if (cantEnviados > 0) {
+            this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+          }
         }
       }
 
-      const pullRes = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+      const pullRes = await this.supabase.descargarDatosDeSupabase(22000, tenantContext);
       if (pullRes.ok && pullRes.datos) {
+        this._descargaCompletaRealizada = true;
         this.integrarDatosSupabase(pullRes.datos);
         this.persistirEstadoSeguro();
         if (this.offlineManager && this.state) {
-          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() });
+          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString(), inmediato: true });
+        }
+        if (typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+          this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext).catch(() => {});
         }
       }
 
@@ -34415,6 +34797,9 @@ class BoviTrackApp {
     if (!id || this.esUsuarioSoloConsulta()) return false;
     if (!Array.isArray(this.state.contabilidadMovimientos)) return false;
     this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter((m) => m && m.id !== id);
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_CONTAB_MOV_${id}`).catch(() => {});
+    }
     this.guardarEstado();
     return true;
   }
@@ -34465,6 +34850,9 @@ class BoviTrackApp {
     if (!id || this.esUsuarioSoloConsulta()) return false;
     if (!Array.isArray(this.state.nominaTrabajadores)) return false;
     this.state.nominaTrabajadores = this.state.nominaTrabajadores.filter((t) => t && t.id !== id);
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_NOMINA_TRAB_${id}`).catch(() => {});
+    }
     this.guardarEstado();
     return true;
   }
@@ -34536,6 +34924,10 @@ class BoviTrackApp {
       this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter(
         (m) => m && m.nominaPagoId !== idPago && m.id !== `MOV-NOM-${idPago}`
       );
+    }
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_NOMINA_PAGO_${idPago}`).catch(() => {});
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_CONTAB_MOV_MOV-NOM-${idPago}`).catch(() => {});
     }
     this.guardarEstado();
     return true;
@@ -35934,6 +36326,11 @@ class BoviTrackApp {
       return false;
     }
 
+    // Respaldo automático de emergencia antes de eliminar la finca
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      this.offlineManager.guardarRespaldoEmergencia(this.state, `eliminar_finca_${fincaId}`).catch(() => {});
+    }
+
     // Remover animales, costos, inversiones, pesajes, servicios, traslados, operaciones y nutrición asociados
     this.state.animales = (this.state.animales || []).filter((a) => a.fincaId !== fincaId);
     this.state.inversiones = (this.state.inversiones || []).filter((i) => i.fincaId !== fincaId);
@@ -36192,6 +36589,10 @@ class BoviTrackApp {
       return;
     }
 
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      await this.offlineManager.guardarRespaldoEmergencia(this.state, `purgar_empresa_${nombreEmp}`).catch(() => {});
+    }
+
     this._bloqueoSync = true;
 
     // Registrar tombstones para todas las fincas de la empresa activa
@@ -36259,6 +36660,10 @@ class BoviTrackApp {
 
     const finca = (this.state.fincas || []).find((f) => f.id === fincaId);
     const nombreFinca = finca ? finca.nombre : fincaId;
+
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      await this.offlineManager.guardarRespaldoEmergencia(this.state, `purgar_finca_${fincaId}`).catch(() => {});
+    }
 
     this._bloqueoSync = true;
 
@@ -37081,12 +37486,21 @@ class BoviTrackApp {
       return;
     }
 
-    // MODO REEMPLAZO TOTAL DE INVENTARIO:
-    // Si se activa para "inventario", vaciar previamente el hato del predio tanto local como en nube
+    // MODO REEMPLAZO DE INVENTARIO (BLINDADO):
+    // Sólo reemplaza el listado de animales de esta finca tras guardar respaldo de emergencia,
+    // preservando 100% de pesajes históricos, operaciones, contabilidad, nómina e inversiones.
     const modoReemplazo = Boolean(opciones && opciones.modoReemplazo);
     if (tipoCargue === 'inventario' && modoReemplazo) {
-      console.log(`[BoviTrack] Modo Reemplazo Total activado para predio ${resolvedFincaId}. Vaciando inventario previo...`);
-      await this.purgarFinca(resolvedFincaId, true /* silencioso */);
+      console.log(`[BoviTrack] Modo Reemplazo Seguro activado para predio ${resolvedFincaId}. Guardando respaldo y reemplazando sólo inventario de animales...`);
+      if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+        await this.offlineManager.guardarRespaldoEmergencia(this.state, `reemplazo_excel_${resolvedFincaId}`).catch(() => {});
+      }
+      this._bloqueoSync = true;
+      this.state.animales = (this.state.animales || []).filter((a) => a.fincaId !== resolvedFincaId);
+      if (this.supabase && typeof this.supabase.reemplazarSoloAnimalesFincaCloud === 'function') {
+        await this.supabase.reemplazarSoloAnimalesFincaCloud(resolvedFincaId).catch(() => {});
+      }
+      this._bloqueoSync = false;
     }
 
     // Determinar especie forzada según empresa y predio
@@ -37965,6 +38379,21 @@ class BoviTrackApp {
       if (badge.style) {
         badge.style.display = alertas.length > 0 ? 'inline-block' : 'none';
       }
+    }
+  }
+
+  refrescarVistas() {
+    if (!this.state?.usuarioActual) return;
+    try {
+      this.actualizarHeader();
+      this.actualizarIndicadoresOfflineUI();
+      this.actualizarContadorAlertas();
+      if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+        this.compCuadricula.cargarFilasDesdeInventario();
+      }
+      this.mostrarVistaActiva();
+    } catch (err) {
+      console.warn('[BoviTrack] Aviso refrescando vistas:', err?.message || err);
     }
   }
 

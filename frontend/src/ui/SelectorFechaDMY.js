@@ -266,19 +266,56 @@ export function inicializarInputsFechaDMYGlobal(docRef = null) {
   const Obs = (doc.defaultView && doc.defaultView.MutationObserver) || (typeof MutationObserver !== 'undefined' ? MutationObserver : null);
   if (!Obs) return null;
 
+  const nodosPendientes = new Set();
+  let framePendiente = null;
+  let procesandoLote = false;
+
+  const procesarPendientes = () => {
+    framePendiente = null;
+    if (procesandoLote || nodosPendientes.size === 0) return;
+    procesandoLote = true;
+    try {
+      const lote = Array.from(nodosPendientes);
+      nodosPendientes.clear();
+      for (const node of lote) {
+        if (!node || !node.isConnected) continue;
+        if (node.tagName === 'INPUT' && node.type === 'date') {
+          mejorarInputFechaDMY(node);
+        } else if (typeof node.querySelectorAll === 'function') {
+          mejorarInputsFechaDMYEnContenedor(node);
+        }
+      }
+    } finally {
+      procesandoLote = false;
+    }
+  };
+
+  const programarProcesamiento = () => {
+    if (framePendiente !== null) return;
+    const raf = (doc.defaultView && doc.defaultView.requestAnimationFrame) || (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
+    if (raf) {
+      framePendiente = raf(procesarPendientes);
+    } else {
+      framePendiente = setTimeout(procesarPendientes, 0);
+    }
+  };
+
   const observer = new Obs((mutations) => {
+    if (procesandoLote) return;
+    let agrego = false;
     for (const m of mutations) {
       if (m.type === 'childList' && m.addedNodes && m.addedNodes.length > 0) {
-        m.addedNodes.forEach((node) => {
-          if (!node || node.nodeType !== 1) return;
-          if (node.tagName === 'INPUT' && node.type === 'date') {
-            mejorarInputFechaDMY(node);
-          } else if (typeof node.querySelectorAll === 'function') {
-            mejorarInputsFechaDMYEnContenedor(node);
-          }
-        });
+        for (let i = 0; i < m.addedNodes.length; i++) {
+          const node = m.addedNodes[i];
+          if (!node || node.nodeType !== 1) continue;
+          if (node.classList && node.classList.contains('bovi-dmy-wrapper')) continue;
+          if (node.tagName === 'TR' || node.tagName === 'TD' || node.tagName === 'SPAN' || node.tagName === 'OPTION') continue;
+          nodosPendientes.add(node);
+          agrego = true;
+        }
       }
     }
+    if (agrego) programarProcesamiento();
   });
 
   observer.observe(doc.body, { childList: true, subtree: true });

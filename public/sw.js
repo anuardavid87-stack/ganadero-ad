@@ -1,8 +1,8 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v4.8.0 (OFFLINE FIELD MODE & FECHAS DD/MM/AAAA)
+// GANADERO AD PWA: SERVICE WORKER v4.9.0 (BLINDAJE ANTI-BORRADO & SYNC CONTAB)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.8.0-fechas-dmy';
+const CACHE_NAME = 'ganadero-ad-v4.9.0-proteccion-datos';
 const CORE_FILES = [
   './',
   './index.html',

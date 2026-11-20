@@ -1098,7 +1098,7 @@ class BoviTrackApp {
     return huboCambios;
   }
 
-  async sincronizarConSupabaseInicial() {
+  async sincronizarConSupabaseInicial(forzarDescarga = false, intento = 1) {
     if (!this.supabase || !this.supabase.estaConfigurado()) {
       this.actualizarBadgeConexion();
       return;
@@ -1116,6 +1116,7 @@ class BoviTrackApp {
 
     this._syncEnCurso = true;
     const inicioSinSesion = !this.state?.usuarioActual;
+    let reintentarEnMs = 0;
     try {
       this.actualizarBadgeConexion('descargando');
 
@@ -1151,8 +1152,15 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       };
 
-      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar, subirlos ANTES de descargar
-      if (this.state._hayCambiosOfflinePendientes || (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)) {
+      const hayPendientesOffline = Boolean(
+        this.state._hayCambiosOfflinePendientes ||
+        (Array.isArray(this.state._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0)
+      );
+      const tieneInventarioLocal = Array.isArray(this.state.fincas) && this.state.fincas.length > 0 &&
+        Array.isArray(this.state.animales) && this.state.animales.length > 0;
+
+      // PRIORIDAD OFFLINE-FIRST: Si hay cambios capturados sin conexión pendientes de enviar (y hay datos locales), subirlos ANTES de descargar
+      if (hayPendientesOffline && tieneInventarioLocal) {
         const pushPend = await this.supabase.subirDatosASupabase(this.state);
         if (pushPend && pushPend.ok && this.offlineManager) {
           const enviados = this.offlineManager.limpiarColaSincronizada(this.state);
@@ -1162,7 +1170,24 @@ class BoviTrackApp {
         }
       }
 
-      const res = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+      // AHORRO DE CUOTA EGRESS (SONDA 350 BYTES):
+      // Si el dispositivo YA tiene fincas y animales en caché local y nada cambió en Supabase,
+      // omitir la descarga pesada (~2.6 MB) en recargas de página.
+      if (!forzarDescarga && !hayPendientesOffline && tieneInventarioLocal && typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+        const sonda = await this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext, { usarFirmaPersistida: true });
+        if (sonda && sonda.ok && !sonda.hayCambios && !sonda.inicializada) {
+          this.online = true;
+          this._descargaCompletaRealizada = true;
+          this.actualizarBadgeConexion('sincronizado');
+          return;
+        }
+      }
+
+      if (!tieneInventarioLocal && intento === 1) {
+        this.mostrarNotificacionToast('☁️ Descargando fincas e inventario desde la base de datos...', 'info');
+      }
+
+      const res = await this.supabase.descargarDatosDeSupabase(22000, tenantContext);
       if (res.ok && res.datos) {
         this.online = true;
         this._descargaCompletaRealizada = true;
@@ -1172,29 +1197,39 @@ class BoviTrackApp {
         if (this.offlineManager) {
           this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() }).catch(() => {});
         }
+        // Registrar firma liviana actual en segundo plano para ahorrar Egress en próximas recargas
+        if (typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+          this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext).catch(() => {});
+        }
         this.actualizarHeader();
         this.actualizarIndicadoresOfflineUI();
         if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
           this.compCuadricula.cargarFilasDesdeInventario();
-        }
-        if (typeof this.refrescarVistas === 'function') {
-          this.refrescarVistas();
         }
         this.mostrarVistaActiva();
         this.actualizarContadorAlertas();
         this.actualizarBadgeConexion('sincronizado');
       } else {
         this.actualizarBadgeConexion();
+        if (!tieneInventarioLocal && intento < 3) {
+          reintentarEnMs = intento * 2500;
+        }
       }
     } catch (err) {
       console.warn('Error en descarga inicial de Supabase:', err);
       this.actualizarBadgeConexion();
+      const sinDatosLocales = !Array.isArray(this.state?.fincas) || this.state.fincas.length === 0;
+      if (sinDatosLocales && intento < 3) {
+        reintentarEnMs = intento * 2500;
+      }
     } finally {
       this._syncEnCurso = false;
       this._ultimoSyncTiempo = Date.now();
       if (this._pullInicialPendiente && this.state?.usuarioActual) {
         this._pullInicialPendiente = false;
-        setTimeout(() => this.sincronizarConSupabaseInicial(), 10);
+        setTimeout(() => this.sincronizarConSupabaseInicial(true, 1), 10);
+      } else if (reintentarEnMs > 0 && this.state?.usuarioActual) {
+        setTimeout(() => this.sincronizarConSupabaseInicial(true, intento + 1), reintentarEnMs);
       } else if (this._syncPendiente) {
         this._syncPendiente = false;
         this.sincronizarConSupabaseDebounced(50);
@@ -1325,20 +1360,31 @@ class BoviTrackApp {
         token: this._tokenSesion || null
       } : null;
 
-      const pushRes = await this.supabase.subirDatosASupabase(this.state);
-      if (pushRes.ok && this.offlineManager && this.state) {
-        const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
-        if (cantEnviados > 0) {
-          this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+      // BLINDAJE ANTI-SOBRESCRITURA: Si el dispositivo está vacío (0 fincas / 0 animales) y sin cola offline,
+      // descargar primero desde la nube antes de intentar subir cualquier dato.
+      const hayDatosLocales = Array.isArray(this.state?.fincas) && this.state.fincas.length > 0;
+      const hayColaOffline = Array.isArray(this.state?._colaSincronizacionOffline) && this.state._colaSincronizacionOffline.length > 0;
+      let pushRes = { ok: true };
+      if (hayDatosLocales || hayColaOffline) {
+        pushRes = await this.supabase.subirDatosASupabase(this.state);
+        if (pushRes.ok && this.offlineManager && this.state) {
+          const cantEnviados = this.offlineManager.limpiarColaSincronizada(this.state);
+          if (cantEnviados > 0) {
+            this.mostrarNotificacionToast(`✅ ¡${cantEnviados} dato(s) trabajados sin conexión enviados exitosamente a la base de datos!`, 'success');
+          }
         }
       }
 
-      const pullRes = await this.supabase.descargarDatosDeSupabase(18000, tenantContext);
+      const pullRes = await this.supabase.descargarDatosDeSupabase(22000, tenantContext);
       if (pullRes.ok && pullRes.datos) {
+        this._descargaCompletaRealizada = true;
         this.integrarDatosSupabase(pullRes.datos);
         this.persistirEstadoSeguro();
         if (this.offlineManager && this.state) {
-          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString() });
+          await this.offlineManager.guardarSnapshotInventario(this.state, { descargadoEn: new Date().toISOString(), inmediato: true });
+        }
+        if (typeof this.supabase.verificarCambiosRemotosLiviano === 'function') {
+          this.supabase.verificarCambiosRemotosLiviano(6000, tenantContext).catch(() => {});
         }
       }
 
@@ -2765,6 +2811,9 @@ class BoviTrackApp {
     if (!id || this.esUsuarioSoloConsulta()) return false;
     if (!Array.isArray(this.state.contabilidadMovimientos)) return false;
     this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter((m) => m && m.id !== id);
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_CONTAB_MOV_${id}`).catch(() => {});
+    }
     this.guardarEstado();
     return true;
   }
@@ -2815,6 +2864,9 @@ class BoviTrackApp {
     if (!id || this.esUsuarioSoloConsulta()) return false;
     if (!Array.isArray(this.state.nominaTrabajadores)) return false;
     this.state.nominaTrabajadores = this.state.nominaTrabajadores.filter((t) => t && t.id !== id);
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_NOMINA_TRAB_${id}`).catch(() => {});
+    }
     this.guardarEstado();
     return true;
   }
@@ -2886,6 +2938,10 @@ class BoviTrackApp {
       this.state.contabilidadMovimientos = this.state.contabilidadMovimientos.filter(
         (m) => m && m.nominaPagoId !== idPago && m.id !== `MOV-NOM-${idPago}`
       );
+    }
+    if (this.supabase && typeof this.supabase.eliminarRegistroSistemaCloud === 'function') {
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_NOMINA_PAGO_${idPago}`).catch(() => {});
+      this.supabase.eliminarRegistroSistemaCloud(`SYS_CONTAB_MOV_MOV-NOM-${idPago}`).catch(() => {});
     }
     this.guardarEstado();
     return true;
@@ -4284,6 +4340,11 @@ class BoviTrackApp {
       return false;
     }
 
+    // Respaldo automático de emergencia antes de eliminar la finca
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      this.offlineManager.guardarRespaldoEmergencia(this.state, `eliminar_finca_${fincaId}`).catch(() => {});
+    }
+
     // Remover animales, costos, inversiones, pesajes, servicios, traslados, operaciones y nutrición asociados
     this.state.animales = (this.state.animales || []).filter((a) => a.fincaId !== fincaId);
     this.state.inversiones = (this.state.inversiones || []).filter((i) => i.fincaId !== fincaId);
@@ -4542,6 +4603,10 @@ class BoviTrackApp {
       return;
     }
 
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      await this.offlineManager.guardarRespaldoEmergencia(this.state, `purgar_empresa_${nombreEmp}`).catch(() => {});
+    }
+
     this._bloqueoSync = true;
 
     // Registrar tombstones para todas las fincas de la empresa activa
@@ -4609,6 +4674,10 @@ class BoviTrackApp {
 
     const finca = (this.state.fincas || []).find((f) => f.id === fincaId);
     const nombreFinca = finca ? finca.nombre : fincaId;
+
+    if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+      await this.offlineManager.guardarRespaldoEmergencia(this.state, `purgar_finca_${fincaId}`).catch(() => {});
+    }
 
     this._bloqueoSync = true;
 
@@ -5431,12 +5500,21 @@ class BoviTrackApp {
       return;
     }
 
-    // MODO REEMPLAZO TOTAL DE INVENTARIO:
-    // Si se activa para "inventario", vaciar previamente el hato del predio tanto local como en nube
+    // MODO REEMPLAZO DE INVENTARIO (BLINDADO):
+    // Sólo reemplaza el listado de animales de esta finca tras guardar respaldo de emergencia,
+    // preservando 100% de pesajes históricos, operaciones, contabilidad, nómina e inversiones.
     const modoReemplazo = Boolean(opciones && opciones.modoReemplazo);
     if (tipoCargue === 'inventario' && modoReemplazo) {
-      console.log(`[BoviTrack] Modo Reemplazo Total activado para predio ${resolvedFincaId}. Vaciando inventario previo...`);
-      await this.purgarFinca(resolvedFincaId, true /* silencioso */);
+      console.log(`[BoviTrack] Modo Reemplazo Seguro activado para predio ${resolvedFincaId}. Guardando respaldo y reemplazando sólo inventario de animales...`);
+      if (this.offlineManager && typeof this.offlineManager.guardarRespaldoEmergencia === 'function') {
+        await this.offlineManager.guardarRespaldoEmergencia(this.state, `reemplazo_excel_${resolvedFincaId}`).catch(() => {});
+      }
+      this._bloqueoSync = true;
+      this.state.animales = (this.state.animales || []).filter((a) => a.fincaId !== resolvedFincaId);
+      if (this.supabase && typeof this.supabase.reemplazarSoloAnimalesFincaCloud === 'function') {
+        await this.supabase.reemplazarSoloAnimalesFincaCloud(resolvedFincaId).catch(() => {});
+      }
+      this._bloqueoSync = false;
     }
 
     // Determinar especie forzada según empresa y predio
@@ -6315,6 +6393,21 @@ class BoviTrackApp {
       if (badge.style) {
         badge.style.display = alertas.length > 0 ? 'inline-block' : 'none';
       }
+    }
+  }
+
+  refrescarVistas() {
+    if (!this.state?.usuarioActual) return;
+    try {
+      this.actualizarHeader();
+      this.actualizarIndicadoresOfflineUI();
+      this.actualizarContadorAlertas();
+      if (this.compCuadricula && typeof this.compCuadricula.cargarFilasDesdeInventario === 'function') {
+        this.compCuadricula.cargarFilasDesdeInventario();
+      }
+      this.mostrarVistaActiva();
+    } catch (err) {
+      console.warn('[BoviTrack] Aviso refrescando vistas:', err?.message || err);
     }
   }
 

@@ -32,7 +32,7 @@ export class ImportadorExcel {
     this.fincaDestinoId = null;
     this._ultimaFincaActivaGlobal = null;
     this.informeResultados = null;
-    this.modoReemplazo = true; // Por defecto en inventario: reemplazar para garantizar que el predio quede exactamente con el archivo
+    this.modoReemplazo = false; // Modo seguro por defecto: agregar/actualizar sin borrar animales ni históricos existentes
     this.especiePredeterminada = null;
     this._especieFijadaManual = false;
   }
@@ -977,7 +977,17 @@ export class ImportadorExcel {
     if (this.onImportConfirmada) {
       const filasAImportar = [...validos];
       const especieF = this.resolverEspeciePredeterminada ? this.resolverEspeciePredeterminada() : (this.especiePredeterminada || 'bufalino');
-      const modoR = Boolean(this.modoReemplazo);
+      let modoR = Boolean(this.modoReemplazo && this.tipoCargue === 'inventario');
+      if (modoR && typeof prompt === 'function') {
+        const confirmTxt = prompt(
+          `⚠️ PROTECCIÓN ANTI-BORRADO:\n\nEstás a punto de REEMPLAZAR el inventario actual de la finca "${fincaConfirmada.nombre}" por los ${filasAImportar.length} registros del archivo.\n\nEscribe exactamente la palabra REEMPLAZAR para confirmar (o Cancela para importar de forma segura sin borrar animales previos):`,
+          ''
+        );
+        if (String(confirmTxt || '').trim().toUpperCase() !== 'REEMPLAZAR') {
+          alert('🛡️ Reemplazo total cancelado. No se borró ningún animal. Desmarca la casilla si deseas agregar/actualizar sin borrar.');
+          return;
+        }
+      }
       this.registros = [];
       this.onImportConfirmada(filasAImportar, targetFincaId, this.tipoCargue, this.fechaGlobal, {
         modoReemplazo: modoR,
@@ -1258,10 +1268,10 @@ export class ImportadorExcel {
             <!-- MODO DE CARGUE (SOLO PARA INVENTARIO) -->
             ${this.tipoCargue === 'inventario' ? `
               <div class="flex items-center gap-2">
-                <label class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-emerald-100/60 transition">
-                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded cursor-pointer">
-                  <span class="text-xs font-black text-emerald-950">
-                    🔄 Reemplazar inventario completo (dejar exactamente los ejemplares de este archivo)
+                <label class="inline-flex items-center gap-2 ${this.modoReemplazo ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'} border px-3 py-1.5 rounded-xl cursor-pointer hover:bg-amber-50/70 transition">
+                  <input type="checkbox" id="check-modo-reemplazo" ${this.modoReemplazo ? 'checked' : ''} class="w-4 h-4 text-amber-600 rounded cursor-pointer">
+                  <span class="text-xs font-black ${this.modoReemplazo ? 'text-amber-950' : 'text-slate-700'}">
+                    ${this.modoReemplazo ? '⚠️ Reemplazar inventario de animales (requiere confirmación)' : '🛡️ Modo Seguro Activo: Agregar/actualizar sin borrar animales previos (marcar solo para reemplazo total)'}
                   </span>
                 </label>
               </div>
