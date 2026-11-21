@@ -997,6 +997,114 @@ export function crearRepositorioWhatsAppSupabase({
     usarServiceRole = false,
     fetchImpl = globalThis.fetch
 } = {}) {
+    // Si opera desde el panel administrativo (navegador / PWA / Android APK) en modo Neon Postgres,
+    // enrutar 100% de las lecturas y mutaciones del panel hacia /api/whatsapp/panel en Vercel + Neon.
+    const urlPanelCfg = String(contextoPanel?.supabaseUrl || '').trim();
+    const usarPanelNeon = Boolean(
+        !usarServiceRole &&
+        contextoPanel &&
+        (!urlPanelCfg || urlPanelCfg.includes('/api/db') || !urlPanelCfg.includes('supabase.co'))
+    );
+
+    if (usarPanelNeon) {
+        let originBase = 'https://ganadero-ad.vercel.app';
+        if (urlPanelCfg && urlPanelCfg.includes('/api/db')) {
+            originBase = urlPanelCfg.replace(/\/api\/db\/?$/, '');
+        } else if (typeof window !== 'undefined' && window.location) {
+            const proto = String(window.location.protocol || '');
+            const host = String(window.location.hostname || '');
+            const orig = String(window.location.origin || '');
+            if ((proto === 'https:' || proto === 'http:') && orig && orig !== 'null' && !/^(localhost|127\.0\.0\.1)$/i.test(host)) {
+                originBase = orig.replace(/\/+$/, '');
+            }
+        }
+        const panelUrl = `${originBase}/api/whatsapp/panel`;
+        const panelHeaders = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+        };
+        if (contextoPanel.rol) panelHeaders['x-ganadero-rol'] = String(contextoPanel.rol).toLowerCase();
+        if (contextoPanel.usuario) panelHeaders['x-ganadero-usuario'] = String(contextoPanel.usuario).toLowerCase();
+        if (contextoPanel.empresaId) panelHeaders['x-empresa-id'] = String(contextoPanel.empresaId);
+        if (contextoPanel.sessionToken) panelHeaders['x-session-token'] = String(contextoPanel.sessionToken);
+
+        const llamarPanelNeon = async (method, bodyObj = null) => {
+            if (typeof fetchImpl !== 'function') throw new Error('fetch no disponible.');
+            const res = await fetchImpl(panelUrl, {
+                method,
+                headers: panelHeaders,
+                ...(bodyObj !== null ? { body: JSON.stringify(bodyObj) } : {})
+            });
+            const txt = await res.text();
+            let data = null;
+            try { data = txt ? JSON.parse(txt) : null; } catch { data = { ok: false, error: txt }; }
+            return { ok: res.ok, status: res.status, data };
+        };
+
+        return {
+            esSupabaseReal: false,
+            esNeonReal: true,
+
+            async cargarDatosPanel() {
+                const r = await llamarPanelNeon('GET');
+                if (!r.ok || !r.data) {
+                    return {
+                        ok: false,
+                        faltaMigracionSql: false,
+                        error: r.data?.error || `Error HTTP ${r.status} consultando Neon Postgres.`,
+                        channels: [],
+                        contacts: [],
+                        contactAccess: [],
+                        messagesLog: [],
+                        messageStatus: []
+                    };
+                }
+                return {
+                    ok: r.data.ok !== false,
+                    faltaMigracionSql: false,
+                    error: r.data.error || null,
+                    channels: Array.isArray(r.data.channels) ? r.data.channels.map(sanitizarCanalParaFrontend) : [],
+                    contacts: Array.isArray(r.data.contacts) ? r.data.contacts : [],
+                    contactAccess: Array.isArray(r.data.contactAccess) ? r.data.contactAccess : [],
+                    messagesLog: Array.isArray(r.data.messagesLog) ? r.data.messagesLog : [],
+                    messageStatus: Array.isArray(r.data.messageStatus) ? r.data.messageStatus : []
+                };
+            },
+
+            async guardarCanalPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'guardar_canal', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} guardando canal en Neon.` };
+                }
+                return { ok: true, channel: sanitizarCanalParaFrontend(r.data.channel || r.data.canal || datos) };
+            },
+
+            async guardarContactoConAccesosPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'guardar_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} guardando contacto en Neon.` };
+                }
+                return { ok: true, data: r.data.data || r.data };
+            },
+
+            async cambiarEstadoContactoPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'cambiar_estado_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} actualizando estado en Neon.` };
+                }
+                return { ok: true };
+            },
+
+            async eliminarContactoPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'eliminar_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} eliminando contacto en Neon.` };
+                }
+                return { ok: true };
+            }
+        };
+    }
+
     const { supabaseUrl, apiKey, headers } = construirHeadersSupabase({ env, contextoPanel, usarServiceRole });
 
     async function peticionJson(ruta, opcionesFetch = {}) {

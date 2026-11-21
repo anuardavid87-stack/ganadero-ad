@@ -1,8 +1,8 @@
 // ============================================================================
-// GANADERO AD PWA: SERVICE WORKER v4.9.0 (BLINDAJE ANTI-BORRADO & SYNC CONTAB)
+// GANADERO AD PWA: SERVICE WORKER v5.0.0 (MIGRACIÓN COMPLETA A NEON POSTGRES)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v4.9.0-proteccion-datos';
+const CACHE_NAME = 'ganadero-ad-v5.0.0-neon-postgres';
 const CORE_FILES = [
   './',
   './index.html',

@@ -459,7 +459,13 @@ async function handlePost(req, res, sql) {
             tsColumns: ['actualizado_en'],
             conflictTarget: 'id',
             updateColumns: ['empresa_id', 'codigo', 'nombre', 'ubicacion', 'area_ha', 'precio_leche_litro', 'precio_carne_kg_pie', 'actualizado_en'],
-            rows: body.fincas.map((f) => ({ ...f, actualizado_en: nowIso }))
+            rows: body.fincas.map((f) => {
+                let empId = f.empresa_id || null;
+                const rawUbic = String(f.ubicacion || '');
+                const m = rawUbic.match(/^\[TENANT:([^\]]+)\](.*)$/);
+                if (m && !empId) empId = m[1].trim();
+                return { ...f, empresa_id: empId, actualizado_en: nowIso };
+            })
         });
     }
 
@@ -740,19 +746,31 @@ async function handleDelete(req, res, sql) {
         return res.status(200).json({ ok: true });
     }
 
+    if (action === 'usuario') {
+        const uLogin = String(body.usuario || '').replace(/^@/, '').trim();
+        const uId = String(body.usuarioId || '').trim();
+        if (!uLogin && !uId) return res.status(400).json({ ok: false, error: 'usuario o usuarioId requerido.' });
+        if (uLogin) await sql.query(`DELETE FROM public.usuarios WHERE usuario = $1`, [uLogin]);
+        if (uId) await sql.query(`DELETE FROM public.usuarios WHERE id = $1`, [uId]);
+        return res.status(200).json({ ok: true });
+    }
+
     if (action === 'registro_tabla') {
         const permitidas = {
-            usuarios: 'usuario',
-            inversiones_diferidas: 'id',
-            traslados_animales: 'id',
-            servicios_reproductivos: 'id',
-            pesajes_animales: 'id',
-            nutricion_animales: 'id',
-            operaciones_diarias: 'id'
+            usuarios: ['usuario', 'id'],
+            inversiones_diferidas: ['id', 'finca_id'],
+            traslados_animales: ['id'],
+            servicios_reproductivos: ['id', 'animal_tag'],
+            pesajes_animales: ['id', 'animal_tag'],
+            nutricion_animales: ['id', 'animal_tag'],
+            operaciones_diarias: ['id']
         };
-        const col = permitidas[body.tabla];
-        if (!col || !body.valor) return res.status(400).json({ ok: false, error: 'Tabla o valor inválido.' });
-        await sql.query(`DELETE FROM public.${body.tabla} WHERE ${col} = $1`, [String(body.valor)]);
+        const colsValidas = permitidas[body.tabla];
+        const colSolicitada = String(body.columna || (colsValidas ? colsValidas[0] : '')).trim();
+        if (!colsValidas || !colsValidas.includes(colSolicitada) || !body.valor) {
+            return res.status(400).json({ ok: false, error: 'Tabla, columna o valor inválido.' });
+        }
+        await sql.query(`DELETE FROM public.${body.tabla} WHERE ${colSolicitada} = $1`, [String(body.valor)]);
         return res.status(200).json({ ok: true });
     }
 

@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-21T02:25:27.222Z
+ * Generado automáticamente: 2026-11-21T02:36:19.419Z
  */
 (function() {
   "use strict";
@@ -2415,7 +2415,7 @@ class SupabaseSyncService {
     guardarMapa('fincas', datosLocales.fincas, (f) => this.mapearFincaLocalACloud(f), (r) => r.id);
     guardarMapa('usuarios', datosLocales.usuarios, (u) => ({
       id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-      empresa_id: u.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
       usuario: u.usuario,
       nombre: u.nombre,
       rol: u.rol,
@@ -2438,7 +2438,7 @@ class SupabaseSyncService {
     }), (r) => r.id);
     guardarMapa('traslados_animales', datosLocales.traslados, (t) => ({
       id: t.id,
-      empresa_id: t.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(t.empresaId),
       fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
       finca_origen_id: t.fincaOrigenId || null,
       finca_origen_nombre: t.fincaOrigenNombre || '',
@@ -2452,7 +2452,7 @@ class SupabaseSyncService {
     }), (r) => r.id);
     guardarMapa('operaciones_diarias', datosLocales.operacionesDiarias, (o) => ({
       id: o.id,
-      empresa_id: o.empresaId === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(o.empresaId),
       fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
       finca_id: o.fincaId === 'GLOBAL' ? null : (o.fincaId || null),
       finca_nombre: o.fincaNombre || '',
@@ -2476,11 +2476,17 @@ class SupabaseSyncService {
     guardarMapa('sys_nomina_pago', datosLocales.nominaPagos, (p) => this._mapearNominaPagoACloud(p), (r) => r.id);
   }
 
+  _resolverEmpresaIdCloud(empId) {
+    if (!empId) return null;
+    if (this.usarModoNeon()) return String(empId);
+    return empId === 'EMP-01' ? 'EMP-01' : null;
+  }
+
   _mapearContabMovACloud(m, empresaFallback = null) {
     const empRef = m.empresaId || empresaFallback || null;
     return {
       id: `SYS_CONTAB_MOV_${m.id}`,
-      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(empRef),
       fecha: normalizarFechaISO(m.fecha) || new Date().toISOString().split('T')[0],
       finca_id: m.fincaId || m.finca_id || null,
       finca_nombre: m.fincaNombre || '',
@@ -2495,7 +2501,7 @@ class SupabaseSyncService {
     const empRef = t.empresaId || empresaFallback || null;
     return {
       id: `SYS_NOMINA_TRAB_${t.id}`,
-      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(empRef),
       fecha: normalizarFechaISO(t.fechaIngreso || t.creadoEn) || new Date().toISOString().split('T')[0],
       finca_id: t.fincaId || t.finca_id || null,
       finca_nombre: t.fincaNombre || '',
@@ -2510,7 +2516,7 @@ class SupabaseSyncService {
     const empRef = p.empresaId || empresaFallback || null;
     return {
       id: `SYS_NOMINA_PAGO_${p.id}`,
-      empresa_id: empRef === 'EMP-01' ? 'EMP-01' : null,
+      empresa_id: this._resolverEmpresaIdCloud(empRef),
       fecha: normalizarFechaISO(p.fecha) || new Date().toISOString().split('T')[0],
       finca_id: p.fincaId || p.finca_id || null,
       finca_nombre: p.fincaNombre || '',
@@ -2536,38 +2542,80 @@ class SupabaseSyncService {
     };
   }
 
+  _resolverNeonApiBaseUrl() {
+    if (typeof window !== 'undefined' && window.location) {
+      const proto = String(window.location.protocol || '');
+      const host = String(window.location.hostname || '');
+      const origin = String(window.location.origin || '');
+      if ((proto === 'https:' || proto === 'http:') && origin && origin !== 'null' && !/^(localhost|127\.0\.0\.1)$/i.test(host)) {
+        return `${origin.replace(/\/+$/, '')}/api/db`;
+      }
+    }
+    return 'https://ganadero-ad.vercel.app/api/db';
+  }
+
+  usarModoNeon() {
+    if (
+      Object.prototype.hasOwnProperty.call(this, '_postgrestUpsert') ||
+      Object.prototype.hasOwnProperty.call(this, '_postgrestGet') ||
+      Object.prototype.hasOwnProperty.call(this, '_postgrestDelete')
+    ) {
+      return false;
+    }
+    return this.config?.provider === 'neon' && Boolean(this.config?.apiBaseUrl);
+  }
+
   cargarConfig() {
-    const defaultUrl = 'https://jucpxyjzmbthplbvzrsj.supabase.co';
-    const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1Y3B4eWp6bWJ0aHBsYnZ6cnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3ODExNjMsImV4cCI6MjEwNTM1NzE2M30.EYCHnq6pUNO3cUtD1fRb7l3k-XBbrGtgYmsxkmNzDsA';
+    const neonApiBase = this._resolverNeonApiBaseUrl();
+    const defaultNeonConfig = {
+      provider: 'neon',
+      apiBaseUrl: neonApiBase,
+      url: neonApiBase,
+      anonKey: 'neon-serverless'
+    };
 
     if (typeof localStorage === 'undefined') {
-      return { url: defaultUrl, anonKey: defaultKey };
+      return defaultNeonConfig;
     }
     try {
       const raw = localStorage.getItem(this.storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        // Forzar estrictamente el nuevo proyecto oficial 'jucpxyjzmbthplbvzrsj' en todos los dispositivos
-        if (!parsed.url || !parsed.url.includes('jucpxyjzmbthplbvzrsj') || !parsed.anonKey || parsed.anonKey !== defaultKey) {
-          this.guardarConfig({ url: defaultUrl, anonKey: defaultKey });
-          return { url: defaultUrl, anonKey: defaultKey };
+        // Migrar automáticamente cualquier dispositivo que todavía apunte al antiguo proyecto Supabase hacia Neon Postgres
+        if (
+          !parsed ||
+          parsed.provider !== 'neon' ||
+          !parsed.apiBaseUrl ||
+          String(parsed.url || '').includes('jucpxyjzmbthplbvzrsj') ||
+          String(parsed.url || '').includes('supabase.co')
+        ) {
+          this.guardarConfig(defaultNeonConfig);
+          return defaultNeonConfig;
         }
         return {
-          url: this.sanitizarUrl(parsed.url || defaultUrl),
-          anonKey: (parsed.anonKey || defaultKey).trim()
+          provider: 'neon',
+          apiBaseUrl: this.sanitizarUrl(parsed.apiBaseUrl || neonApiBase),
+          url: this.sanitizarUrl(parsed.apiBaseUrl || neonApiBase),
+          anonKey: 'neon-serverless'
         };
       }
     } catch (e) {
-      console.warn('Error leyendo configuración de Supabase:', e);
+      console.warn('Error leyendo configuración de nube:', e);
     }
-    this.guardarConfig({ url: defaultUrl, anonKey: defaultKey });
-    return { url: defaultUrl, anonKey: defaultKey };
+    this.guardarConfig(defaultNeonConfig);
+    return defaultNeonConfig;
   }
 
-  guardarConfig({ url, anonKey }) {
+  guardarConfig({ url, anonKey, provider = null, apiBaseUrl = null }) {
     const cleanUrl = this.sanitizarUrl(url || '');
     const cleanKey = (anonKey || '').trim();
-    this.config = { url: cleanUrl, anonKey: cleanKey };
+    const esNeon = provider === 'neon' || (cleanUrl && cleanUrl.includes('/api/db'));
+    if (esNeon) {
+      const base = this.sanitizarUrl(apiBaseUrl || cleanUrl || this._resolverNeonApiBaseUrl());
+      this.config = { provider: 'neon', apiBaseUrl: base, url: base, anonKey: cleanKey || 'neon-serverless' };
+    } else {
+      this.config = { provider: 'supabase', apiBaseUrl: '', url: cleanUrl, anonKey: cleanKey };
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(this.storageKey, JSON.stringify(this.config));
     }
@@ -2584,7 +2632,45 @@ class SupabaseSyncService {
   }
 
   estaConfigurado() {
+    if (this.config?.provider === 'neon') {
+      return Boolean(this.config.apiBaseUrl);
+    }
     return Boolean(this.config.url && this.config.anonKey);
+  }
+
+  obtenerHeadersNeon(extra = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...extra
+    };
+    if (this.tenantContext) {
+      if (this.tenantContext.empresaId) headers['x-empresa-id'] = this.tenantContext.empresaId;
+      if (this.tenantContext.rol) headers['x-ganadero-rol'] = this.tenantContext.rol;
+      else if (this.tenantContext.esSuperAdmin) headers['x-ganadero-rol'] = 'superadmin';
+      if (this.tenantContext.usuario) headers['x-ganadero-usuario'] = this.tenantContext.usuario;
+      if (this.tenantContext.token) headers['x-session-token'] = this.tenantContext.token;
+    }
+    return headers;
+  }
+
+  async _neonRequest(path, options = {}, timeoutMs = 15000) {
+    const base = this.sanitizarUrl(this.config?.apiBaseUrl || this._resolverNeonApiBaseUrl());
+    const url = `${base}${path}`;
+    const res = await this._fetchConTimeout(url, {
+      ...options,
+      headers: this.obtenerHeadersNeon(options.headers || {})
+    }, timeoutMs);
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { ok: false, error: text.slice(0, 200) };
+    }
+    if (!res.ok || (data && data.ok === false)) {
+      throw new Error(data?.error || `Neon API HTTP ${res.status}`);
+    }
+    return data;
   }
 
   obtenerHeaders(extra = {}) {
@@ -2612,18 +2698,49 @@ class SupabaseSyncService {
   }
 
   /**
-   * Prueba en vivo si las credenciales conectan con la API REST de Supabase.
+   * Prueba en vivo la conexión con Neon Postgres (/api/db/health) o PostgREST legado.
    */
   async testConexion(customUrl = null, customKey = null) {
     const url = this.sanitizarUrl(customUrl !== null ? customUrl : this.config.url);
     const key = customKey !== null ? customKey.trim() : this.config.anonKey;
+
+    const esPruebaNeon =
+      (customUrl === null && customKey === null && this.usarModoNeon()) ||
+      (url && url.includes('/api/db'));
+
+    if (esPruebaNeon) {
+      try {
+        const base = url && url.includes('/api/db') ? url : this.config.apiBaseUrl;
+        const res = await this._fetchConTimeout(`${base}/health`, {
+          method: 'GET',
+          headers: this.obtenerHeadersNeon()
+        }, 8000);
+        const data = await res.json();
+        if (res.ok && data?.ok) {
+          this.estadoConexion = 'conectado';
+          const c = data.counts || {};
+          return {
+            ok: true,
+            provider: 'neon',
+            counts: c,
+            mensaje: `¡Conexión exitosa con Neon Postgres! (${c.fincas || 0} fincas, ${c.animales || 0} animales, ${c.pesajes_animales || 0} pesajes).`
+          };
+        }
+        return { ok: false, error: data?.error || `Neon API respondió HTTP ${res.status}` };
+      } catch (err) {
+        return { ok: false, error: 'No fue posible conectar con Neon Postgres: ' + err.message };
+      }
+    }
 
     if (!url || !key) {
       return { ok: false, error: 'Debes ingresar tanto la URL del proyecto como la Anon Key.' };
     }
 
     if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      return { ok: false, error: 'La URL de Supabase debe comenzar con https:// (ejemplo: https://xyz.supabase.co)' };
+      return { ok: false, error: 'La URL de conexión debe comenzar con https:// (ejemplo: https://ganadero-ad.vercel.app/api/db)' };
+    }
+    if (url === 'http://' || url === 'https://' || url.length < 12) {
+      return { ok: false, error: 'La URL ingresada no es válida.' };
     }
 
     try {
@@ -2948,11 +3065,455 @@ class SupabaseSyncService {
   // ==========================================================================
 
   /**
-   * Sube todos los registros locales a Supabase usando Upsert (merge duplicates)
+   * Sube únicamente registros modificados a Neon Postgres vía POST /api/db/sync.
+   */
+  async _subirDatosANeon(appState, forzarCompleta = false) {
+    const esSuperAdmin = appState.usuarioActual && appState.usuarioActual.rol === 'superadmin';
+    const empresaIdActiva = appState.empresaActivaId || (appState.usuarioActual && appState.usuarioActual.empresaId);
+    const fincaActiva = appState.fincaActivaId || (appState.fincas?.[0]?.id || null);
+
+    if (empresaIdActiva || esSuperAdmin) {
+      const fincasPermitidasIds = (appState.fincas || [])
+        .filter(f => esSuperAdmin || f.empresaId === empresaIdActiva)
+        .map(f => f.id);
+      this.setTenantContext({
+        empresaId: empresaIdActiva,
+        esSuperAdmin,
+        rol: appState.usuarioActual?.rol || (esSuperAdmin ? 'superadmin' : null),
+        usuario: appState.usuarioActual?.usuario || null,
+        fincasIds: fincasPermitidasIds,
+        token: this.tenantContext?.token || null
+      });
+    }
+
+    const resultados = {
+      empresas: 0, fincas: 0, usuarios: 0, animales: 0, servicios: 0,
+      costosFijos: 0, inversiones: 0, traslados: 0, operacionesDiarias: 0,
+      pesajes: 0, nutricion: 0
+    };
+
+    try {
+      this.estadoConexion = 'sincronizando';
+      const confirmadores = [];
+      const payload = {};
+
+      // 0. Empresas + Directorio blindado
+      if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
+        const empresasFiltradas = esSuperAdmin ? appState.empresas : appState.empresas.filter(e => e.id === empresaIdActiva);
+        if (empresasFiltradas.length > 0) {
+          const full = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('empresas', full, r => r.id, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.empresas = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.empresas = pendientes.length; });
+          }
+        }
+
+        const prevDir = (this._ultimoDirectorioCloud && typeof this._ultimoDirectorioCloud === 'object') ? this._ultimoDirectorioCloud : {};
+        const fincasEmpresaMap = { ...(prevDir.fincasEmpresaMap || {}) };
+        const fincasOrdenosMap = { ...(prevDir.fincasOrdenosMap || {}) };
+        (appState.fincas || []).forEach(f => {
+          if (f && f.id) {
+            if (f.empresaId) fincasEmpresaMap[f.id] = f.empresaId;
+            if (f.numeroOrdenos !== undefined || f.tipoOrdeno) {
+              fincasOrdenosMap[f.id] = Number(f.numeroOrdenos) === 2 || f.tipoOrdeno === 'doble_ordeno' ? 2 : 1;
+            }
+          }
+        });
+        const usuariosEmpresaMap = { ...(prevDir.usuariosEmpresaMap || {}) };
+        (appState.usuarios || []).forEach(u => {
+          if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+        });
+
+        const tieneFincasLocales = Array.isArray(appState.fincas) && appState.fincas.length > 0;
+        const permitirActualizarDir = tieneFincasLocales || Boolean(appState._permitirDirectorioVacioExplicito);
+        if (permitirActualizarDir && (esSuperAdmin || Object.keys(prevDir).length > 0)) {
+          const empresasDirMap = new Map();
+          if (Array.isArray(prevDir.empresas)) prevDir.empresas.forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          (appState.empresas || []).forEach(e => { if (e && e.id) empresasDirMap.set(e.id, e); });
+          const unionArrays = (a, b) => Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].filter(Boolean)));
+          const empresasElimMerged = unionArrays(prevDir.empresasEliminadas, appState._empresasEliminadas);
+          const elimEmpSet = new Set(empresasElimMerged);
+          const detallesDir = {
+            _esSistemaDirectorio: true,
+            empresas: Array.from(empresasDirMap.values()).filter(e => !elimEmpSet.has(e.id)),
+            empresasEliminadas: empresasElimMerged,
+            fincasEliminadas: unionArrays(prevDir.fincasEliminadas, appState._fincasEliminadas),
+            usuariosEliminados: unionArrays(prevDir.usuariosEliminados, appState._usuariosEliminados),
+            fincasPurgadas: { ...(prevDir.fincasPurgadas || {}), ...(appState._fincasPurgadas || {}) },
+            animalesEliminados: unionArrays(prevDir.animalesEliminados, appState._animalesEliminados).slice(-1000),
+            fincasEmpresaMap,
+            fincasOrdenosMap,
+            usuariosEmpresaMap
+          };
+          this._ultimoDirectorioCloud = detallesDir;
+          const { pendientes: dirPend, confirmarSubida: confDir } =
+            this._filtrarRegistrosModificados('sys_directorio', [{ id: 'SYS_DIRECTORIO_EMPRESAS', detalles: detallesDir }], r => r.id, forzarCompleta);
+          if (dirPend.length > 0) {
+            payload.directorio = { fecha: new Date().toISOString().split('T')[0], detalles: detallesDir };
+            confirmadores.push(() => { confDir(); if (!resultados.empresas) resultados.empresas = detallesDir.empresas.length; });
+          }
+        }
+      }
+
+      // 1. Fincas
+      const eliminadasFincasSet = new Set(Array.isArray(appState._fincasEliminadas) ? appState._fincasEliminadas : []);
+      const todasFincasIdsLocal = new Set(
+        (appState.fincas || []).filter(f => f && f.id && !eliminadasFincasSet.has(f.id) && !eliminadasFincasSet.has(f.codigo)).map(f => f.id)
+      );
+      const fincasFiltradas = (esSuperAdmin ? (appState.fincas || []) : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva))
+        .filter(f => f && f.id && todasFincasIdsLocal.has(f.id));
+      const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
+
+      if (fincasFiltradas.length > 0) {
+        const full = fincasFiltradas.map(f => this.mapearFincaLocalACloud(f));
+        const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('fincas', full, r => r.id, forzarCompleta);
+        if (pendientes.length > 0) {
+          payload.fincas = pendientes;
+          confirmadores.push(() => { confirmarSubida(); resultados.fincas = pendientes.length; });
+        }
+      }
+
+      // 2. Usuarios
+      if (Array.isArray(appState.usuarios) && appState.usuarios.length > 0) {
+        const usuariosFiltrados = esSuperAdmin ? appState.usuarios : appState.usuarios.filter(u => u.empresaId === empresaIdActiva);
+        if (usuariosFiltrados.length > 0) {
+          const full = usuariosFiltrados.map(u => ({
+            id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+            empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
+            usuario: u.usuario,
+            nombre: u.nombre,
+            rol: u.rol,
+            password: u.password || null,
+            fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+            email: u.email || null,
+            telefono: u.telefono || null,
+            activo: u.activo !== false
+          }));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('usuarios', full, r => r.usuario, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.usuarios = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.usuarios = pendientes.length; });
+          }
+        }
+      }
+
+      // 3. Animales
+      let animalesPendientes = [];
+      let confirmarAnm = null;
+      if (Array.isArray(appState.animales) && appState.animales.length > 0) {
+        const filtrados = (esSuperAdmin ? appState.animales : appState.animales.filter(a => fincasIdsValidas.has(a.fincaId)))
+          .filter(a => a && a.fincaId && todasFincasIdsLocal.has(a.fincaId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(a => this.mapearAnimalLocalACloud(a, fincaActiva));
+          const diff = this._filtrarRegistrosModificados('animales', full, r => `${r.finca_id}__${r.identificacion_tag}`, forzarCompleta);
+          animalesPendientes = diff.pendientes;
+          confirmarAnm = diff.confirmarSubida;
+        }
+      }
+
+      // 4. Servicios Reproductivos
+      if (Array.isArray(appState.servicios) && appState.servicios.length > 0) {
+        const filtrados = (esSuperAdmin ? appState.servicios : appState.servicios.filter(s => fincasIdsValidas.has(s.fincaId)))
+          .filter(s => s && s.fincaId && todasFincasIdsLocal.has(s.fincaId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(s => this.mapearServicioLocalACloud(s, fincaActiva));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('servicios_reproductivos', full, r => r.id, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.servicios = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.servicios = pendientes.length; });
+          }
+        }
+      }
+
+      // 5. Costos Fijos
+      if (appState.costosFijos && typeof appState.costosFijos === 'object') {
+        const full = [];
+        for (const [fincaId, c] of Object.entries(appState.costosFijos)) {
+          if (!fincasIdsValidas.has(fincaId) || !todasFincasIdsLocal.has(fincaId)) continue;
+          full.push({
+            finca_id: fincaId,
+            nomina: Number(c.nomina || 0),
+            insumos: Number(c.insumos || 0),
+            herbicidas: Number(c.herbicidas || 0),
+            maquinaria: Number(c.maquinaria || 0),
+            servicios: Number(c.servicios || 0),
+            otros: Number(c.otros || 0)
+          });
+        }
+        const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('costos_fijos_finca', full, r => r.finca_id, forzarCompleta);
+        if (pendientes.length > 0) {
+          payload.costosFijos = pendientes;
+          confirmadores.push(() => { confirmarSubida(); resultados.costosFijos = pendientes.length; });
+        }
+      }
+
+      // 6. Inversiones Diferidas
+      if (Array.isArray(appState.inversiones) && appState.inversiones.length > 0) {
+        const filtrados = (esSuperAdmin ? appState.inversiones : appState.inversiones.filter(i => fincasIdsValidas.has(i.fincaId)))
+          .filter(i => i && i.fincaId && todasFincasIdsLocal.has(i.fincaId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(i => ({
+            id: i.id || ('INV-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            finca_id: i.fincaId || fincaActiva,
+            descripcion_activo: i.descripcionActivo || 'Inversión',
+            monto_total_inversion: Number(i.montoTotalInversion || 0),
+            plazo_meses_diferido: Number(i.plazoMesesDiferido || 12),
+            cuota_mensual: Number(i.cuotaMensual || 0),
+            estado: i.estado || 'Activa'
+          }));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('inversiones_diferidas', full, r => r.id, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.inversiones = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.inversiones = pendientes.length; });
+          }
+        }
+      }
+
+      // 7. Traslados
+      if (Array.isArray(appState.traslados) && appState.traslados.length > 0) {
+        const filtrados = esSuperAdmin
+          ? appState.traslados
+          : appState.traslados.filter(t => t.empresaId === empresaIdActiva || fincasIdsValidas.has(t.fincaOrigenId) || fincasIdsValidas.has(t.fincaDestinoId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(t => ({
+            id: t.id || ('TRS-' + Date.now()),
+            empresa_id: this._resolverEmpresaIdCloud(t.empresaId || empresaIdActiva),
+            fecha: normalizarFechaISO(t.fecha) || new Date().toISOString().split('T')[0],
+            finca_origen_id: t.fincaOrigenId || null,
+            finca_origen_nombre: t.fincaOrigenNombre || '',
+            finca_destino_id: t.fincaDestinoId || null,
+            finca_destino_nombre: t.fincaDestinoNombre || '',
+            motivo: t.motivo || '',
+            observaciones: t.observaciones || '',
+            total_animales: t.totalAnimales || 1,
+            animales: Array.isArray(t.animales) ? t.animales : (t.tag ? [{ id: t.animalId, tag: t.tag, alias: t.nombreAlias }] : []),
+            usuario_nombre: t.responsable || t.usuarioNombre || ''
+          }));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('traslados_animales', full, r => r.id, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.traslados = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.traslados = pendientes.length; });
+          }
+        }
+      }
+
+      // 8 + 11. Operaciones Diarias + Contabilidad/Nómina (SYS_*)
+      const opsPendientesAcum = [];
+      const confirmadoresOps = [];
+      if (Array.isArray(appState.operacionesDiarias) && appState.operacionesDiarias.length > 0) {
+        const pesajesIdsSet = new Set((appState.pesajes || []).map(p => p && p.id).filter(Boolean));
+        const filtradas = (esSuperAdmin
+          ? appState.operacionesDiarias
+          : appState.operacionesDiarias.filter(o => o.empresaId === empresaIdActiva || (o.fincaId && fincasIdsValidas.has(o.fincaId)))
+        ).filter(o => {
+          if (!o) return false;
+          const idStr = String(o.id || '');
+          if (idStr.startsWith('ACT-PES-') && (pesajesIdsSet.has(idStr.slice(4)) || o.modulo === 'pesajes' || o.accion === 'pesajes')) return false;
+          return !o.fincaId || o.fincaId === 'GLOBAL' || todasFincasIdsLocal.has(o.fincaId);
+        });
+        if (filtradas.length > 0) {
+          const full = filtradas.map(o => ({
+            id: o.id || ('ACT-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            empresa_id: this._resolverEmpresaIdCloud(o.empresaId || empresaIdActiva),
+            fecha: normalizarFechaISO(o.fecha) || new Date().toISOString().split('T')[0],
+            finca_id: o.fincaId === 'GLOBAL' ? null : (o.fincaId || null),
+            finca_nombre: o.fincaNombre || '',
+            accion: o.accion || '',
+            modulo: o.modulo || o.accion || '',
+            detalles: o,
+            usuario: o.responsable || o.usuario || 'Sistema'
+          }));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('operaciones_diarias', full, r => r.id, forzarCompleta);
+          if (pendientes.length > 0) {
+            opsPendientesAcum.push(...pendientes);
+            confirmadoresOps.push(() => { confirmarSubida(); resultados.operacionesDiarias += pendientes.length; });
+          }
+        }
+      }
+
+      const acumBloqueSistema = (cacheKey, lista, fnMap) => {
+        if (!Array.isArray(lista) || lista.length === 0) return;
+        const filtrados = (esSuperAdmin
+          ? lista
+          : lista.filter(item => item && (item.empresaId === empresaIdActiva || (item.fincaId && fincasIdsValidas.has(item.fincaId))))
+        ).filter(item => item && item.id && (!item.fincaId || todasFincasIdsLocal.has(item.fincaId)));
+        if (filtrados.length === 0) return;
+        const full = filtrados.map(item => fnMap(item, empresaIdActiva));
+        const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados(cacheKey, full, r => r.id, forzarCompleta);
+        if (pendientes.length > 0) {
+          opsPendientesAcum.push(...pendientes);
+          confirmadoresOps.push(() => { confirmarSubida(); resultados.operacionesDiarias += pendientes.length; });
+        }
+      };
+      acumBloqueSistema('sys_contabilidad_mov', appState.contabilidadMovimientos, (m, emp) => this._mapearContabMovACloud(m, emp));
+      acumBloqueSistema('sys_nomina_trab', appState.nominaTrabajadores, (t, emp) => this._mapearNominaTrabACloud(t, emp));
+      acumBloqueSistema('sys_nomina_pago', appState.nominaPagos, (p, emp) => this._mapearNominaPagoACloud(p, emp));
+
+      // 9. Pesajes
+      let pesajesPendientes = [];
+      let confirmarPes = null;
+      if (Array.isArray(appState.pesajes) && appState.pesajes.length > 0) {
+        const filtrados = (esSuperAdmin ? appState.pesajes : appState.pesajes.filter(p => fincasIdsValidas.has(p.fincaId)))
+          .filter(p => p && p.fincaId && todasFincasIdsLocal.has(p.fincaId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(p => ({
+            id: p.id || ('PES-' + Date.now() + '-' + Math.floor(Math.random() * 1000)),
+            finca_id: p.fincaId || fincaActiva,
+            animal_tag: p.tag || p.animalTag || '',
+            fecha_pesaje: normalizarFechaISO(p.fecha || p.fechaPesaje) || new Date().toISOString().split('T')[0],
+            peso_kg: Number(p.pesoNuevo || p.peso || 0),
+            gdp_calculada_g_dia: p.gdp ? Number(p.gdp) : null,
+            notas: p.observaciones || p.responsable || 'Registro de Manga'
+          }));
+          const diff = this._filtrarRegistrosModificados('pesajes_animales', full, r => r.id, forzarCompleta);
+          pesajesPendientes = diff.pendientes;
+          confirmarPes = diff.confirmarSubida;
+        }
+      }
+
+      // 10. Nutrición
+      if (Array.isArray(appState.nutricion) && appState.nutricion.length > 0) {
+        const filtrados = (esSuperAdmin ? appState.nutricion : appState.nutricion.filter(n => fincasIdsValidas.has(n.fincaId)))
+          .filter(n => n && n.fincaId && todasFincasIdsLocal.has(n.fincaId));
+        if (filtrados.length > 0) {
+          const full = filtrados.map(n => this.mapearNutricionLocalACloud(n, fincaActiva));
+          const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('nutricion_animales', full, r => `${r.finca_id}__${r.animal_tag}`, forzarCompleta);
+          if (pendientes.length > 0) {
+            payload.nutricion = pendientes;
+            confirmadores.push(() => { confirmarSubida(); resultados.nutricion = pendientes.length; });
+          }
+        }
+      }
+
+      // Enviar ola principal (empresas, fincas, directorio, usuarios, servicios, costos, inversiones, traslados, nutrición)
+      const tieneBase = Object.keys(payload).length > 0;
+      const cabeTodoEnUnPost = animalesPendientes.length <= 300 && pesajesPendientes.length <= 400 && opsPendientesAcum.length <= 250;
+
+      if (cabeTodoEnUnPost) {
+        if (animalesPendientes.length > 0) payload.animales = animalesPendientes;
+        if (pesajesPendientes.length > 0) payload.pesajes = pesajesPendientes;
+        if (opsPendientesAcum.length > 0) payload.operacionesDiarias = opsPendientesAcum;
+        if (Object.keys(payload).length > 0) {
+          await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify(payload) }, 25000);
+          confirmadores.forEach(fn => fn());
+          if (animalesPendientes.length > 0 && confirmarAnm) { confirmarAnm(); resultados.animales = animalesPendientes.length; }
+          if (pesajesPendientes.length > 0 && confirmarPes) { confirmarPes(); resultados.pesajes = pesajesPendientes.length; }
+          if (opsPendientesAcum.length > 0) confirmadoresOps.forEach(fn => fn());
+        }
+      } else {
+        if (tieneBase) {
+          await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify(payload) }, 25000);
+          confirmadores.forEach(fn => fn());
+        }
+        for (let i = 0; i < animalesPendientes.length; i += 300) {
+          const chunk = animalesPendientes.slice(i, i + 300);
+          await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify({ animales: chunk }) }, 25000);
+          resultados.animales += chunk.length;
+        }
+        if (animalesPendientes.length > 0 && confirmarAnm) confirmarAnm();
+
+        for (let i = 0; i < pesajesPendientes.length; i += 400) {
+          const chunk = pesajesPendientes.slice(i, i + 400);
+          await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify({ pesajes: chunk }) }, 25000);
+          resultados.pesajes += chunk.length;
+        }
+        if (pesajesPendientes.length > 0 && confirmarPes) confirmarPes();
+
+        for (let i = 0; i < opsPendientesAcum.length; i += 200) {
+          const chunk = opsPendientesAcum.slice(i, i + 200);
+          await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify({ operacionesDiarias: chunk }) }, 25000);
+        }
+        if (opsPendientesAcum.length > 0) confirmadoresOps.forEach(fn => fn());
+      }
+
+      const totalSubidos = Object.values(resultados).reduce((acc, v) => acc + Number(v || 0), 0);
+      if (totalSubidos > 0) {
+        this._limpiarFirmaPersistida();
+      }
+
+      this.ultimoSync = new Date().toISOString();
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageSyncKey, this.ultimoSync);
+      }
+      this.estadoConexion = 'conectado';
+
+      return {
+        ok: true,
+        provider: 'neon',
+        mensaje: 'Sincronización exitosa hacia Neon Postgres con aislamiento multi-tenant verificado.',
+        resumen: resultados,
+        ultimoSync: this.ultimoSync
+      };
+    } catch (err) {
+      this.estadoConexion = 'error';
+      return {
+        ok: false,
+        error: 'Error durante la subida a Neon Postgres: ' + err.message
+      };
+    }
+  }
+
+  /**
+   * Descarga consolidada en 1 sola petición gzip desde Neon Postgres vía GET /api/db/sync.
+   */
+  async _descargarDatosDeNeon(timeoutMs = 20000, tenantContext = null) {
+    if (tenantContext) {
+      this.setTenantContext(tenantContext);
+    }
+    try {
+      this.estadoConexion = 'sincronizando';
+      const ctx = this.tenantContext;
+      const esSuperAdmin = Boolean(ctx && ctx.esSuperAdmin);
+      const empId = ctx && ctx.empresaId ? String(ctx.empresaId) : '';
+      const fincasIds = ctx && Array.isArray(ctx.fincasIds) && ctx.fincasIds.length > 0 ? ctx.fincasIds : [];
+
+      const qs = new URLSearchParams();
+      if (esSuperAdmin) qs.set('esSuperAdmin', '1');
+      if (empId) qs.set('empresaId', empId);
+      if (!esSuperAdmin && fincasIds.length > 0) qs.set('fincasIds', fincasIds.join(','));
+      const queryStr = qs.toString() ? `?${qs.toString()}` : '';
+
+      const effectiveTimeout = Math.max(Number(timeoutMs) || 20000, 15000);
+      const resp = await this._neonRequest(`/sync${queryStr}`, { method: 'GET' }, effectiveTimeout);
+
+      if (resp.directorio && typeof resp.directorio === 'object') {
+        this._ultimoDirectorioCloud = resp.directorio;
+      }
+
+      const datosDescargados = resp.datos || {};
+      this._registrarHuellasDescargadas(datosDescargados);
+
+      this.ultimoSync = new Date().toISOString();
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageSyncKey, this.ultimoSync);
+      }
+      this.estadoConexion = 'conectado';
+
+      return {
+        ok: true,
+        provider: 'neon',
+        datos: datosDescargados,
+        ultimoSync: this.ultimoSync
+      };
+    } catch (err) {
+      this.estadoConexion = 'error';
+      return {
+        ok: false,
+        error: 'Error descargando datos de Neon Postgres: ' + err.message
+      };
+    }
+  }
+
+  /**
+   * Sube todos los registros locales a la nube (Neon Postgres por defecto o PostgREST legado).
    */
   async subirDatosASupabase(appState, forzarCompleta = false) {
     if (!this.estaConfigurado()) {
-      return { ok: false, error: 'Supabase no está configurado. Ingrese sus credenciales primero.' };
+      return { ok: false, error: 'Nube no configurada. Ingrese sus credenciales primero.' };
+    }
+    if (this.usarModoNeon()) {
+      return await this._subirDatosANeon(appState, forzarCompleta);
     }
 
     const esSuperAdmin = appState.usuarioActual && appState.usuarioActual.rol === 'superadmin';
@@ -3482,7 +4043,10 @@ class SupabaseSyncService {
    */
   async descargarDatosDeSupabase(timeoutMs = 15000, tenantContext = null) {
     if (!this.estaConfigurado()) {
-      return { ok: false, error: 'Supabase no está configurado.' };
+      return { ok: false, error: 'Nube no configurada.' };
+    }
+    if (this.usarModoNeon()) {
+      return await this._descargarDatosDeNeon(timeoutMs, tenantContext);
     }
 
     if (tenantContext) {
@@ -3849,6 +4413,38 @@ class SupabaseSyncService {
       return { ok: false, hayCambios: false };
     }
 
+    if (this.usarModoNeon()) {
+      try {
+        const ctx = tenantContext || this.tenantContext || null;
+        const esSuperAdmin = !ctx || Boolean(ctx.esSuperAdmin);
+        const fincasIds = (ctx && Array.isArray(ctx.fincasIds)) ? ctx.fincasIds.filter(Boolean) : [];
+        const qs = new URLSearchParams();
+        if (esSuperAdmin) qs.set('esSuperAdmin', '1');
+        if (!esSuperAdmin && fincasIds.length > 0) qs.set('fincasIds', fincasIds.join(','));
+        const queryStr = qs.toString() ? `?${qs.toString()}` : '';
+
+        const data = await this._neonRequest(`/probe${queryStr}`, { method: 'GET' }, Math.max(Number(timeoutMs) || 6000, 5000));
+        const firmaActual = String(data?.firma || '');
+        if (!firmaActual) return { ok: false, hayCambios: false };
+
+        if (this._ultimaFirmaRemota === null && opciones && opciones.usarFirmaPersistida) {
+          const persistida = this._leerFirmaPersistida(ctx);
+          if (persistida) this._ultimaFirmaRemota = persistida;
+        }
+        if (this._ultimaFirmaRemota === null) {
+          this._ultimaFirmaRemota = firmaActual;
+          this._persistirFirmaRemota(firmaActual, ctx);
+          return { ok: true, hayCambios: false, firma: firmaActual, inicializada: true };
+        }
+        const hayCambios = firmaActual !== this._ultimaFirmaRemota;
+        this._ultimaFirmaRemota = firmaActual;
+        this._persistirFirmaRemota(firmaActual, ctx);
+        return { ok: true, hayCambios, firma: firmaActual };
+      } catch (err) {
+        return { ok: false, hayCambios: false, error: err.message };
+      }
+    }
+
     try {
       const ctx = tenantContext || this.tenantContext || null;
       const esSuperAdmin = !ctx || Boolean(ctx.esSuperAdmin);
@@ -3938,6 +4534,35 @@ class SupabaseSyncService {
 
   async _postgrestUpsert(tabla, registros, onConflict = null, timeoutMs = 8000) {
     if (!Array.isArray(registros) || registros.length === 0) return true;
+    if (this.usarModoNeon()) {
+      const mapaPayload = {
+        empresas: 'empresas',
+        fincas: 'fincas',
+        usuarios: 'usuarios',
+        animales: 'animales',
+        servicios_reproductivos: 'servicios',
+        costos_fijos_finca: 'costosFijos',
+        inversiones_diferidas: 'inversiones',
+        traslados_animales: 'traslados',
+        pesajes_animales: 'pesajes',
+        nutricion_animales: 'nutricion'
+      };
+      const body = {};
+      if (tabla === 'operaciones_diarias') {
+        const dirRow = registros.find((r) => r && r.id === 'SYS_DIRECTORIO_EMPRESAS');
+        const otras = registros.filter((r) => !r || r.id !== 'SYS_DIRECTORIO_EMPRESAS');
+        if (dirRow && dirRow.detalles) {
+          body.directorio = { fecha: dirRow.fecha, detalles: dirRow.detalles };
+        }
+        if (otras.length > 0) body.operacionesDiarias = otras;
+      } else if (mapaPayload[tabla]) {
+        body[mapaPayload[tabla]] = registros;
+      } else {
+        return true;
+      }
+      await this._neonRequest('/sync', { method: 'POST', body: JSON.stringify(body) }, Math.max(timeoutMs, 10000));
+      return true;
+    }
     let endpoint = this.config.url + '/rest/v1/' + tabla;
     if (onConflict) {
       endpoint += '?on_conflict=' + onConflict;
@@ -3966,7 +4591,18 @@ class SupabaseSyncService {
    */
   async descargarDirectorioPreLogin(timeoutMs = 6000) {
     if (!this.estaConfigurado()) {
-      return { ok: false, error: 'Supabase no está configurado.' };
+      return { ok: false, error: 'Nube no configurada.' };
+    }
+    if (this.usarModoNeon()) {
+      try {
+        const resp = await this._neonRequest('/prelogin', { method: 'GET' }, Math.max(Number(timeoutMs) || 8000, 6000));
+        if (resp.directorio && typeof resp.directorio === 'object') {
+          this._ultimoDirectorioCloud = resp.directorio;
+        }
+        return { ok: true, datos: resp.datos || { empresas: [], usuarios: [] } };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
     }
     try {
       const [empresasRes, usuariosRes, dirRes] = await Promise.allSettled([
@@ -4054,6 +4690,7 @@ class SupabaseSyncService {
    */
   async cerrarSesionCloud(token) {
     if (!this.estaConfigurado() || !token) return { ok: false };
+    if (this.usarModoNeon()) return { ok: true };
     const endpoint = this.config.url + '/rest/v1/rpc/cerrar_sesion';
     try {
       await this._fetchConTimeout(endpoint, {
@@ -4112,6 +4749,21 @@ class SupabaseSyncService {
 
   async _postgrestDelete(tabla, queryParam = '', timeoutMs = 8000) {
     if (!this.estaConfigurado()) return false;
+    if (this.usarModoNeon()) {
+      const m = String(queryParam || '').match(/^([a-z_]+)=eq\.([^&]+)$/i);
+      if (m) {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({
+            action: 'registro_tabla',
+            tabla,
+            columna: m[1],
+            valor: decodeURIComponent(m[2])
+          })
+        }, Math.max(timeoutMs, 10000));
+      }
+      return true;
+    }
     let endpoint = this.config.url + '/rest/v1/' + tabla;
     if (queryParam) {
       endpoint += (queryParam.startsWith('?') ? queryParam : ('?' + queryParam));
@@ -4137,6 +4789,22 @@ class SupabaseSyncService {
    */
   async eliminarUsuarioCloud(usuarioLogin, usuarioId = null) {
     if (!this.estaConfigurado()) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({
+            action: 'usuario',
+            usuario: usuarioLogin ? String(usuarioLogin).replace(/^@/, '').trim() : '',
+            usuarioId: usuarioId ? String(usuarioId).trim() : ''
+          })
+        }, 10000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const tareas = [];
     if (usuarioLogin) {
       const uClean = String(usuarioLogin).replace(/^@/, '').trim();
@@ -4160,6 +4828,18 @@ class SupabaseSyncService {
    */
   async eliminarAnimalCloud(animalId, animalTag = null, fincaId = null) {
     if (!this.estaConfigurado()) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'animal', animalId, tag: animalTag, fincaId })
+        }, 12000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const tareas = [];
 
     if (animalId) {
@@ -4195,6 +4875,18 @@ class SupabaseSyncService {
    */
   async eliminarFincaCloud(fincaId) {
     if (!this.estaConfigurado() || !fincaId) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'finca', fincaId })
+        }, 12000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const fid = encodeURIComponent(fincaId);
 
     try {
@@ -4228,6 +4920,18 @@ class SupabaseSyncService {
    */
   async eliminarEmpresaCloud(empresaId) {
     if (!this.estaConfigurado() || !empresaId) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'empresa', empresaId })
+        }, 15000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const eid = encodeURIComponent(empresaId);
 
     try {
@@ -4259,6 +4963,18 @@ class SupabaseSyncService {
    */
   async purgarFincaCloud(fincaId) {
     if (!this.estaConfigurado() || !fincaId) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'purgar_finca', fincaId })
+        }, 15000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const fid = encodeURIComponent(fincaId);
 
     try {
@@ -4289,6 +5005,18 @@ class SupabaseSyncService {
    */
   async reemplazarSoloAnimalesFincaCloud(fincaId) {
     if (!this.estaConfigurado() || !fincaId) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'reemplazar_animales_finca', fincaId })
+        }, 15000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const fid = encodeURIComponent(fincaId);
     try {
       await this._postgrestDelete('animales', `finca_id=eq.${fid}`);
@@ -4305,6 +5033,18 @@ class SupabaseSyncService {
    */
   async eliminarRegistroSistemaCloud(idCompleto) {
     if (!this.estaConfigurado() || !idCompleto) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'registro_sistema', id: idCompleto })
+        }, 10000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     try {
       await this._postgrestDelete('operaciones_diarias', `id=eq.${encodeURIComponent(idCompleto)}`);
       this._limpiarFirmaPersistida();
@@ -4320,6 +5060,18 @@ class SupabaseSyncService {
    */
   async purgarFincasCloud(fincasIds = []) {
     if (!this.estaConfigurado() || !Array.isArray(fincasIds) || fincasIds.length === 0) return { ok: false };
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'purgar_fincas', fincasIds })
+        }, 15000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
     const listaIn = fincasIds.map((id) => encodeURIComponent(id)).join(',');
     const queryIn = `finca_id=in.(${listaIn})`;
 
@@ -4354,10 +5106,22 @@ class SupabaseSyncService {
    * Blindado: Requiere contexto y verificación de Super Administrador para ejecutarse.
    */
   async purgarBaseDatosTotalCloud(confirmacionSuperAdmin = false) {
-    if (!this.estaConfigurado()) return { ok: false, error: 'Supabase no está configurado.' };
+    if (!this.estaConfigurado()) return { ok: false, error: 'Nube no configurada.' };
     if (!confirmacionSuperAdmin && (!this.tenantContext || !this.tenantContext.esSuperAdmin)) {
       console.warn('Acción bloqueada: purgarBaseDatosTotalCloud requiere privilegios de Super Administrador.');
       return { ok: false, error: 'Acción no autorizada: requiere privilegios de Super Administrador.' };
+    }
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'purgar_total', confirmacionSuperAdmin: true })
+        }, 20000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
     }
     try {
       await Promise.allSettled([
@@ -4384,10 +5148,22 @@ class SupabaseSyncService {
    * Blindado: Requiere contexto y verificación de Super Administrador.
    */
   async limpiarTodoElSistemaCloud(confirmacionSuperAdmin = false) {
-    if (!this.estaConfigurado()) return { ok: false, error: 'Supabase no está configurado.' };
+    if (!this.estaConfigurado()) return { ok: false, error: 'Nube no configurada.' };
     if (!confirmacionSuperAdmin && (!this.tenantContext || !this.tenantContext.esSuperAdmin)) {
       console.warn('Acción bloqueada: limpiarTodoElSistemaCloud requiere privilegios de Super Administrador.');
       return { ok: false, error: 'Acción no autorizada: requiere privilegios de Super Administrador.' };
+    }
+    if (this.usarModoNeon()) {
+      try {
+        await this._neonRequest('/sync', {
+          method: 'DELETE',
+          body: JSON.stringify({ action: 'limpiar_todo', confirmacionSuperAdmin: true })
+        }, 20000);
+        this._limpiarFirmaPersistida();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
     }
     try {
       // Orden estricto de borrado para respetar dependencias de claves foráneas
@@ -8378,6 +9154,114 @@ function crearRepositorioWhatsAppSupabase({
     usarServiceRole = false,
     fetchImpl = globalThis.fetch
 } = {}) {
+    // Si opera desde el panel administrativo (navegador / PWA / Android APK) en modo Neon Postgres,
+    // enrutar 100% de las lecturas y mutaciones del panel hacia /api/whatsapp/panel en Vercel + Neon.
+    const urlPanelCfg = String(contextoPanel?.supabaseUrl || '').trim();
+    const usarPanelNeon = Boolean(
+        !usarServiceRole &&
+        contextoPanel &&
+        (!urlPanelCfg || urlPanelCfg.includes('/api/db') || !urlPanelCfg.includes('supabase.co'))
+    );
+
+    if (usarPanelNeon) {
+        let originBase = 'https://ganadero-ad.vercel.app';
+        if (urlPanelCfg && urlPanelCfg.includes('/api/db')) {
+            originBase = urlPanelCfg.replace(/\/api\/db\/?$/, '');
+        } else if (typeof window !== 'undefined' && window.location) {
+            const proto = String(window.location.protocol || '');
+            const host = String(window.location.hostname || '');
+            const orig = String(window.location.origin || '');
+            if ((proto === 'https:' || proto === 'http:') && orig && orig !== 'null' && !/^(localhost|127\.0\.0\.1)$/i.test(host)) {
+                originBase = orig.replace(/\/+$/, '');
+            }
+        }
+        const panelUrl = `${originBase}/api/whatsapp/panel`;
+        const panelHeaders = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+        };
+        if (contextoPanel.rol) panelHeaders['x-ganadero-rol'] = String(contextoPanel.rol).toLowerCase();
+        if (contextoPanel.usuario) panelHeaders['x-ganadero-usuario'] = String(contextoPanel.usuario).toLowerCase();
+        if (contextoPanel.empresaId) panelHeaders['x-empresa-id'] = String(contextoPanel.empresaId);
+        if (contextoPanel.sessionToken) panelHeaders['x-session-token'] = String(contextoPanel.sessionToken);
+
+        const llamarPanelNeon = async (method, bodyObj = null) => {
+            if (typeof fetchImpl !== 'function') throw new Error('fetch no disponible.');
+            const res = await fetchImpl(panelUrl, {
+                method,
+                headers: panelHeaders,
+                ...(bodyObj !== null ? { body: JSON.stringify(bodyObj) } : {})
+            });
+            const txt = await res.text();
+            let data = null;
+            try { data = txt ? JSON.parse(txt) : null; } catch { data = { ok: false, error: txt }; }
+            return { ok: res.ok, status: res.status, data };
+        };
+
+        return {
+            esSupabaseReal: false,
+            esNeonReal: true,
+
+            async cargarDatosPanel() {
+                const r = await llamarPanelNeon('GET');
+                if (!r.ok || !r.data) {
+                    return {
+                        ok: false,
+                        faltaMigracionSql: false,
+                        error: r.data?.error || `Error HTTP ${r.status} consultando Neon Postgres.`,
+                        channels: [],
+                        contacts: [],
+                        contactAccess: [],
+                        messagesLog: [],
+                        messageStatus: []
+                    };
+                }
+                return {
+                    ok: r.data.ok !== false,
+                    faltaMigracionSql: false,
+                    error: r.data.error || null,
+                    channels: Array.isArray(r.data.channels) ? r.data.channels.map(sanitizarCanalParaFrontend) : [],
+                    contacts: Array.isArray(r.data.contacts) ? r.data.contacts : [],
+                    contactAccess: Array.isArray(r.data.contactAccess) ? r.data.contactAccess : [],
+                    messagesLog: Array.isArray(r.data.messagesLog) ? r.data.messagesLog : [],
+                    messageStatus: Array.isArray(r.data.messageStatus) ? r.data.messageStatus : []
+                };
+            },
+
+            async guardarCanalPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'guardar_canal', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} guardando canal en Neon.` };
+                }
+                return { ok: true, channel: sanitizarCanalParaFrontend(r.data.channel || r.data.canal || datos) };
+            },
+
+            async guardarContactoConAccesosPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'guardar_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} guardando contacto en Neon.` };
+                }
+                return { ok: true, data: r.data.data || r.data };
+            },
+
+            async cambiarEstadoContactoPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'cambiar_estado_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} actualizando estado en Neon.` };
+                }
+                return { ok: true };
+            },
+
+            async eliminarContactoPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'eliminar_contacto', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} eliminando contacto en Neon.` };
+                }
+                return { ok: true };
+            }
+        };
+    }
+
     const { supabaseUrl, apiKey, headers } = construirHeadersSupabase({ env, contextoPanel, usarServiceRole });
 
     async function peticionJson(ruta, opcionesFetch = {}) {
@@ -18291,6 +19175,7 @@ class ModuloAdmin {
   renderSeccionSupabase(esAdmin, esConsultor) {
     const srv = this.getSupabaseService ? this.getSupabaseService() : null;
     const cfg = srv ? srv.config : { url: '', anonKey: '' };
+    const esNeon = Boolean(cfg && cfg.provider === 'neon');
     const estaConectado = srv ? srv.estaConfigurado() : false;
     const ultimoSync = srv && srv.ultimoSync ? `${formatearFecha(srv.ultimoSync)} ${new Date(srv.ultimoSync).toLocaleTimeString('es-CO')}` : 'Sin sincronizaciones';
 
@@ -18303,9 +19188,9 @@ class ModuloAdmin {
             </span>
             <div>
               <div class="font-black text-sm ${estaConectado ? 'text-emerald-900' : 'text-amber-900'} flex items-center gap-2">
-                Estado de Nube Supabase: 
+                ${esNeon ? 'Estado de Nube Neon Postgres:' : 'Estado de Nube Supabase:'}
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-black ${estaConectado ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}">
-                  ${estaConectado ? 'Configurado & Listo' : 'Sin Credenciales'}
+                  ${estaConectado ? (esNeon ? 'Neon Serverless Activo' : 'Configurado & Listo') : 'Sin Credenciales'}
                 </span>
               </div>
               <p class="text-xs text-slate-600 mt-0.5">Última sincronización: <strong>${ultimoSync}</strong></p>
@@ -21672,7 +22557,8 @@ END $$;
 
     this.whatsappHealthCargando = true;
     try {
-      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+      const esHostLocal = typeof window !== 'undefined' && window.location && /^(localhost|127\.0\.0\.1)$/i.test(String(window.location.hostname || ''));
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http') && !esHostLocal)
         ? window.location.origin
         : 'https://ganadero-ad.vercel.app';
       const res = await fetchImpl(`${originUrl}/api/whatsapp/health`, {
@@ -21685,6 +22571,8 @@ END $$;
       if (res && res.ok) {
         const data = await res.json();
         this.whatsappServerHealth = {
+          dbProvider: data?.dbProvider || (data?.DATABASE_URL ? 'neon' : 'supabase'),
+          DATABASE_URL: Boolean(data?.DATABASE_URL === true),
           WHATSAPP_SYSTEM_TOKEN: Boolean(data?.WHATSAPP_SYSTEM_TOKEN === true),
           WHATSAPP_APP_SECRET: Boolean(data?.WHATSAPP_APP_SECRET === true),
           WHATSAPP_VERIFY_TOKEN: Boolean(data?.WHATSAPP_VERIFY_TOKEN === true),
@@ -21693,6 +22581,7 @@ END $$;
         };
       } else {
         this.whatsappServerHealth = {
+          DATABASE_URL: false,
           WHATSAPP_SYSTEM_TOKEN: false,
           WHATSAPP_APP_SECRET: false,
           WHATSAPP_VERIFY_TOKEN: false,
@@ -21702,6 +22591,7 @@ END $$;
       }
     } catch {
       this.whatsappServerHealth = {
+        DATABASE_URL: false,
         WHATSAPP_SYSTEM_TOKEN: false,
         WHATSAPP_APP_SECRET: false,
         WHATSAPP_VERIFY_TOKEN: false,
@@ -21923,9 +22813,14 @@ END $$;
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
                 ${renderBadgeSecreto(health.WHATSAPP_VERIFY_TOKEN)}
               </div>
+              ${health.DATABASE_URL ? `
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="DATABASE_URL">
+                <span class="font-mono text-[11px] text-slate-700">DATABASE_URL (Neon Postgres)</span>
+                ${renderBadgeSecreto(true)}
+              </div>` : ''}
               <div class="flex justify-between items-center py-1" data-secret="SUPABASE_SERVICE_ROLE_KEY">
                 <span class="font-mono text-[11px] text-slate-700">SUPABASE_SERVICE_ROLE_KEY</span>
-                ${renderBadgeSecreto(health.SUPABASE_SERVICE_ROLE_KEY)}
+                ${renderBadgeSecreto(health.SUPABASE_SERVICE_ROLE_KEY || health.DATABASE_URL)}
               </div>
             </div>
           </div>

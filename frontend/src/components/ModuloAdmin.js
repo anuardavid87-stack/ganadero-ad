@@ -1572,6 +1572,7 @@ export class ModuloAdmin {
   renderSeccionSupabase(esAdmin, esConsultor) {
     const srv = this.getSupabaseService ? this.getSupabaseService() : null;
     const cfg = srv ? srv.config : { url: '', anonKey: '' };
+    const esNeon = Boolean(cfg && cfg.provider === 'neon');
     const estaConectado = srv ? srv.estaConfigurado() : false;
     const ultimoSync = srv && srv.ultimoSync ? `${formatearFecha(srv.ultimoSync)} ${new Date(srv.ultimoSync).toLocaleTimeString('es-CO')}` : 'Sin sincronizaciones';
 
@@ -1584,9 +1585,9 @@ export class ModuloAdmin {
             </span>
             <div>
               <div class="font-black text-sm ${estaConectado ? 'text-emerald-900' : 'text-amber-900'} flex items-center gap-2">
-                Estado de Nube Supabase: 
+                ${esNeon ? 'Estado de Nube Neon Postgres:' : 'Estado de Nube Supabase:'}
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-black ${estaConectado ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}">
-                  ${estaConectado ? 'Configurado & Listo' : 'Sin Credenciales'}
+                  ${estaConectado ? (esNeon ? 'Neon Serverless Activo' : 'Configurado & Listo') : 'Sin Credenciales'}
                 </span>
               </div>
               <p class="text-xs text-slate-600 mt-0.5">Última sincronización: <strong>${ultimoSync}</strong></p>
@@ -4953,7 +4954,8 @@ END $$;
 
     this.whatsappHealthCargando = true;
     try {
-      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+      const esHostLocal = typeof window !== 'undefined' && window.location && /^(localhost|127\.0\.0\.1)$/i.test(String(window.location.hostname || ''));
+      const originUrl = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http') && !esHostLocal)
         ? window.location.origin
         : 'https://ganadero-ad.vercel.app';
       const res = await fetchImpl(`${originUrl}/api/whatsapp/health`, {
@@ -4966,6 +4968,8 @@ END $$;
       if (res && res.ok) {
         const data = await res.json();
         this.whatsappServerHealth = {
+          dbProvider: data?.dbProvider || (data?.DATABASE_URL ? 'neon' : 'supabase'),
+          DATABASE_URL: Boolean(data?.DATABASE_URL === true),
           WHATSAPP_SYSTEM_TOKEN: Boolean(data?.WHATSAPP_SYSTEM_TOKEN === true),
           WHATSAPP_APP_SECRET: Boolean(data?.WHATSAPP_APP_SECRET === true),
           WHATSAPP_VERIFY_TOKEN: Boolean(data?.WHATSAPP_VERIFY_TOKEN === true),
@@ -4974,6 +4978,7 @@ END $$;
         };
       } else {
         this.whatsappServerHealth = {
+          DATABASE_URL: false,
           WHATSAPP_SYSTEM_TOKEN: false,
           WHATSAPP_APP_SECRET: false,
           WHATSAPP_VERIFY_TOKEN: false,
@@ -4983,6 +4988,7 @@ END $$;
       }
     } catch {
       this.whatsappServerHealth = {
+        DATABASE_URL: false,
         WHATSAPP_SYSTEM_TOKEN: false,
         WHATSAPP_APP_SECRET: false,
         WHATSAPP_VERIFY_TOKEN: false,
@@ -5204,9 +5210,14 @@ END $$;
                 <span class="font-mono text-[11px] text-slate-700">WHATSAPP_VERIFY_TOKEN</span>
                 ${renderBadgeSecreto(health.WHATSAPP_VERIFY_TOKEN)}
               </div>
+              ${health.DATABASE_URL ? `
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/70" data-secret="DATABASE_URL">
+                <span class="font-mono text-[11px] text-slate-700">DATABASE_URL (Neon Postgres)</span>
+                ${renderBadgeSecreto(true)}
+              </div>` : ''}
               <div class="flex justify-between items-center py-1" data-secret="SUPABASE_SERVICE_ROLE_KEY">
                 <span class="font-mono text-[11px] text-slate-700">SUPABASE_SERVICE_ROLE_KEY</span>
-                ${renderBadgeSecreto(health.SUPABASE_SERVICE_ROLE_KEY)}
+                ${renderBadgeSecreto(health.SUPABASE_SERVICE_ROLE_KEY || health.DATABASE_URL)}
               </div>
             </div>
           </div>

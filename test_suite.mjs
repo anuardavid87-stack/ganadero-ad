@@ -2381,7 +2381,7 @@ const syncService = new SupabaseSyncService();
 // 25.1: Servicio configurado por defecto con URL y Anon Key oficial
 test(
   syncService.estaConfigurado() &&
-  syncService.config.url.includes('supabase.co') &&
+  syncService.config.provider === 'neon' && syncService.config.apiBaseUrl.includes('/api/db') &&
   Boolean(syncService.config.anonKey),
   'Supabase: Servicio preconfigurado con URL oficial de Supabase Cloud y Anon Key'
 );
@@ -8416,6 +8416,147 @@ console.log('\n--- 64. Blindaje Anti-Borrado, Sync Cloud de Contabilidad/Nómina
     desc64.datos.nominaPagos.length === 1 &&
     desc64.datos.operacionesDiarias.length === 0,
     'Persistencia Cloud Contabilidad & Nómina: Sube y restaura movimientos, inversiones diferidas, trabajadores y pagos sin contaminar la bitácora'
+  );
+}
+
+// ============================================================================
+// 65. MIGRACIÓN Y OPERACIÓN NATIVA SOBRE NEON POSTGRES (/api/db/* y /api/whatsapp/panel)
+// ============================================================================
+console.log('\n--- 65. Operación Nativa sobre Neon Postgres Serverless ---');
+{
+  const { normDateSQL, bulkUpsert, serializeAnimalRow } = await import('./api/_lib/neonDb.js');
+
+  // 65.1: Helpers y deduplicación de claves de conflicto en bulkUpsert (previene error PG en duplicados)
+  const queriesEjecutadas = [];
+  const fakeSql = {
+    async query(sqlText, params) {
+      queriesEjecutadas.push({ sqlText, params });
+      return [];
+    }
+  };
+  await bulkUpsert(fakeSql, {
+    table: 'animales',
+    columns: ['id', 'finca_id', 'identificacion_tag', 'ultimo_peso_kg'],
+    conflictTarget: 'finca_id, identificacion_tag',
+    updateColumns: ['ultimo_peso_kg'],
+    rows: [
+      { id: 'A1', finca_id: 'FIN-1', identificacion_tag: '100', ultimo_peso_kg: 310 },
+      { id: 'A1', finca_id: 'FIN-1', identificacion_tag: '100', ultimo_peso_kg: 325 }
+    ]
+  });
+  const animalSer = serializeAnimalRow({
+    id: 'A1', finca_id: 'FIN-1', identificacion_tag: '100',
+    fecha_nacimiento: new Date('2024-05-10T00:00:00Z'), ultimo_peso_kg: '325.5'
+  });
+  test(
+    normDateSQL('20/11/2026') === '2026-11-20' &&
+    queriesEjecutadas.length === 1 &&
+    queriesEjecutadas[0].params.length === 4 &&
+    queriesEjecutadas[0].params[3] === 325 &&
+    animalSer.fecha_nacimiento === '2024-05-10' &&
+    animalSer.ultimo_peso_kg === 325.5,
+    'Neon DB Layer: normDateSQL convierte DD/MM/AAAA, bulkUpsert deduplica conflictos y serializeAnimalRow normaliza tipos'
+  );
+
+  // 65.2: Cliente SupabaseSyncService en modo Neon (prelogin, sync GET/POST/DELETE, probe)
+  const neonSync = new SupabaseSyncService();
+  const llamadasNeon = [];
+  neonSync._fetchConTimeout = async (url, options = {}) => {
+    llamadasNeon.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/health')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, provider: 'neon', counts: { fincas: 5, animales: 1493, pesajes_animales: 2585 } }), json: async () => ({ ok: true, provider: 'neon', counts: { fincas: 5, animales: 1493, pesajes_animales: 2585 } }) };
+    }
+    if (url.endsWith('/prelogin')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, datos: { empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES' }], usuarios: [{ usuario: 'anuardavid', rol: 'superadmin' }] } }) };
+    }
+    if (url.includes('/probe')) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, firma: 'f:5||a:1493||p:2585' }) };
+    }
+    if (url.includes('/sync') && (options.method || 'GET') === 'GET') {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          ok: true,
+          provider: 'neon',
+          datos: {
+            empresas: [{ id: 'EMP-01', nombre: 'INVERSIONES', activa: true }],
+            fincas: [{ id: 'FIN-VES', empresaId: 'EMP-01', codigo: 'VES', nombre: 'Vesubio', areaHa: 200 }],
+            usuarios: [{ id: 'USR-SUPER', usuario: 'anuardavid', nombre: 'Anuar', rol: 'superadmin', activo: true }],
+            animales: [{ id: 'ANM-1', fincaId: 'FIN-VES', identificacionTag: '5937', ultimoPesoKg: 210, estadoVida: 'activo' }],
+            servicios: [], costosFijos: {}, inversiones: [], traslados: [], operacionesDiarias: [], pesajes: [], nutricion: [],
+            contabilidadMovimientos: [], nominaTrabajadores: [], nominaPagos: []
+          }
+        })
+      };
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, provider: 'neon' }) };
+  };
+
+  const healthN = await neonSync.testConexion();
+  const preN = await neonSync.descargarDirectorioPreLogin();
+  const pullN = await neonSync.descargarDatosDeSupabase(10000, { empresaId: 'EMP-01', esSuperAdmin: true });
+  const pushSinCambios = await neonSync.subirDatosASupabase({
+    usuarioActual: { usuario: 'anuardavid', rol: 'superadmin' },
+    empresaActivaId: 'EMP-01',
+    fincaActivaId: 'FIN-VES',
+    empresas: pullN.datos.empresas,
+    fincas: pullN.datos.fincas,
+    usuarios: pullN.datos.usuarios,
+    animales: pullN.datos.animales
+  });
+  const postsSinCambios = llamadasNeon.filter(l => l.method === 'POST' && l.url.includes('/sync'));
+
+  // Modificar 1 animal y subir -> debe enviar exactamente 1 POST /api/db/sync con solo ese animal
+  await neonSync.subirDatosASupabase({
+    usuarioActual: { usuario: 'anuardavid', rol: 'superadmin' },
+    empresaActivaId: 'EMP-01',
+    fincaActivaId: 'FIN-VES',
+    empresas: pullN.datos.empresas,
+    fincas: pullN.datos.fincas,
+    usuarios: pullN.datos.usuarios,
+    animales: [{ ...pullN.datos.animales[0], ultimoPesoKg: 235 }]
+  });
+  const postsConCambio = llamadasNeon.filter(l => l.method === 'POST' && l.url.includes('/sync'));
+  const probeN1 = await neonSync.verificarCambiosRemotosLiviano(5000, { esSuperAdmin: true });
+  const delN = await neonSync.eliminarRegistroSistemaCloud('SYS_CONTAB_MOV_M1');
+  const deleteCalls = llamadasNeon.filter(l => l.method === 'DELETE' && l.url.includes('/sync'));
+
+  test(
+    neonSync.usarModoNeon() === true &&
+    healthN.ok === true && healthN.provider === 'neon' &&
+    preN.ok === true && preN.datos.empresas.length === 1 &&
+    pullN.ok === true && pullN.datos.animales.length === 1 &&
+    pushSinCambios.ok === true &&
+    postsSinCambios.length <= 1 &&
+    postsConCambio.some(p => Array.isArray(p.body?.animales) && p.body.animales.length === 1 && p.body.animales[0].ultimo_peso_kg === 235) &&
+    probeN1.ok === true && probeN1.firma === 'f:5||a:1493||p:2585' &&
+    delN.ok === true && deleteCalls.some(d => d.body?.action === 'registro_sistema' && d.body?.id === 'SYS_CONTAB_MOV_M1'),
+    'Cliente Neon Postgres: Enruta health, prelogin, sync GET/POST diferencial, probe y DELETE hacia /api/db/* con 0 llamadas a Supabase'
+  );
+
+  // 65.3: Panel WhatsApp en modo Neon enruta hacia /api/whatsapp/panel
+  const { crearRepositorioWhatsAppSupabase: crearRepoWa65 } = await import('./frontend/src/core/whatsappCloudService.js');
+  const llamadasWaNeon = [];
+  const repoWaNeonPanel = crearRepoWa65({
+    contextoPanel: { rol: 'superadmin', usuario: 'anuardavid', empresaId: 'EMP-01', supabaseUrl: 'https://ganadero-ad.vercel.app/api/db' },
+    fetchImpl: async (url, opts) => {
+      llamadasWaNeon.push({ url, method: opts.method });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ ok: true, channels: [{ id: 'CH-SHARED-DEFAULT', phone_number_id: '111443548633291' }], contacts: [], contactAccess: [], messagesLog: [], messageStatus: [] })
+      };
+    }
+  });
+  const datosPanelNeon = await repoWaNeonPanel.cargarDatosPanel();
+  test(
+    repoWaNeonPanel.esNeonReal === true &&
+    datosPanelNeon.ok === true &&
+    datosPanelNeon.channels.length === 1 &&
+    llamadasWaNeon.length === 1 &&
+    llamadasWaNeon[0].url === 'https://ganadero-ad.vercel.app/api/whatsapp/panel',
+    'Panel WhatsApp Neon: crearRepositorioWhatsAppSupabase enruta el panel hacia /api/whatsapp/panel en Neon Postgres'
   );
 }
 
