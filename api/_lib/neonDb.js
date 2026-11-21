@@ -340,7 +340,7 @@ export async function ensureNeonSchema(sql = getSql(), force = false) {
             phone_number_id TEXT UNIQUE NOT NULL,
             waba_id TEXT,
             display_phone_number TEXT,
-            nombre TEXT NOT NULL DEFAULT 'Canal Compartido Ganadero AD',
+            nombre TEXT NOT NULL DEFAULT 'Canal WhatsApp Ganadero AD',
             tipo TEXT NOT NULL DEFAULT 'compartido' CHECK (tipo IN ('compartido', 'dedicado')),
             empresa_id TEXT NULL,
             access_token_override TEXT NULL,
@@ -349,15 +349,6 @@ export async function ensureNeonSchema(sql = getSql(), force = false) {
             activo BOOLEAN DEFAULT true,
             created_at TIMESTAMPTZ DEFAULT now()
         )`,
-
-        `INSERT INTO public.whatsapp_channels (
-            id, phone_number_id, waba_id, display_phone_number, nombre,
-            tipo, empresa_id, template_name, template_lang, activo
-        ) VALUES (
-            'CH-SHARED-DEFAULT', '111443548633291', '118927644541032', '+57 322 5694112',
-            'Canal Compartido Ganadero AD', 'compartido', NULL,
-            'notificacion_ganadero_ad', 'es', true
-        ) ON CONFLICT (phone_number_id) DO NOTHING`,
 
         `CREATE TABLE IF NOT EXISTS public.whatsapp_contacts (
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -908,6 +899,29 @@ export function crearRepositorioWhatsAppNeon(sql = getSql()) {
             );
             const clean = sanitizarCanalParaFrontend(rows[0] || {});
             return { ok: true, channel: clean, canal: clean };
+        },
+
+        async cambiarEstadoCanalPanel({ channelId = null, phoneNumberId = null, activo = false } = {}) {
+            await ensureNeonSchema(sql);
+            if (!channelId && !phoneNumberId) return { ok: false, error: 'channelId o phoneNumberId requerido.' };
+            if (channelId) {
+                await sql.query(`UPDATE public.whatsapp_channels SET activo = $1 WHERE id = $2`, [Boolean(activo), String(channelId)]);
+            } else {
+                await sql.query(`UPDATE public.whatsapp_channels SET activo = $1 WHERE phone_number_id = $2`, [Boolean(activo), String(phoneNumberId)]);
+            }
+            return { ok: true };
+        },
+
+        async eliminarCanalPanel({ channelId = null, phoneNumberId = null } = {}) {
+            await ensureNeonSchema(sql);
+            if (!channelId && !phoneNumberId) return { ok: false, error: 'channelId o phoneNumberId requerido.' };
+            if (channelId) {
+                await sql.query(`DELETE FROM public.whatsapp_channels WHERE id = $1`, [String(channelId)]);
+            }
+            if (phoneNumberId) {
+                await sql.query(`DELETE FROM public.whatsapp_channels WHERE phone_number_id = $1`, [String(phoneNumberId)]);
+            }
+            return { ok: true };
         },
 
         async guardarContactoConAccesosPanel({ contactId = null, telefono, nombre, activo = true, accesos = [], modoSuperAdmin = false, empresaIdContexto = null } = {}) {

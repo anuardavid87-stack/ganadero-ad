@@ -33,6 +33,16 @@ export default async function handler(req, res) {
                 const r = await repo.guardarCanalPanel(body.datos || {});
                 return res.status(r.ok ? 200 : 400).json(r);
             }
+            if (action === 'cambiar_estado_canal') {
+                if (!esSuperAdmin) return res.status(403).json({ ok: false, error: 'Solo Super Admin puede gestionar canales.' });
+                const r = await repo.cambiarEstadoCanalPanel(body.datos || {});
+                return res.status(r.ok ? 200 : 400).json(r);
+            }
+            if (action === 'eliminar_canal') {
+                if (!esSuperAdmin) return res.status(403).json({ ok: false, error: 'Solo Super Admin puede eliminar canales.' });
+                const r = await repo.eliminarCanalPanel(body.datos || {});
+                return res.status(r.ok ? 200 : 400).json(r);
+            }
             if (action === 'guardar_contacto') {
                 const r = await repo.guardarContactoConAccesosPanel({
                     ...(body.datos || {}),

@@ -8558,6 +8558,25 @@ console.log('\n--- 65. Operación Nativa sobre Neon Postgres Serverless ---');
     llamadasWaNeon[0].url === 'https://ganadero-ad.vercel.app/api/whatsapp/panel',
     'Panel WhatsApp Neon: crearRepositorioWhatsAppSupabase enruta el panel hacia /api/whatsapp/panel en Neon Postgres'
   );
+
+  // 65.4: Eliminar canal WhatsApp deja la lista en 0 sin resucitar número personal (+57 322 5694112)
+  const llamadasDelCanal = [];
+  const repoWaDel = crearRepoWa65({
+    contextoPanel: { rol: 'superadmin', usuario: 'anuardavid', empresaId: 'EMP-01', supabaseUrl: 'https://ganadero-ad.vercel.app/api/db' },
+    fetchImpl: async (url, opts) => {
+      llamadasDelCanal.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : null });
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, channels: [], contacts: [], contactAccess: [], messagesLog: [], messageStatus: [] }) };
+    }
+  });
+  const resDelCanal = await repoWaDel.eliminarCanalPanel({ channelId: 'CH-SHARED-DEFAULT', phoneNumberId: '111443548633291' });
+  const datosVacios = await repoWaDel.cargarDatosPanel();
+  test(
+    resDelCanal.ok === true &&
+    llamadasDelCanal.some(c => c.body?.action === 'eliminar_canal' && c.body?.datos?.phoneNumberId === '111443548633291') &&
+    datosVacios.ok === true &&
+    datosVacios.channels.length === 0,
+    'Gestión Canales WhatsApp Neon: eliminarCanalPanel borra el canal en Neon y permite operar con 0 canales sin reinyectar número personal'
+  );
 }
 
 console.log(`\n=====================================================================`);

@@ -4258,8 +4258,8 @@ END $$;
       btn.addEventListener('click', async () => {
         const chId = btn.getAttribute('data-id');
         const phoneId = btn.getAttribute('data-phone-id');
-        const wabaId = btn.getAttribute('data-waba-id') || '118927644541032';
-        const displayPhone = btn.getAttribute('data-display-phone') || '+57 322 5694112';
+        const wabaId = btn.getAttribute('data-waba-id') || '';
+        const displayPhone = btn.getAttribute('data-display-phone') || '';
         const nombreCanal = btn.getAttribute('data-nombre') || 'Canal WhatsApp';
         const tipo = btn.getAttribute('data-tipo') || 'compartido';
         const empId = btn.getAttribute('data-empresa-id') || null;
@@ -4287,23 +4287,71 @@ END $$;
         } else {
           this.whatsappFeedback = {
             tipo: 'ok',
-            mensaje: `✅ Plantilla del canal actualizada en Supabase: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
+            mensaje: `✅ Plantilla del canal actualizada en Neon Postgres: ${res.channel.template_name} (idioma Meta: "${res.channel.template_lang}").`
           };
           await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
         }
       });
     });
 
-    // Super Admin: Crear / Asignar Canal Dedicado a una Empresa en Supabase
+    // Super Admin: Activar o desactivar un canal de WhatsApp
+    this.container.querySelectorAll('.btn-wa-toggle-canal').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const channelId = btn.getAttribute('data-id');
+        const phoneNumberId = btn.getAttribute('data-phone-id');
+        const nuevoActivo = btn.getAttribute('data-activo') === 'true';
+        const repo = this.obtenerRepoWhatsAppPanel();
+        if (typeof repo.cambiarEstadoCanalPanel !== 'function') return;
+        const res = await repo.cambiarEstadoCanalPanel({ channelId, phoneNumberId, activo: nuevoActivo });
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+          this.render();
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: nuevoActivo ? '✅ Canal activado nuevamente.' : '⏸️ Canal desactivado. El webhook ignorará sus mensajes.'
+          };
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
+        }
+      });
+    });
+
+    // Super Admin: Quitar definitivamente un canal/número de WhatsApp de Ganadero AD
+    this.container.querySelectorAll('.btn-wa-eliminar-canal').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const channelId = btn.getAttribute('data-id');
+        const phoneNumberId = btn.getAttribute('data-phone-id');
+        const displayPhone = btn.getAttribute('data-display-phone') || phoneNumberId;
+        if (typeof confirm === 'function' && !confirm(`¿Quitar definitivamente el canal ${displayPhone} de Ganadero AD?\nEl sistema dejará de procesar mensajes para este número.`)) {
+          return;
+        }
+        const repo = this.obtenerRepoWhatsAppPanel();
+        if (typeof repo.eliminarCanalPanel !== 'function') return;
+        const res = await repo.eliminarCanalPanel({ channelId, phoneNumberId });
+        if (!res.ok) {
+          this.whatsappFeedback = { tipo: 'error', mensaje: `❌ ${res.error}` };
+          this.render();
+        } else {
+          this.whatsappFeedback = {
+            tipo: 'ok',
+            mensaje: `🗑️ Canal ${displayPhone} eliminado de Ganadero AD.`
+          };
+          await this.cargarDatosWhatsAppDesdeSupabase({ forzar: true });
+        }
+      });
+    });
+
+    // Super Admin: Crear / Asignar Canal (Compartido o Dedicado) en Neon Postgres
     const formCrearCanalWA = this.container.querySelector('#form-wa-crear-canal');
     if (formCrearCanalWA) {
       formCrearCanalWA.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const tipoCanal = (this.container.querySelector('#wa-canal-tipo')?.value || 'dedicado').trim();
         const phoneNumberId = (this.container.querySelector('#wa-canal-phone-id')?.value || '').trim();
         const wabaId = (this.container.querySelector('#wa-canal-waba-id')?.value || '').trim();
         const displayPhone = (this.container.querySelector('#wa-canal-display-phone')?.value || '').trim();
         const nombre = (this.container.querySelector('#wa-canal-nombre')?.value || '').trim();
-        const empresaId = (this.container.querySelector('#wa-canal-empresa-id')?.value || '').trim();
+        const empresaId = tipoCanal === 'dedicado' ? (this.container.querySelector('#wa-canal-empresa-id')?.value || '').trim() : null;
         const templateName = (this.container.querySelector('#wa-canal-template-name')?.value || 'notificacion_ganadero_ad').trim();
         const templateLang = (this.container.querySelector('#wa-canal-template-lang')?.value || 'es').trim();
         const tokenOverride = (this.container.querySelector('#wa-canal-token-override')?.value || '').trim();
@@ -4313,8 +4361,8 @@ END $$;
           phone_number_id: phoneNumberId,
           waba_id: wabaId,
           display_phone_number: displayPhone,
-          nombre: nombre || `Canal Dedicado ${empresaId}`,
-          tipo: 'dedicado',
+          nombre: nombre || (tipoCanal === 'compartido' ? 'Canal Compartido Ganadero AD' : `Canal Dedicado ${empresaId}`),
+          tipo: tipoCanal === 'compartido' ? 'compartido' : 'dedicado',
           empresa_id: empresaId,
           template_name: templateName,
           template_lang: templateLang,
@@ -4627,14 +4675,14 @@ END $$;
         const canalDedicado = canalesCargados.find(
           (c) => c.tipo === 'dedicado' && c.activo !== false && String(c.empresa_id) === String(empIdSim)
         );
-        const canalCompartido = canalesCargados.find((c) => c.tipo === 'compartido' && c.activo !== false) || DEFAULT_SHARED_WHATSAPP_CHANNEL;
+        const canalCompartido = canalesCargados.find((c) => c.tipo === 'compartido' && c.activo !== false) || null;
         const canalEmpresa = canalDedicado || canalCompartido;
-        const numeroBotNorm = normalizarTelefono(canalEmpresa.display_phone_number);
+        const numeroBotNorm = canalEmpresa ? normalizarTelefono(canalEmpresa.display_phone_number) : '';
 
-        if (remitente === numeroBotNorm || remitente === String(canalEmpresa.phone_number_id)) {
+        if (canalEmpresa && (remitente === numeroBotNorm || remitente === String(canalEmpresa.phone_number_id))) {
           this.whatsappFeedback = {
             tipo: 'error',
-            mensaje: '⛔ El teléfono remitente no puede ser el propio número del canal (+57 322 5694112).'
+            mensaje: `⛔ El teléfono remitente no puede ser el propio número del canal (${canalEmpresa.display_phone_number || canalEmpresa.phone_number_id}).`
           };
           this.render();
           return;
@@ -4831,7 +4879,7 @@ END $$;
         cargando: false,
         faltaMigracionSql: Boolean(res.faltaMigracionSql),
         error: res.ok ? null : (res.error || null),
-        channels: Array.isArray(res.channels) && res.channels.length > 0 ? res.channels : [{ ...DEFAULT_SHARED_WHATSAPP_CHANNEL }],
+        channels: Array.isArray(res.channels) ? res.channels : [],
         contacts: Array.isArray(res.contacts) ? res.contacts : [],
         contactAccess: Array.isArray(res.contactAccess) ? res.contactAccess : [],
         messagesLog: Array.isArray(res.messagesLog) ? res.messagesLog : [],
@@ -5059,9 +5107,7 @@ END $$;
     const webhookUrl = `${originUrl}/api/whatsapp`;
     const privacidadUrl = `${originUrl}/privacidad`;
 
-    const canalesRaw = Array.isArray(this.whatsappDatos?.channels) && this.whatsappDatos.channels.length > 0
-      ? this.whatsappDatos.channels
-      : [{ ...DEFAULT_SHARED_WHATSAPP_CHANNEL }];
+    const canalesRaw = Array.isArray(this.whatsappDatos?.channels) ? this.whatsappDatos.channels : [];
     const canales = isSuper
       ? canalesRaw
       : canalesRaw.filter((c) => c.tipo === 'compartido' || String(c.empresa_id) === String(empActiva.id));
@@ -5069,10 +5115,10 @@ END $$;
     const canalDedicadoEmp = canalesRaw.find(
       (c) => c.tipo === 'dedicado' && c.activo !== false && String(c.empresa_id) === String(empActiva.id)
     );
-    const canalCompartido = canalesRaw.find((c) => c.tipo === 'compartido' && c.activo !== false) || DEFAULT_SHARED_WHATSAPP_CHANNEL;
-    const canalEmpresaActiva = canalDedicadoEmp || canalCompartido;
-    const numeroWaMe = normalizarTelefonoWhatsApp(canalEmpresaActiva.display_phone_number || '+57 322 5694112') || '573225694112';
-    const linkAbrirChat = `https://wa.me/${numeroWaMe}`;
+    const canalCompartido = canalesRaw.find((c) => c.tipo === 'compartido' && c.activo !== false) || null;
+    const canalEmpresaActiva = canalDedicadoEmp || canalCompartido || null;
+    const numeroWaMe = canalEmpresaActiva ? normalizarTelefonoWhatsApp(canalEmpresaActiva.display_phone_number || '') : '';
+    const linkAbrirChat = numeroWaMe ? `https://wa.me/${numeroWaMe}` : '';
 
     const todosContactosCargados = Array.isArray(this.whatsappDatos?.contacts) ? this.whatsappDatos.contacts : [];
     const contactosVisibles = isSuper
@@ -5142,9 +5188,13 @@ END $$;
             <a href="${privacidadUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs transition flex items-center gap-1.5">
               <span>🛡️</span> Política /privacidad
             </a>
+            ${linkAbrirChat ? `
             <a href="${linkAbrirChat}" target="_blank" rel="noopener noreferrer" id="btn-wa-abrir-chat-empresa" class="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs shadow transition flex items-center gap-1.5">
-              <span>📲</span> Abrir chat (${canalEmpresaActiva.display_phone_number || '+57 322 5694112'})
-            </a>
+              <span>📲</span> Abrir chat (${canalEmpresaActiva.display_phone_number})
+            </a>` : `
+            <span class="px-3 py-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs">
+              📵 Sin línea WhatsApp vinculada
+            </span>`}
           </div>
         </div>
 
@@ -5222,15 +5272,15 @@ END $$;
             </div>
           </div>
 
-          <!-- 1. LISTA DE CANALES EN SUPABASE (whatsapp_channels) -->
+          <!-- 1. LISTA DE CANALES EN NEON POSTGRES (whatsapp_channels) -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-3">
               <div>
                 <h5 class="text-sm font-black text-slate-800 flex items-center gap-2">
-                  <span>📡</span> 1. Canales de WhatsApp en Supabase (<code>whatsapp_channels</code>)
+                  <span>📡</span> 1. Canales de WhatsApp en Neon Postgres (<code>whatsapp_channels</code>)
                 </h5>
                 <p class="text-xs text-slate-600">
-                  Canal compartido por defecto (<code>111443548633291</code> • <code>+57 322 5694112</code> • WABA <code>118927644541032</code> • plantilla <code>notificacion_ganadero_ad</code> • idioma <code>es</code>) y canales dedicados por empresa.
+                  Administra los números oficiales de WhatsApp Cloud API (compartidos para todas las empresas o dedicados por empresa). Si quitas un número aquí, el webhook dejará de responderle automáticamente.
                 </p>
               </div>
             </div>
@@ -5246,11 +5296,17 @@ END $$;
                     <th class="p-2.5">Empresa Asignada</th>
                     <th class="p-2.5">Plantilla e Idioma Meta (24h)</th>
                     <th class="p-2.5">Token Servidor</th>
-                    <th class="p-2.5 text-center">Estado</th>
+                    <th class="p-2.5 text-center">Estado / Acciones</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  ${canales.map((ch) => `
+                  ${canales.length === 0 ? `
+                    <tr>
+                      <td colspan="8" class="p-5 text-center text-slate-500 font-semibold">
+                        📵 No hay ningún número de WhatsApp vinculado actualmente. Cuando tengas un nuevo número corporativo en Meta Cloud API, agrégalo en el formulario de abajo.
+                      </td>
+                    </tr>
+                  ` : canales.map((ch) => `
                     <tr>
                       <td class="p-2.5 font-bold text-slate-800">
                         ${ch.nombre}
@@ -5258,9 +5314,9 @@ END $$;
                           ${ch.tipo}
                         </span>
                       </td>
-                      <td class="p-2.5 font-mono font-bold text-slate-800">${ch.display_phone_number || '+57 322 5694112'}</td>
+                      <td class="p-2.5 font-mono font-bold text-slate-800">${ch.display_phone_number || '—'}</td>
                       <td class="p-2.5 font-mono text-slate-700">${ch.phone_number_id}</td>
-                      <td class="p-2.5 font-mono text-slate-700">${ch.waba_id || '118927644541032'}</td>
+                      <td class="p-2.5 font-mono text-slate-700">${ch.waba_id || '—'}</td>
                       <td class="p-2.5 font-bold text-slate-700">
                         ${ch.tipo === 'compartido' ? '🌐 Todas (Compartido)' : (mapaNombresEmpresas.get(String(ch.empresa_id)) || ch.empresa_id)}
                       </td>
@@ -5268,7 +5324,7 @@ END $$;
                         <div class="flex items-center gap-1">
                           <input type="text" class="input-wa-ch-tpl-name px-2 py-1 text-[11px] font-mono rounded border border-slate-300 w-36" data-id="${ch.id}" value="${ch.template_name || 'notificacion_ganadero_ad'}" title="Nombre de la plantilla en Meta">
                           <input type="text" class="input-wa-ch-tpl-lang px-2 py-1 text-[11px] font-mono font-bold rounded border border-slate-300 w-16 text-center" data-id="${ch.id}" value="${ch.template_lang || 'es'}" title="Código de idioma exacto en Meta (por defecto es)">
-                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-waba-id="${ch.waba_id || '118927644541032'}" data-display-phone="${ch.display_phone_number || '+57 322 5694112'}" data-nombre="${ch.nombre || ''}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma en Supabase">
+                          <button type="button" class="btn-wa-guardar-plantilla-canal px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-waba-id="${ch.waba_id || ''}" data-display-phone="${ch.display_phone_number || ''}" data-nombre="${ch.nombre || ''}" data-tipo="${ch.tipo}" data-empresa-id="${ch.empresa_id || ''}" title="Guardar plantilla e idioma">
                             💾
                           </button>
                         </div>
@@ -5279,9 +5335,17 @@ END $$;
                           : renderBadgeSecreto(health.WHATSAPP_SYSTEM_TOKEN)}
                       </td>
                       <td class="p-2.5 text-center">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${ch.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
-                          ${ch.activo !== false ? 'Activo' : 'Inactivo'}
-                        </span>
+                        <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${ch.activo !== false ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
+                            ${ch.activo !== false ? 'Activo' : 'Inactivo'}
+                          </span>
+                          <button type="button" class="btn-wa-toggle-canal px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-activo="${ch.activo !== false ? 'false' : 'true'}" title="${ch.activo !== false ? 'Pausar canal' : 'Activar canal'}">
+                            ${ch.activo !== false ? '⏸️' : '▶️'}
+                          </button>
+                          <button type="button" class="btn-wa-eliminar-canal px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer" data-id="${ch.id}" data-phone-id="${ch.phone_number_id}" data-display-phone="${ch.display_phone_number || ch.phone_number_id}" title="Quitar este número de Ganadero AD">
+                            🗑️ Quitar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   `).join('')}
@@ -5290,10 +5354,17 @@ END $$;
             </div>
 
             <form id="form-wa-crear-canal" class="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-              <div class="text-xs font-black text-slate-800">➕ Crear Canal Dedicado y Asignarlo a una Empresa</div>
+              <div class="text-xs font-black text-slate-800">➕ Agregar Nuevo Canal de WhatsApp (Compartido o Dedicado)</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 <div>
-                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa Destino:</label>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Tipo de Canal:</label>
+                  <select id="wa-canal-tipo" class="w-full px-2.5 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white">
+                    <option value="compartido">🌐 Compartido (Todas las empresas)</option>
+                    <option value="dedicado" selected>🏢 Dedicado (Una empresa)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-700 mb-1">Empresa Destino (si es dedicado):</label>
                   <select id="wa-canal-empresa-id" class="w-full px-2.5 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white">
                     ${todasEmpresas.map((e) => `<option value="${e.id}" ${e.id === empActiva.id ? 'selected' : ''}>${e.nombre} (${e.id})</option>`).join('')}
                   </select>
@@ -5312,7 +5383,7 @@ END $$;
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Nombre del Canal:</label>
-                  <input type="text" id="wa-canal-nombre" placeholder="Ej. Línea Dedicada Hacienda" class="w-full px-2.5 py-2 text-xs rounded-lg border border-slate-300">
+                  <input type="text" id="wa-canal-nombre" placeholder="Ej. Línea Corporativa Ganadero AD" class="w-full px-2.5 py-2 text-xs rounded-lg border border-slate-300">
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Plantilla Aprobada:</label>
@@ -5322,13 +5393,13 @@ END $$;
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Idioma Plantilla Meta (ej. es, es_CO):</label>
                   <input type="text" id="wa-canal-template-lang" value="es" placeholder="es" class="w-full px-2.5 py-2 text-xs font-mono font-bold rounded-lg border border-slate-300">
                 </div>
-                <div>
+                <div class="sm:col-span-2 lg:col-span-4">
                   <label class="block text-[10px] font-bold text-slate-700 mb-1">Token Override (Opcional):</label>
                   <input type="password" id="wa-canal-token-override" placeholder="Vacío = usa WHATSAPP_SYSTEM_TOKEN" class="w-full px-2.5 py-2 text-xs font-mono rounded-lg border border-slate-300">
                 </div>
               </div>
               <button type="submit" class="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-xl shadow cursor-pointer transition">
-                💾 Guardar Canal Dedicado en Supabase
+                💾 Guardar Canal en Neon Postgres
               </button>
             </form>
           </div>
@@ -5340,24 +5411,29 @@ END $$;
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- COLUMNA IZQUIERDA: CONTACTOS AUTORIZADOS Y MATRIZ DE PERMISOS -->
           <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-            <div class="p-4 bg-white rounded-xl border border-emerald-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div class="p-4 bg-white rounded-xl border ${canalEmpresaActiva ? 'border-emerald-300' : 'border-amber-300'} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <span class="text-[10px] font-black uppercase text-emerald-800 block">
+                <span class="text-[10px] font-black uppercase ${canalEmpresaActiva ? 'text-emerald-800' : 'text-amber-800'} block">
                   📱 Línea de WhatsApp Asignada a ${empActiva.nombre}:
                 </span>
+                ${canalEmpresaActiva ? `
                 <div class="text-base font-black font-mono text-slate-800 mt-0.5">
-                  ${canalEmpresaActiva.display_phone_number || '+57 322 5694112'}
+                  ${canalEmpresaActiva.display_phone_number || canalEmpresaActiva.phone_number_id}
                   <span class="ml-1.5 px-2 py-0.5 rounded text-[10px] uppercase ${canalEmpresaActiva.tipo === 'dedicado' ? 'bg-purple-100 text-purple-900' : 'bg-emerald-100 text-emerald-900'}">
                     Canal ${canalEmpresaActiva.tipo}
                   </span>
-                </div>
+                </div>` : `
+                <div class="text-sm font-black text-amber-900 mt-0.5">
+                  Sin número vinculado (desconectado)
+                </div>`}
                 <span class="text-[11px] text-slate-600 block mt-0.5">
                   Comandos: <code>INFO &lt;ID&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt;</code> • <code>PESO &lt;ID&gt; &lt;KG&gt; &lt;FINCA&gt;</code> • <code>AYUDA</code>
                 </span>
               </div>
+              ${linkAbrirChat ? `
               <a href="${linkAbrirChat}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow whitespace-nowrap">
                 💬 Abrir chat
-              </a>
+              </a>` : ''}
             </div>
 
             <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">

@@ -1079,6 +1079,22 @@ export function crearRepositorioWhatsAppSupabase({
                 return { ok: true, channel: sanitizarCanalParaFrontend(r.data.channel || r.data.canal || datos) };
             },
 
+            async cambiarEstadoCanalPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'cambiar_estado_canal', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} actualizando estado del canal en Neon.` };
+                }
+                return { ok: true };
+            },
+
+            async eliminarCanalPanel(datos = {}) {
+                const r = await llamarPanelNeon('POST', { action: 'eliminar_canal', datos });
+                if (!r.ok || !r.data?.ok) {
+                    return { ok: false, error: r.data?.error || `Error HTTP ${r.status} eliminando canal en Neon.` };
+                }
+                return { ok: true };
+            },
+
             async guardarContactoConAccesosPanel(datos = {}) {
                 const r = await llamarPanelNeon('POST', { action: 'guardar_contacto', datos });
                 if (!r.ok || !r.data?.ok) {
@@ -2326,6 +2342,27 @@ export function crearRepositorioWhatsAppMemoria({
                     if (idx >= 0) db.channels[idx] = reg;
                     else db.channels.push(reg);
                     return { ok: true, channel: sanitizarCanalParaFrontend(reg) };
+                },
+
+                async cambiarEstadoCanalPanel({ channelId = null, phoneNumberId = null, activo = false } = {}) {
+                    if (!esSuperAdmin) return { ok: false, error: 'Solo Super Admin.' };
+                    db.channels.forEach((c) => {
+                        if ((channelId && c.id === channelId) || (phoneNumberId && String(c.phone_number_id) === String(phoneNumberId))) {
+                            c.activo = Boolean(activo);
+                        }
+                    });
+                    return { ok: true };
+                },
+
+                async eliminarCanalPanel({ channelId = null, phoneNumberId = null } = {}) {
+                    if (!esSuperAdmin) return { ok: false, error: 'Solo Super Admin.' };
+                    db.channels = db.channels.filter(
+                        (c) => !(
+                            (channelId && c.id === channelId) ||
+                            (phoneNumberId && String(c.phone_number_id) === String(phoneNumberId))
+                        )
+                    );
+                    return { ok: true };
                 },
 
                 async guardarContactoConAccesosPanel({ contactId = null, telefono, nombre, activo = true, accesos = [], modoSuperAdmin = false }) {
