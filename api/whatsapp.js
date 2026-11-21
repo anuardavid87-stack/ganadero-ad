@@ -15,6 +15,10 @@ import {
     verificarWebhookWhatsApp,
     procesarWebhookPostWhatsApp
 } from '../frontend/src/core/whatsappCloudService.js';
+import {
+    getDatabaseUrl,
+    crearRepositorioWhatsAppNeon
+} from './_lib/neonDb.js';
 
 // Desactivar el bodyParser automático de Vercel para leer el body CRUDO (Buffer) sin parsear
 export const config = {
@@ -29,6 +33,7 @@ function obtenerVariablesServidor() {
         WHATSAPP_SYSTEM_TOKEN: pEnv.WHATSAPP_SYSTEM_TOKEN || '',
         WHATSAPP_APP_SECRET: pEnv.WHATSAPP_APP_SECRET || '',
         WHATSAPP_VERIFY_TOKEN: pEnv.WHATSAPP_VERIFY_TOKEN || '',
+        DATABASE_URL: getDatabaseUrl(),
         SUPABASE_URL: pEnv.SUPABASE_URL || 'https://jucpxyjzmbthplbvzrsj.supabase.co',
         SUPABASE_SERVICE_ROLE_KEY: pEnv.SUPABASE_SERVICE_ROLE_KEY || ''
     };
@@ -128,12 +133,14 @@ export default async function handler(req, res) {
         }
 
         try {
-            if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-                console.error('[POST /api/whatsapp] ERROR CRÍTICO: Falta SUPABASE_SERVICE_ROLE_KEY en variables de entorno del servidor.');
+            const usarNeon = Boolean(env.DATABASE_URL);
+            if (!usarNeon && !env.SUPABASE_SERVICE_ROLE_KEY) {
+                console.error('[POST /api/whatsapp] ERROR CRÍTICO: Falta DATABASE_URL (Neon) o SUPABASE_SERVICE_ROLE_KEY en variables de entorno del servidor.');
             }
 
             const resultado = await procesarWebhookPostWhatsApp(payload, {
                 env,
+                repo: usarNeon ? crearRepositorioWhatsAppNeon() : undefined,
                 rawBody: rawBuffer,
                 signatureHeader,
                 omitirValidacionFirma: true

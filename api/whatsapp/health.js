@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { verificarSaludSecretosWhatsApp } from '../../frontend/src/core/whatsappCloudService.js';
+import { getDatabaseUrl } from '../_lib/neonDb.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -26,6 +27,7 @@ export default async function handler(req, res) {
             WHATSAPP_SYSTEM_TOKEN: pEnv.WHATSAPP_SYSTEM_TOKEN || '',
             WHATSAPP_APP_SECRET: pEnv.WHATSAPP_APP_SECRET || '',
             WHATSAPP_VERIFY_TOKEN: pEnv.WHATSAPP_VERIFY_TOKEN || '',
+            DATABASE_URL: getDatabaseUrl(),
             SUPABASE_SERVICE_ROLE_KEY: pEnv.SUPABASE_SERVICE_ROLE_KEY || '',
             SUPABASE_URL: pEnv.SUPABASE_URL || ''
         },

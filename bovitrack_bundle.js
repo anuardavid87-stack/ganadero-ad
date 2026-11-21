@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-20T19:08:46.582Z
+ * Generado automáticamente: 2026-11-21T02:25:27.222Z
  */
 (function() {
   "use strict";
@@ -7693,6 +7693,7 @@ function verificarSaludSecretosWhatsApp(env = {}, { rol = '' } = {}) {
     const tieneSystemToken = Boolean(env.WHATSAPP_SYSTEM_TOKEN && String(env.WHATSAPP_SYSTEM_TOKEN).trim().length > 0);
     const tieneAppSecret = Boolean(env.WHATSAPP_APP_SECRET && String(env.WHATSAPP_APP_SECRET).trim().length > 0);
     const tieneVerifyToken = Boolean(env.WHATSAPP_VERIFY_TOKEN && String(env.WHATSAPP_VERIFY_TOKEN).trim().length > 0);
+    const tieneDatabaseUrl = Boolean((env.DATABASE_URL || env.POSTGRES_URL) && String(env.DATABASE_URL || env.POSTGRES_URL).trim().length > 0);
     const tieneServiceRole = Boolean(env.SUPABASE_SERVICE_ROLE_KEY && String(env.SUPABASE_SERVICE_ROLE_KEY).trim().length > 0);
     const tieneSupabaseUrl = Boolean((env.SUPABASE_URL && String(env.SUPABASE_URL).trim().length > 0) || SUPABASE_GANADERO_URL);
 
@@ -7700,6 +7701,8 @@ function verificarSaludSecretosWhatsApp(env = {}, { rol = '' } = {}) {
         status: 200,
         body: {
             ok: true,
+            dbProvider: tieneDatabaseUrl ? 'neon' : 'supabase',
+            DATABASE_URL: tieneDatabaseUrl,
             WHATSAPP_SYSTEM_TOKEN: tieneSystemToken,
             WHATSAPP_APP_SECRET: tieneAppSecret,
             WHATSAPP_VERIFY_TOKEN: tieneVerifyToken,
