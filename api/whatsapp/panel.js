@@ -43,6 +43,33 @@ export default async function handler(req, res) {
                 const r = await repo.eliminarCanalPanel(body.datos || {});
                 return res.status(r.ok ? 200 : 400).json(r);
             }
+            if (action === 'listar_numeros_meta') {
+                if (!esSuperAdmin) return res.status(403).json({ ok: false, error: 'Solo Super Admin puede consultar Meta Graph API.' });
+                const token = String(process.env.WHATSAPP_SYSTEM_TOKEN || '').trim();
+                if (!token) return res.status(500).json({ ok: false, error: 'WHATSAPP_SYSTEM_TOKEN no configurado en servidor.' });
+                const wabaId = String(body.datos?.waba_id || '118927644541032').trim();
+                if (!/^\d+$/.test(wabaId)) return res.status(400).json({ ok: false, error: 'waba_id inválido.' });
+                const respMeta = await fetch(
+                    `https://graph.facebook.com/v25.0/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,status,quality_rating,code_verification_status`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const metaJson = await respMeta.json();
+                if (!respMeta.ok) {
+                    return res.status(respMeta.status).json({
+                        ok: false,
+                        error: metaJson?.error?.message || `Meta Graph API HTTP ${respMeta.status}`
+                    });
+                }
+                const numeros = (Array.isArray(metaJson?.data) ? metaJson.data : []).map((n) => ({
+                    id: n.id,
+                    display_phone_number: n.display_phone_number || '',
+                    verified_name: n.verified_name || '',
+                    status: n.status || '',
+                    quality_rating: n.quality_rating || '',
+                    code_verification_status: n.code_verification_status || ''
+                }));
+                return res.status(200).json({ ok: true, waba_id: wabaId, numeros });
+            }
             if (action === 'guardar_contacto') {
                 const r = await repo.guardarContactoConAccesosPanel({
                     ...(body.datos || {}),
