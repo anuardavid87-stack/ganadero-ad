@@ -339,7 +339,7 @@ export class ModuloAdmin {
         </div>
 
         <!-- PESTAÑAS DE NAVEGACIÓN ADMINISTRATIVA -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 bg-slate-100 border-b border-slate-200 p-1.5 gap-1.5 text-xs font-black">
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'empresas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800'} cursor-pointer" data-sec="empresas">
             <span>🏢</span> Empresas & Fincas
           </button>
@@ -348,9 +348,6 @@ export class ModuloAdmin {
           </button>
           <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'finanzas' ? 'bg-white text-purple-950 shadow-md border border-slate-200 ring-2 ring-purple-400/30' : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800'} cursor-pointer" data-sec="finanzas">
             <span>💰</span> Precios & Costos
-          </button>
-          <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'whatsapp' ? 'bg-gradient-to-r from-emerald-800 to-green-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-400/40' : 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'} cursor-pointer" data-sec="whatsapp">
-            <span>💬</span> WhatsApp API
           </button>
           ${esSuperAdmin ? `
             <button class="btn-sub-admin py-3 px-2 rounded-2xl transition flex items-center justify-center gap-1.5 ${this.seccion === 'gemini' ? 'bg-gradient-to-r from-purple-950 to-indigo-950 text-purple-700 shadow-md border border-purple-500/50 ring-2 ring-purple-400/30' : 'text-purple-900 hover:bg-purple-100/70'} cursor-pointer" data-sec="gemini">

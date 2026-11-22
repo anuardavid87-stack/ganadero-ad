@@ -68,6 +68,23 @@ async function leerRawBodyBuffer(req) {
 }
 
 export default async function handler(req, res) {
+    // Kill-switch de seguridad: WhatsApp Cloud API desactivada por defecto para garantizar
+    // cero llamadas a Meta Graph API, cero respuestas automáticas y $0 cobros.
+    const apiHabilitada = String(process.env?.WHATSAPP_API_ENABLED || '').toLowerCase() === 'true';
+    if (!apiHabilitada) {
+        res.setHeader('Cache-Control', 'no-store');
+        if (req.method === 'POST') {
+            return res.status(200).json({
+                status: 'WHATSAPP_API_DISABLED',
+                processed: 0,
+                statusesProcessed: 0,
+                ignored: true
+            });
+        }
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return res.status(410).send('WhatsApp Cloud API desactivada en Ganadero AD.');
+    }
+
     const env = obtenerVariablesServidor();
 
     // ------------------------------------------------------------------------

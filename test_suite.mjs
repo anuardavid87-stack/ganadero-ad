@@ -8577,6 +8577,33 @@ console.log('\n--- 65. Operación Nativa sobre Neon Postgres Serverless ---');
     datosVacios.channels.length === 0,
     'Gestión Canales WhatsApp Neon: eliminarCanalPanel borra el canal en Neon y permite operar con 0 canales sin reinyectar número personal'
   );
+
+  // 65.5: Kill-switch de /api/whatsapp desactivado por defecto (0 llamadas a Meta / $0 cobros)
+  const { default: waWebhookHandler } = await import('./api/whatsapp.js');
+  let statusPostWa = null;
+  let bodyPostWa = null;
+  const mockResPost = {
+    setHeader() {},
+    status(c) { statusPostWa = c; return this; },
+    json(b) { bodyPostWa = b; return this; },
+    send(b) { bodyPostWa = b; return this; }
+  };
+  await waWebhookHandler({ method: 'POST', headers: {}, body: {} }, mockResPost);
+  let statusGetWa = null;
+  const mockResGet = {
+    setHeader() {},
+    status(c) { statusGetWa = c; return this; },
+    json() { return this; },
+    send() { return this; }
+  };
+  await waWebhookHandler({ method: 'GET', query: {} }, mockResGet);
+  test(
+    statusPostWa === 200 &&
+    bodyPostWa?.status === 'WHATSAPP_API_DISABLED' &&
+    bodyPostWa?.processed === 0 &&
+    statusGetWa === 410,
+    'WhatsApp Cloud API Kill-Switch: /api/whatsapp permanece desactivado por defecto (POST ignorado sin envíos y GET 410)'
+  );
 }
 
 console.log(`\n=====================================================================`);

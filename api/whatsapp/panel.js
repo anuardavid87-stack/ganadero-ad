@@ -28,7 +28,9 @@ export default async function handler(req, res) {
             const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
             const action = String(body.action || '').trim();
 
+            const apiHabilitada = String(process.env?.WHATSAPP_API_ENABLED || '').toLowerCase() === 'true';
             if (action === 'guardar_canal') {
+                if (!apiHabilitada) return res.status(410).json({ ok: false, error: 'WhatsApp Cloud API está desactivada en Ganadero AD.' });
                 if (!esSuperAdmin) return res.status(403).json({ ok: false, error: 'Solo Super Admin puede gestionar canales.' });
                 const r = await repo.guardarCanalPanel(body.datos || {});
                 return res.status(r.ok ? 200 : 400).json(r);
@@ -44,6 +46,7 @@ export default async function handler(req, res) {
                 return res.status(r.ok ? 200 : 400).json(r);
             }
             if (action === 'listar_numeros_meta') {
+                if (!apiHabilitada) return res.status(410).json({ ok: false, error: 'WhatsApp Cloud API está desactivada en Ganadero AD.' });
                 if (!esSuperAdmin) return res.status(403).json({ ok: false, error: 'Solo Super Admin puede consultar Meta Graph API.' });
                 const token = String(process.env.WHATSAPP_SYSTEM_TOKEN || '').trim();
                 if (!token) return res.status(500).json({ ok: false, error: 'WHATSAPP_SYSTEM_TOKEN no configurado en servidor.' });
