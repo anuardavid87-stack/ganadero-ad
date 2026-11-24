@@ -283,6 +283,10 @@ class BoviTrackApp {
     const nombresDemo = ['Ing. Mateo Restrepo (Admin)', 'Javier Morales (Encargado)', 'Dra. Elena Gómez (Consultor)', 'Ing. Mateo Restrepo (Administrador)'];
     if (!Array.isArray(state._usuariosEliminados)) {
       state._usuariosEliminados = [];
+    } else {
+      state._usuariosEliminados = state._usuariosEliminados.filter(
+        (x) => x !== 'anuardavid' && x !== 'anuararana' && x !== 'USR-SUPER' && x !== 'USR-1795533901176'
+      );
     }
     const eliminadosUsr = new Set(state._usuariosEliminados);
 

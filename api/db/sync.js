@@ -506,6 +506,15 @@ async function handlePost(req, res, sql) {
         const union = (a, b) => Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].filter(Boolean)));
         const elimEmp = union(prevDet.empresasEliminadas, nuevoDet.empresasEliminadas);
         const elimEmpSet = new Set(elimEmp);
+        const activosSet = new Set(['anuardavid', 'anuararana']);
+        if (Array.isArray(body.usuarios)) {
+            body.usuarios.forEach((u) => {
+                if (u && u.activo !== false) {
+                    if (u.usuario) activosSet.add(u.usuario);
+                    if (u.id) activosSet.add(u.id);
+                }
+            });
+        }
         const detFinal = {
             ...prevDet,
             ...nuevoDet,
@@ -513,7 +522,7 @@ async function handlePost(req, res, sql) {
             empresas: Array.from(empMerge.values()).filter((e) => !elimEmpSet.has(e.id)),
             empresasEliminadas: elimEmp,
             fincasEliminadas: union(prevDet.fincasEliminadas, nuevoDet.fincasEliminadas),
-            usuariosEliminados: union(prevDet.usuariosEliminados, nuevoDet.usuariosEliminados),
+            usuariosEliminados: union(prevDet.usuariosEliminados, nuevoDet.usuariosEliminados).filter((x) => !activosSet.has(x)),
             fincasPurgadas: { ...(prevDet.fincasPurgadas || {}), ...(nuevoDet.fincasPurgadas || {}) },
             fincasEmpresaMap: { ...(prevDet.fincasEmpresaMap || {}), ...(nuevoDet.fincasEmpresaMap || {}) },
             fincasOrdenosMap: { ...(prevDet.fincasOrdenosMap || {}), ...(nuevoDet.fincasOrdenosMap || {}) },
@@ -551,6 +560,7 @@ async function handlePost(req, res, sql) {
             updateColumns: ['empresa_id', 'empresas_asignadas', 'nombre', 'rol', 'password', 'fincas_asignadas', 'email', 'telefono', 'activo'],
             rows: body.usuarios.map((u) => ({
                 ...u,
+                activo: u.activo !== false,
                 empresas_asignadas: Array.isArray(u.empresas_asignadas)
                     ? u.empresas_asignadas
                     : (Array.isArray(u.empresasAsignadas) ? u.empresasAsignadas : (u.empresa_id ? [u.empresa_id] : []))

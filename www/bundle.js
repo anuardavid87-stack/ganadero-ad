@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-24T22:59:30.302Z
+ * Generado automáticamente: 2026-11-24T23:07:54.572Z
  */
 (function() {
   "use strict";
@@ -33555,6 +33555,10 @@ class BoviTrackApp {
     const nombresDemo = ['Ing. Mateo Restrepo (Admin)', 'Javier Morales (Encargado)', 'Dra. Elena Gómez (Consultor)', 'Ing. Mateo Restrepo (Administrador)'];
     if (!Array.isArray(state._usuariosEliminados)) {
       state._usuariosEliminados = [];
+    } else {
+      state._usuariosEliminados = state._usuariosEliminados.filter(
+        (x) => x !== 'anuardavid' && x !== 'anuararana' && x !== 'USR-SUPER' && x !== 'USR-1795533901176'
+      );
     }
     const eliminadosUsr = new Set(state._usuariosEliminados);
 
