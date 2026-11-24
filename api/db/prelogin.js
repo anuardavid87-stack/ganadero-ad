@@ -42,18 +42,25 @@ export default async function handler(req, res) {
             };
         });
 
-        const usuarios = (usuariosRows || []).map((r) => ({
-            id: r.id,
-            empresaId: r.empresa_id || null,
-            usuario: r.usuario,
-            nombre: r.nombre,
-            rol: r.rol,
-            password: r.password || '',
-            fincasAsignadas: r.fincas_asignadas !== undefined && r.fincas_asignadas !== null ? r.fincas_asignadas : 'todas',
-            email: r.email || '',
-            telefono: r.telefono || '',
-            activo: r.activo !== false
-        }));
+        const usuarios = (usuariosRows || []).map((r) => {
+            const empAsigRaw = Array.isArray(r.empresas_asignadas) ? r.empresas_asignadas.filter(Boolean) : [];
+            const empId = r.empresa_id || empAsigRaw[0] || null;
+            const empresasAsignadas = empAsigRaw.length > 0 ? empAsigRaw : (empId ? [empId] : []);
+            return {
+                id: r.id,
+                empresaId: empId,
+                empresasAsignadas,
+                usuario: r.usuario,
+                nombre: r.nombre,
+                rol: r.rol,
+                _superadminAutorizado: r.rol === 'superadmin',
+                password: r.password || '',
+                fincasAsignadas: r.fincas_asignadas !== undefined && r.fincas_asignadas !== null ? r.fincas_asignadas : 'todas',
+                email: r.email || '',
+                telefono: r.telefono || '',
+                activo: r.activo !== false
+            };
+        });
 
         const det = dirRows?.[0]?.detalles && typeof dirRows[0].detalles === 'object' ? dirRows[0].detalles : null;
         if (det) {
@@ -70,6 +77,17 @@ export default async function handler(req, res) {
                 usuarios.forEach((u) => {
                     if (!u.empresaId && u.rol !== 'superadmin' && det.usuariosEmpresaMap[u.usuario]) {
                         u.empresaId = det.usuariosEmpresaMap[u.usuario];
+                    }
+                });
+            }
+            if (det.usuariosEmpresasAsignadasMap && typeof det.usuariosEmpresasAsignadasMap === 'object') {
+                usuarios.forEach((u) => {
+                    const arr = det.usuariosEmpresasAsignadasMap[u.usuario];
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        u.empresasAsignadas = Array.from(new Set([...arr, ...(u.empresaId ? [u.empresaId] : [])].filter(Boolean)));
+                        if (!u.empresaId) u.empresaId = u.empresasAsignadas[0];
+                    } else if ((!u.empresasAsignadas || u.empresasAsignadas.length === 0) && u.empresaId) {
+                        u.empresasAsignadas = [u.empresaId];
                     }
                 });
             }

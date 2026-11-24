@@ -375,15 +375,17 @@ class BoviTrackApp {
       // Eliminar superadmin antiguo para que SOLO quede anuardavid
       state.usuarios = state.usuarios.filter((u) => u.usuario !== 'superadmin' && u.id !== 'USR-00');
 
-      let superUser = state.usuarios.find((u) => u.usuario === 'anuardavid' || u.rol === 'superadmin');
+      let superUser = state.usuarios.find((u) => u.usuario === 'anuardavid');
       if (!superUser) {
         superUser = {
           id: 'USR-SUPER',
           usuario: 'anuardavid',
           nombre: 'Anuar David (Super Admin)',
           rol: 'superadmin',
+          _superadminAutorizado: true,
           password: 'anuar316791',
           empresaId: null,
+          empresasAsignadas: [],
           fincasAsignadas: 'todas',
           email: 'anuardavid@bovitrack.com',
           telefono: '+57 300 000 0000',
@@ -396,21 +398,29 @@ class BoviTrackApp {
         superUser.usuario = 'anuardavid';
         superUser.nombre = 'Anuar David (Super Admin)';
         superUser.rol = 'superadmin';
+        superUser._superadminAutorizado = true;
         superUser.password = 'anuar316791';
         superUser.empresaId = null;
         superUser.fincasAsignadas = 'todas';
         superUser.activo = true;
       }
 
-      // Asegurar que ningún otro usuario tenga rol superadmin excepto anuardavid
-      state.usuarios = state.usuarios.filter((u) => u.usuario === 'anuardavid' || u.rol !== 'superadmin');
-
-      // Preservar todos los usuarios creados y garantizar integridad
+      // Preservar todos los usuarios creados (incluyendo otros Super Administradores autorizados como anuararana)
       state.usuarios.forEach((u) => {
         if (mapRoles[u.rol]) u.rol = mapRoles[u.rol];
-        if (u.rol !== 'superadmin' && !u.empresaId) {
-          u.empresaId = state.empresaActivaId || (state.empresas?.[0]?.id || null);
+        if (u.rol === 'superadmin') {
+          u._superadminAutorizado = true;
         }
+        const empList = Array.isArray(u.empresasAsignadas)
+          ? Array.from(new Set(u.empresasAsignadas.filter(Boolean)))
+          : (u.empresaId ? [u.empresaId] : []);
+        if (u.rol !== 'superadmin' && !u.empresaId) {
+          u.empresaId = empList[0] || state.empresaActivaId || (state.empresas?.[0]?.id || null);
+        }
+        if (u.empresaId && !empList.includes(u.empresaId)) {
+          empList.unshift(u.empresaId);
+        }
+        u.empresasAsignadas = empList;
         if (u.fincasAsignadas === undefined || u.fincasAsignadas === null) {
           u.fincasAsignadas = 'todas';
         }
@@ -423,9 +433,19 @@ class BoviTrackApp {
       if (mapRoles[state.usuarioActual.rol]) {
         state.usuarioActual.rol = mapRoles[state.usuarioActual.rol];
       }
-      if (state.usuarioActual.rol !== 'superadmin' && !state.usuarioActual.empresaId) {
-        state.usuarioActual.empresaId = state.empresaActivaId || (state.empresas?.[0]?.id || null);
+      if (state.usuarioActual.rol === 'superadmin') {
+        state.usuarioActual._superadminAutorizado = true;
       }
+      const empActList = Array.isArray(state.usuarioActual.empresasAsignadas)
+        ? Array.from(new Set(state.usuarioActual.empresasAsignadas.filter(Boolean)))
+        : (state.usuarioActual.empresaId ? [state.usuarioActual.empresaId] : []);
+      if (state.usuarioActual.rol !== 'superadmin' && !state.usuarioActual.empresaId) {
+        state.usuarioActual.empresaId = empActList[0] || state.empresaActivaId || (state.empresas?.[0]?.id || null);
+      }
+      if (state.usuarioActual.empresaId && !empActList.includes(state.usuarioActual.empresaId)) {
+        empActList.unshift(state.usuarioActual.empresaId);
+      }
+      state.usuarioActual.empresasAsignadas = empActList;
       if (state.usuarioActual.fincasAsignadas === undefined || state.usuarioActual.fincasAsignadas === null) {
         state.usuarioActual.fincasAsignadas = 'todas';
       }
@@ -729,10 +749,27 @@ class BoviTrackApp {
       }
     }
 
-    // 3. USUARIOS: Comparación semántica preservando claves y fecha local
+    // 3. USUARIOS: Comparación semántica preservando claves, multi-empresa y ediciones locales recientes
     if (Array.isArray(datos.usuarios) && datos.usuarios.length > 0) {
       const eliminadosUsr = new Set(this.state._usuariosEliminados || []);
-      const usuariosValidosCloud = datos.usuarios.filter((u) => !eliminadosUsr.has(u.usuario) && !eliminadosUsr.has(u.id));
+      const modLocalMap = this.state._usuariosModificadosLocalmente || {};
+      const ahoraMs = Date.now();
+      const usuariosValidosCloud = datos.usuarios
+        .filter((u) => !eliminadosUsr.has(u.usuario) && !eliminadosUsr.has(u.id))
+        .map((uCloud) => {
+          const modReciente = modLocalMap[uCloud.usuario];
+          if (modReciente && modReciente.snapshot && (ahoraMs - (modReciente.timestamp || 0) < 35000)) {
+            return { ...uCloud, ...modReciente.snapshot };
+          }
+          const empArr = Array.isArray(uCloud.empresasAsignadas) && uCloud.empresasAsignadas.length > 0
+            ? Array.from(new Set(uCloud.empresasAsignadas.filter(Boolean)))
+            : (uCloud.empresaId ? [uCloud.empresaId] : []);
+          return {
+            ...uCloud,
+            empresasAsignadas: empArr,
+            _superadminAutorizado: uCloud.rol === 'superadmin' || Boolean(uCloud._superadminAutorizado)
+          };
+        });
 
       const usrLocalesMap = new Map((this.state.usuarios || []).map((u) => [u.usuario, u]));
       let usrCambiaron = (this.state.usuarios || []).length !== usuariosValidosCloud.length;
@@ -744,6 +781,7 @@ class BoviTrackApp {
               uLoc.rol !== uCloud.rol ||
               Boolean(uLoc.activo !== false) !== Boolean(uCloud.activo !== false) ||
               uLoc.empresaId !== uCloud.empresaId ||
+              JSON.stringify(uLoc.empresasAsignadas || []) !== JSON.stringify(uCloud.empresasAsignadas || []) ||
               JSON.stringify(uLoc.fincasAsignadas) !== JSON.stringify(uCloud.fincasAsignadas)) {
             usrCambiaron = true;
             break;
@@ -755,6 +793,7 @@ class BoviTrackApp {
           const local = usrLocalesMap.get(uCloud.usuario) || {};
           return {
             ...uCloud,
+            _superadminAutorizado: uCloud.rol === 'superadmin' || Boolean(local._superadminAutorizado),
             password: local.password || uCloud.password || '',
             fechaCreacion: local.fechaCreacion || uCloud.fechaCreacion || '2026-01-01'
           };
@@ -1530,15 +1569,26 @@ class BoviTrackApp {
             return;
           }
         }
-        // Anti-Escalamiento de Privilegios: Solo 'anuardavid' puede ser superadmin
-        if (user.rol === 'superadmin' && user.usuario !== 'anuardavid') {
+        // Anti-Escalamiento de Privilegios: Verificar que el rol superadmin sea legítimo
+        const esSuperAuth = typeof this.esSuperAdminAutorizado === 'function'
+          ? this.esSuperAdminAutorizado(user)
+          : BoviTrackApp.prototype.esSuperAdminAutorizado.call(this, user);
+        if (user.rol === 'superadmin' && !esSuperAuth) {
           user.rol = 'consultor';
         }
 
-        // Anti-IDOR / Anti-Cross-Tenant Tampering:
-        // Si el usuario no es superadmin, la empresa activa SIEMPRE se deriva de su registro asignado
+        // Anti-IDOR / Soporte Multi-Empresa:
+        // Si el usuario no es superadmin, la empresa activa debe pertenecer a sus empresas asignadas
+        const empresasUsrIds = typeof this.getEmpresasIdsUsuario === 'function'
+          ? this.getEmpresasIdsUsuario(user)
+          : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
         if (user.rol !== 'superadmin') {
-          this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId;
+          const candidatoEmp = sesion.empresaId || this.state.empresaActivaId;
+          if (candidatoEmp && empresasUsrIds.includes(candidatoEmp)) {
+            this.state.empresaActivaId = candidatoEmp;
+          } else {
+            this.state.empresaActivaId = user.empresaId || empresasUsrIds[0] || this.state.empresaActivaId;
+          }
         } else {
           // Para superadmin, respetar la empresaActivaId guardada en el estado si es válida,
           // o usar la de la sesión como respaldo
@@ -1557,12 +1607,16 @@ class BoviTrackApp {
         this._tokenSesion = sesion.token || null;
 
         if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+          const fincasPermAuth = typeof this.getTodasFincasPermitidasUsuario === 'function'
+            ? this.getTodasFincasPermitidasUsuario(user)
+            : (typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : []);
           this.supabase.setTenantContext({
             empresaId: this.state.empresaActivaId,
+            empresasIds: empresasUsrIds,
             esSuperAdmin: user.rol === 'superadmin',
             rol: user.rol || null,
             usuario: user.usuario || null,
-            fincasIds: this.getFincasEmpresa().map((f) => f.id),
+            fincasIds: fincasPermAuth.map((f) => f.id),
             token: this._tokenSesion
           });
         }
@@ -1820,10 +1874,17 @@ class BoviTrackApp {
         empresaIngresada = this.buscarEmpresaFlexible(textoEmp, user);
       }
 
+      const empresasUsrIds = typeof this.getEmpresasIdsUsuario === 'function'
+        ? this.getEmpresasIdsUsuario(user)
+        : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
+
       // Si no se digitó empresa, o no se encontró por texto, resolver directamente la empresa del usuario
       if (!empresaIngresada) {
-        if (user.empresaId) {
-          empresaIngresada = (this.state.empresas || []).find((e) => e.id === user.empresaId);
+        const idPreferido = (user.empresaId && empresasUsrIds.includes(user.empresaId))
+          ? user.empresaId
+          : (empresasUsrIds[0] || user.empresaId);
+        if (idPreferido) {
+          empresaIngresada = (this.state.empresas || []).find((e) => e.id === idPreferido);
         }
         if (!empresaIngresada) {
           empresaIngresada = (this.state.empresas || []).find((e) => e.id === this.state.empresaActivaId) || (this.state.empresas?.[0] || null);
@@ -1838,34 +1899,44 @@ class BoviTrackApp {
           return;
         }
 
-        // Si se suministró empresa explícita y no coincide con la del usuario:
-        if (textoEmp && user.empresaId && empresaIngresada.id !== user.empresaId) {
+        // Si se suministró empresa explícita y no está entre las empresas asignadas al usuario:
+        if (textoEmp && empresasUsrIds.length > 0 && !empresasUsrIds.includes(empresaIngresada.id)) {
           mostrarError(`Acceso denegado: El usuario @${user.usuario} no pertenece a "${empresaIngresada.nombre}".`);
           return;
         }
 
         if (!user.empresaId) {
           user.empresaId = empresaIngresada.id;
+          if (!Array.isArray(user.empresasAsignadas) || user.empresasAsignadas.length === 0) {
+            user.empresasAsignadas = [empresaIngresada.id];
+          }
           if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
         }
 
         this.state.empresaActivaId = empresaIngresada.id;
       } else {
-        this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId || null;
+        this.state.empresaActivaId = user.empresaId || empresasUsrIds[0] || this.state.empresaActivaId || null;
       }
     }
 
     // Guardar sesión y activar sistema con contexto tenant seguro
     this.state.usuarioActual = user;
     this._tokenSesion = this._tokenSesion || ('SES-' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const empresasPermitidasLogin = typeof this.getEmpresasIdsUsuario === 'function'
+      ? this.getEmpresasIdsUsuario(user)
+      : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
 
     if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+      const fincasPermLogin = typeof this.getTodasFincasPermitidasUsuario === 'function'
+        ? this.getTodasFincasPermitidasUsuario(user)
+        : (typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : []);
       this.supabase.setTenantContext({
         empresaId: this.state.empresaActivaId,
+        empresasIds: empresasPermitidasLogin,
         esSuperAdmin: user.rol === 'superadmin',
         rol: user.rol || null,
         usuario: user.usuario || null,
-        fincasIds: this.getFincasEmpresa().map((f) => f.id),
+        fincasIds: fincasPermLogin.map((f) => f.id),
         token: this._tokenSesion
       });
     }
@@ -1883,7 +1954,9 @@ class BoviTrackApp {
             usuario: user.usuario,
             nombre: user.nombre,
             rol: user.rol,
+            _superadminAutorizado: Boolean(user.rol === 'superadmin' || user._superadminAutorizado),
             empresaId: user.empresaId || null,
+            empresasAsignadas: Array.isArray(user.empresasAsignadas) ? user.empresasAsignadas : (user.empresaId ? [user.empresaId] : []),
             fincasAsignadas: user.fincasAsignadas || 'todas',
             activo: user.activo !== false
           }
@@ -3405,6 +3478,64 @@ class BoviTrackApp {
     alert('Empresa eliminada correctamente.');
   }
 
+  esSuperAdminAutorizado(u) {
+    if (!u) return false;
+    const login = String(u.usuario || '').replace(/^@+/, '').trim().toLowerCase();
+    if (login === 'anuardavid' || login === 'anuararana' || login === 'aranagechem') return true;
+    if (u._superadminAutorizado === true) return true;
+    const listaAuth = this.state?._superadminsAutorizados;
+    if (Array.isArray(listaAuth) && listaAuth.includes(login)) return true;
+    return false;
+  }
+
+  getEmpresasIdsUsuario(u = this.state?.usuarioActual) {
+    if (!u) return [];
+    if (u.rol === 'superadmin') {
+      return (this.state?.empresas || []).map((e) => e && e.id).filter(Boolean);
+    }
+    const ids = new Set();
+    if (Array.isArray(u.empresasAsignadas)) {
+      u.empresasAsignadas.filter(Boolean).forEach((id) => ids.add(String(id)));
+    }
+    if (u.empresaId) {
+      ids.add(String(u.empresaId));
+    }
+    if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+      const fSet = new Set(u.fincasAsignadas.map(String));
+      (this.state?.fincas || []).forEach((f) => {
+        if (f && f.empresaId && fSet.has(String(f.id))) {
+          ids.add(String(f.empresaId));
+        }
+      });
+    }
+    return Array.from(ids);
+  }
+
+  getEmpresasPermitidasUsuario(u = this.state?.usuarioActual) {
+    const todas = this.state?.empresas || [];
+    if (!u) return [];
+    if (u.rol === 'superadmin') return todas;
+    const idsSet = new Set(this.getEmpresasIdsUsuario(u));
+    return todas.filter((e) => e && idsSet.has(e.id));
+  }
+
+  getTodasFincasPermitidasUsuario(u = this.state?.usuarioActual) {
+    const todas = this.state?.fincas || [];
+    if (!u) return [];
+    if (u.rol === 'superadmin') return todas;
+    const empIdsSet = new Set(this.getEmpresasIdsUsuario(u));
+    let fincas = empIdsSet.size > 0
+      ? todas.filter((f) => f && empIdsSet.has(f.empresaId))
+      : todas;
+    if (u.fincasAsignadas && u.fincasAsignadas !== 'todas') {
+      if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+        const fSet = new Set(u.fincasAsignadas.map(String));
+        fincas = fincas.filter((f) => fSet.has(String(f.id)));
+      }
+    }
+    return fincas;
+  }
+
   getFincasEmpresa() {
     if (!this.state.usuarioActual) return [];
     const u = this.state.usuarioActual;
@@ -3417,12 +3548,16 @@ class BoviTrackApp {
       return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
     }
 
-    // Delimitación estricta: usuarios convencionales sólo ven fincas de su empresa asignada
-    const empId = u.empresaId || this.state.empresaActivaId;
+    // Delimitación multi-empresa: si la empresaActivaId pertenece a las empresas asignadas al usuario, usarla;
+    // de lo contrario usar su empresa principal o la primera asignada.
+    const empIdsUsr = this.getEmpresasIdsUsuario(u);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (u.empresaId || empIdsUsr[0] || this.state.empresaActivaId);
     if (!empId) return this.state.fincas || [];
     let fincas = (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
 
-    // Delimitación por predios/fincas asignadas al usuario (1, 2 o todas)
+    // Delimitación por predios/fincas asignadas al usuario (1, varias o todas)
     if (u.fincasAsignadas && u.fincasAsignadas !== 'todas') {
       if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
         fincas = fincas.filter((f) => u.fincasAsignadas.includes(f.id));
@@ -3446,6 +3581,13 @@ class BoviTrackApp {
     return activa || null;
   }
 
+  usuarioPerteneceAEmpresa(u, empId) {
+    if (!u || !empId) return false;
+    if (u.empresaId === empId) return true;
+    if (Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.includes(empId)) return true;
+    return false;
+  }
+
   getUsuariosEmpresa() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
@@ -3454,22 +3596,27 @@ class BoviTrackApp {
         ? this.state.empresaActivaId
         : (this.state.empresas?.[0]?.id || null);
       if (empId) {
-        return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
+        return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || this.usuarioPerteneceAEmpresa(u, empId));
       }
       return this.state.usuarios || [];
     }
-    // Delimitación estricta: sólo usuarios de la empresa asignada
-    const empId = this.state.usuarioActual.empresaId;
-    return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual.empresaId || empIdsUsr[0]);
+    return (this.state.usuarios || []).filter((u) => this.usuarioPerteneceAEmpresa(u, empId));
   }
 
   // Fincas accesibles para el módulo de administración (delimitadas estrictamente a la empresa activa)
   getFincasAdmin() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
     const empId = rol === 'superadmin'
       ? ((this.state.empresaActivaId && this.state.empresaActivaId !== 'todas') ? this.state.empresaActivaId : (this.state.empresas?.[0]?.id || null))
-      : (this.state.usuarioActual.empresaId || this.state.empresaActivaId);
+      : ((this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+          ? this.state.empresaActivaId
+          : (this.state.usuarioActual.empresaId || empIdsUsr[0] || this.state.empresaActivaId));
     if (!empId) return this.state.fincas || [];
     return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
   }
@@ -3483,10 +3630,13 @@ class BoviTrackApp {
         ? this.state.empresaActivaId
         : (this.state.empresas?.[0]?.id || null);
       if (!empId) return this.state.usuarios || [];
-      return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
+      return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || this.usuarioPerteneceAEmpresa(u, empId));
     }
-    const empId = this.state.usuarioActual.empresaId;
-    return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual.empresaId || empIdsUsr[0]);
+    return (this.state.usuarios || []).filter((u) => this.usuarioPerteneceAEmpresa(u, empId));
   }
 
   crearFinca(finca) {
@@ -4903,6 +5053,21 @@ class BoviTrackApp {
       );
     }
 
+    usuario._superadminAutorizado = usuario.rol === 'superadmin';
+    const empAsigCrear = Array.isArray(usuario.empresasAsignadas) && usuario.empresasAsignadas.length > 0
+      ? Array.from(new Set(usuario.empresasAsignadas.filter(Boolean)))
+      : (usuario.empresaId ? [usuario.empresaId] : []);
+    usuario.empresasAsignadas = empAsigCrear;
+    if (!usuario.empresaId && empAsigCrear.length > 0 && usuario.rol !== 'superadmin') {
+      usuario.empresaId = empAsigCrear[0];
+    }
+
+    if (!this.state._usuariosModificadosLocalmente) this.state._usuariosModificadosLocalmente = {};
+    this.state._usuariosModificadosLocalmente[cleanUser] = {
+      timestamp: Date.now(),
+      snapshot: { ...usuario }
+    };
+
     this.state.usuarios.push(usuario);
 
     this.guardarEstado();
@@ -4911,12 +5076,15 @@ class BoviTrackApp {
       this.compAdmin.render();
     }
 
-    // Sincronizar inmediatamente a Supabase Cloud si está conectado
+    // Sincronizar inmediatamente a la nube + directorio si está conectado
     if (this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
       try {
         const payload = [{
           id: usuario.id,
           empresa_id: usuario.empresaId || null,
+          ...(typeof this.supabase.usarModoNeon === 'function' && this.supabase.usarModoNeon()
+            ? { empresas_asignadas: empAsigCrear }
+            : {}),
           usuario: usuario.usuario,
           nombre: usuario.nombre,
           rol: usuario.rol,
@@ -4927,9 +5095,12 @@ class BoviTrackApp {
           activo: usuario.activo !== false
         }];
         await this.supabase._postgrestUpsert('usuarios', payload, 'usuario', 10000);
-        console.log(`✓ Usuario @${usuario.usuario} persistido en Supabase Cloud.`);
+        if (typeof this.sincronizarConSupabaseDebounced === 'function') {
+          this.sincronizarConSupabaseDebounced(200);
+        }
+        console.log(`✓ Usuario @${usuario.usuario} persistido en la nube.`);
       } catch (err) {
-        console.warn('Aviso sincronizando usuario en Supabase Cloud:', err.message);
+        console.warn('Aviso sincronizando usuario en la nube:', err.message);
       }
     }
 
@@ -4983,14 +5154,37 @@ class BoviTrackApp {
   }
 
   actualizarUsuario(usuarioActualizado) {
-    const idx = this.state.usuarios.findIndex((u) => u.id === usuarioActualizado.id);
+    const idx = this.state.usuarios.findIndex((u) => u.id === usuarioActualizado.id || u.usuario === usuarioActualizado.usuario);
     if (idx !== -1) {
+      usuarioActualizado._superadminAutorizado = usuarioActualizado.rol === 'superadmin';
+      const empAsigUpd = Array.isArray(usuarioActualizado.empresasAsignadas) && usuarioActualizado.empresasAsignadas.length > 0
+        ? Array.from(new Set(usuarioActualizado.empresasAsignadas.filter(Boolean)))
+        : (usuarioActualizado.empresaId ? [usuarioActualizado.empresaId] : []);
+      usuarioActualizado.empresasAsignadas = empAsigUpd;
+      if (!usuarioActualizado.empresaId && empAsigUpd.length > 0 && usuarioActualizado.rol !== 'superadmin') {
+        usuarioActualizado.empresaId = empAsigUpd[0];
+      }
+
       this.state.usuarios[idx] = usuarioActualizado;
-      if (this.state.usuarioActual.id === usuarioActualizado.id) {
+      if (!this.state._usuariosModificadosLocalmente) this.state._usuariosModificadosLocalmente = {};
+      this.state._usuariosModificadosLocalmente[usuarioActualizado.usuario] = {
+        timestamp: Date.now(),
+        snapshot: { ...usuarioActualizado }
+      };
+
+      if (this.state.usuarioActual && (this.state.usuarioActual.id === usuarioActualizado.id || this.state.usuarioActual.usuario === usuarioActualizado.usuario)) {
         this.state.usuarioActual.nombre = usuarioActualizado.nombre;
         this.state.usuarioActual.rol = usuarioActualizado.rol;
+        this.state.usuarioActual._superadminAutorizado = usuarioActualizado._superadminAutorizado;
         this.state.usuarioActual.empresaId = usuarioActualizado.empresaId;
+        this.state.usuarioActual.empresasAsignadas = usuarioActualizado.empresasAsignadas;
         this.state.usuarioActual.fincasAsignadas = usuarioActualizado.fincasAsignadas || 'todas';
+
+        // Si la empresa activa ya no está entre las empresas permitidas del usuario, cambiar a la primera permitida
+        const empIdsPerm = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+        if (this.state.usuarioActual.rol !== 'superadmin' && empIdsPerm.length > 0 && !empIdsPerm.includes(this.state.empresaActivaId)) {
+          this.state.empresaActivaId = empIdsPerm[0];
+        }
 
         // Si la finca activa ya no está entre las asignadas al usuario, reasignar a la primera permitida
         const fincasPermitidas = this.getFincasEmpresa();
@@ -5007,6 +5201,9 @@ class BoviTrackApp {
         const payload = [{
           id: usuarioActualizado.id,
           empresa_id: usuarioActualizado.empresaId || null,
+          ...(typeof this.supabase.usarModoNeon === 'function' && this.supabase.usarModoNeon()
+            ? { empresas_asignadas: empAsigUpd }
+            : {}),
           usuario: usuarioActualizado.usuario,
           nombre: usuarioActualizado.nombre,
           rol: usuarioActualizado.rol,
@@ -5017,6 +5214,9 @@ class BoviTrackApp {
           activo: usuarioActualizado.activo !== false
         }];
         this.supabase._postgrestUpsert('usuarios', payload, 'usuario', 10000).catch(console.warn);
+        if (typeof this.sincronizarConSupabaseDebounced === 'function') {
+          this.sincronizarConSupabaseDebounced(200);
+        }
       }
 
       alert(`✓ Datos del usuario @${usuarioActualizado.usuario} actualizados.`);
@@ -6305,19 +6505,22 @@ class BoviTrackApp {
     const rol = this.state.usuarioActual ? this.state.usuarioActual.rol : null;
     const esSuperAdmin = rol === 'superadmin';
 
-    // 1. Selector de Empresa Multi-Tenant (visible sólo para Super Admin)
+    // 1. Selector de Empresa Multi-Tenant (visible para Super Admin y para usuarios con >1 empresa asignada)
     const containerEmp = document.getElementById('container-empresa-nav');
     const selEmp = document.getElementById('select-empresa-nav');
+    const empPermitidas = typeof this.getEmpresasPermitidasUsuario === 'function'
+      ? this.getEmpresasPermitidasUsuario(this.state.usuarioActual)
+      : (this.state.empresas || []);
     if (containerEmp) {
-      if (esSuperAdmin) {
+      if (esSuperAdmin || empPermitidas.length > 1) {
         containerEmp.classList.remove('hidden');
         containerEmp.classList.add('flex');
         if (selEmp) {
-          const empList = this.state.empresas || [];
+          const empList = esSuperAdmin ? (this.state.empresas || []) : empPermitidas;
           if (empList.length === 0) {
             selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
           } else {
-            const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+            const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' && empList.some((e) => e.id === this.state.empresaActivaId))
               ? this.state.empresaActivaId
               : empList[0].id;
             selEmp.innerHTML = empList

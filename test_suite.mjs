@@ -8606,6 +8606,134 @@ console.log('\n--- 65. Operación Nativa sobre Neon Postgres Serverless ---');
   );
 }
 
+// ============================================================================
+// 66. USUARIOS MULTI-EMPRESA, MULTI-FINCA Y PERSISTENCIA DE SUPER ADMINISTRADOR
+// ============================================================================
+console.log('\n--- 66. Usuarios Multi-Empresa, Multi-Finca y Persistencia de Super Administrador ---');
+{
+  // 66.1: Promover anuararana a superadmin NO se revierte ni en normalizarEstado ni en verificarAutenticacion
+  const appUsr66 = Object.create(BoviTrackApp.prototype);
+  appUsr66.sessionKey = 'bovitrack_auth_session_66';
+  appUsr66.state = {
+    empresaActivaId: 'EMP-01',
+    fincaActivaId: 'FIN-VES',
+    empresas: [
+      { id: 'EMP-01', nombre: 'INVERSIONES', activa: true },
+      { id: 'EMP-1793154262914', nombre: 'VACUNO INVERSIONES', activa: true }
+    ],
+    fincas: [
+      { id: 'FIN-VES', empresaId: 'EMP-01', nombre: 'Vesubio' },
+      { id: 'FIN-WAT', empresaId: 'EMP-01', nombre: 'WATERLOO' },
+      { id: 'FIN-GAL', empresaId: 'EMP-1793154262914', nombre: 'Gallinazo' },
+      { id: 'FIN-MAN', empresaId: 'EMP-1793154262914', nombre: 'Los Mangos Vacuno' }
+    ],
+    usuarios: [
+      {
+        id: 'USR-1795533901176',
+        usuario: 'anuararana',
+        nombre: 'Anuar Arana Gechem',
+        rol: 'superadmin',
+        empresaId: 'EMP-1793154262914',
+        empresasAsignadas: ['EMP-01', 'EMP-1793154262914'],
+        fincasAsignadas: 'todas',
+        activo: true
+      },
+      {
+        id: 'USR-SUPER',
+        usuario: 'anuardavid',
+        nombre: 'Anuar David (Super Admin)',
+        rol: 'superadmin',
+        empresaId: null,
+        fincasAsignadas: 'todas',
+        activo: true
+      }
+    ],
+    usuarioActual: null
+  };
+  appUsr66.migrarEstadoMultiTenant(appUsr66.state);
+  const anuarAranaPostNorm = appUsr66.state.usuarios.find((u) => u.usuario === 'anuararana');
+  const anuarDavidPostNorm = appUsr66.state.usuarios.find((u) => u.usuario === 'anuardavid');
+
+  globalThis.localStorage.setItem(appUsr66.sessionKey, JSON.stringify({
+    usuarioId: 'USR-1795533901176',
+    usuarioLogin: 'anuararana',
+    empresaId: 'EMP-01',
+    fecha: new Date().toISOString()
+  }));
+  appUsr66.esEmpresaVencida = () => false;
+  appUsr66.ocultarPantallaLogin = () => {};
+  appUsr66.iniciarPostLogin = () => {};
+  appUsr66.verificarAutenticacion();
+
+  test(
+    Boolean(anuarAranaPostNorm) &&
+    anuarAranaPostNorm.rol === 'superadmin' &&
+    Boolean(anuarDavidPostNorm) &&
+    appUsr66.state.usuarioActual?.usuario === 'anuararana' &&
+    appUsr66.state.usuarioActual?.rol === 'superadmin',
+    'Super Admin Persistente: anuararana conserva rol superadmin tras normalizarEstado y verificarAutenticacion sin ser degradado ni sobrescrito'
+  );
+
+  // 66.2: Usuario con múltiples empresas asignadas y selección específica de fincas por empresa
+  const usrMultiEmp = {
+    id: 'USR-MULTI-1',
+    usuario: 'encargado_multi',
+    nombre: 'Encargado Multi-Empresa',
+    rol: 'administrador',
+    empresaId: 'EMP-01',
+    empresasAsignadas: ['EMP-01', 'EMP-1793154262914'],
+    fincasAsignadas: ['FIN-VES', 'FIN-GAL', 'FIN-MAN'],
+    activo: true
+  };
+  appUsr66.state.usuarios.push(usrMultiEmp);
+  appUsr66.state.usuarioActual = usrMultiEmp;
+
+  appUsr66.state.empresaActivaId = 'EMP-01';
+  const fincasEnEmp1 = appUsr66.getFincasEmpresa().map((f) => f.id);
+
+  appUsr66.state.empresaActivaId = 'EMP-1793154262914';
+  const fincasEnEmp2 = appUsr66.getFincasEmpresa().map((f) => f.id);
+  const todasFincasMulti = appUsr66.getTodasFincasPermitidasUsuario(usrMultiEmp).map((f) => f.id);
+  const empresasPermMulti = appUsr66.getEmpresasPermitidasUsuario(usrMultiEmp).map((e) => e.id);
+
+  test(
+    empresasPermMulti.length === 2 &&
+    fincasEnEmp1.length === 1 && fincasEnEmp1[0] === 'FIN-VES' &&
+    fincasEnEmp2.length === 2 && fincasEnEmp2.includes('FIN-GAL') && fincasEnEmp2.includes('FIN-MAN') &&
+    todasFincasMulti.length === 3,
+    'Asignación Multi-Empresa & Multi-Finca: Delimita las fincas permitidas en cada empresa asignada y habilita el cambio entre empresas autorizadas'
+  );
+
+  // 66.3: UI de ModuloAdmin renderiza selector multi-empresa y agrupa fincas de todas las empresas seleccionadas
+  const adminMulti66 = new ModuloAdmin({
+    containerId: 'admin-multi-66',
+    getEmpresas: () => appUsr66.state.empresas,
+    getEmpresaActiva: () => appUsr66.state.empresas[0],
+    getFincas: () => appUsr66.state.fincas.filter((f) => f.empresaId === 'EMP-01'),
+    getTodasLasFincas: () => appUsr66.state.fincas,
+    getUsuarios: () => appUsr66.state.usuarios.filter((u) => u.empresaId === 'EMP-01'),
+    getTodosLosUsuarios: () => appUsr66.state.usuarios,
+    getUsuarioActual: () => anuarDavidPostNorm,
+    getRolActual: () => 'superadmin'
+  });
+  adminMulti66.container = new MockDomElement('admin-multi-66');
+  adminMulti66.seccion = 'usuarios';
+  adminMulti66.usuarioEditando = usrMultiEmp;
+  adminMulti66.render();
+  const htmlAdminMulti66 = adminMulti66.container.innerHTML;
+
+  test(
+    htmlAdminMulti66.includes('chk-empresa-usr-edit') &&
+    htmlAdminMulti66.includes('INVERSIONES') &&
+    htmlAdminMulti66.includes('VACUNO INVERSIONES') &&
+    htmlAdminMulti66.includes('Vesubio') &&
+    htmlAdminMulti66.includes('Gallinazo') &&
+    htmlAdminMulti66.includes('Los Mangos Vacuno') &&
+    htmlAdminMulti66.includes('@anuararana'),
+    'ModuloAdmin Multi-Empresa: Renderiza selector de múltiples empresas, muestra fincas agrupadas por cada empresa y lista todos los usuarios para Super Admin'
+  );
+}
+
 console.log(`\n=====================================================================`);
 console.log(`RESULTADO GANADERO AD: ${pass} Pruebas Pasadas | ${fail} Fallidas`);
 console.log(`=====================================================================\n`);

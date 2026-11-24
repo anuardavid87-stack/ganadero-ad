@@ -1,7 +1,7 @@
 /**
  * BOVITRACK PRO PWA - STANDALONE COMPATIBILITY BUNDLE
  * Compatible con file:// (doble clic directo en Windows) y http:// (PWA en campo)
- * Generado automáticamente: 2026-11-22T18:17:51.022Z
+ * Generado automáticamente: 2026-11-24T22:59:30.302Z
  */
 (function() {
   "use strict";
@@ -2413,18 +2413,26 @@ class SupabaseSyncService {
 
     guardarMapa('empresas', datosLocales.empresas, (e) => this.mapearEmpresaLocalACloud(e), (r) => r.id);
     guardarMapa('fincas', datosLocales.fincas, (f) => this.mapearFincaLocalACloud(f), (r) => r.id);
-    guardarMapa('usuarios', datosLocales.usuarios, (u) => ({
-      id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-      empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
-      usuario: u.usuario,
-      nombre: u.nombre,
-      rol: u.rol,
-      password: u.password || null,
-      fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
-      email: u.email || null,
-      telefono: u.telefono || null,
-      activo: u.activo !== false
-    }), (r) => r.usuario);
+    guardarMapa('usuarios', datosLocales.usuarios, (u) => {
+      const base = {
+        id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+        empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
+        usuario: u.usuario,
+        nombre: u.nombre,
+        rol: u.rol,
+        password: u.password || null,
+        fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+        email: u.email || null,
+        telefono: u.telefono || null,
+        activo: u.activo !== false
+      };
+      if (this.usarModoNeon()) {
+        base.empresas_asignadas = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+          ? u.empresasAsignadas
+          : (u.empresaId ? [u.empresaId] : []);
+      }
+      return base;
+    }, (r) => r.usuario);
     guardarMapa('animales', datosLocales.animales, (a) => this.mapearAnimalLocalACloud(a, fincaActivaFallback), (r) => `${r.finca_id}__${r.identificacion_tag}`);
     guardarMapa('servicios_reproductivos', datosLocales.servicios, (s) => this.mapearServicioLocalACloud(s, fincaActivaFallback), (r) => r.id);
     guardarMapa('inversiones_diferidas', datosLocales.inversiones, (i) => ({
@@ -2534,6 +2542,7 @@ class SupabaseSyncService {
     }
     this.tenantContext = {
       empresaId: context.empresaId || null,
+      empresasIds: Array.isArray(context.empresasIds) ? context.empresasIds.filter(Boolean) : (context.empresaId ? [context.empresaId] : []),
       esSuperAdmin: Boolean(context.esSuperAdmin),
       rol: context.rol || (context.esSuperAdmin ? 'superadmin' : null),
       usuario: context.usuario || null,
@@ -3071,13 +3080,20 @@ class SupabaseSyncService {
     const esSuperAdmin = appState.usuarioActual && appState.usuarioActual.rol === 'superadmin';
     const empresaIdActiva = appState.empresaActivaId || (appState.usuarioActual && appState.usuarioActual.empresaId);
     const fincaActiva = appState.fincaActivaId || (appState.fincas?.[0]?.id || null);
+    const empresasUsuarioIds = Array.from(new Set([
+      ...(Array.isArray(appState.usuarioActual?.empresasAsignadas) ? appState.usuarioActual.empresasAsignadas : []),
+      ...(appState.usuarioActual?.empresaId ? [appState.usuarioActual.empresaId] : []),
+      ...(empresaIdActiva ? [empresaIdActiva] : [])
+    ].filter(Boolean)));
+    const empresasUsuarioSet = new Set(empresasUsuarioIds);
 
-    if (empresaIdActiva || esSuperAdmin) {
+    if (empresaIdActiva || esSuperAdmin || empresasUsuarioIds.length > 0) {
       const fincasPermitidasIds = (appState.fincas || [])
-        .filter(f => esSuperAdmin || f.empresaId === empresaIdActiva)
+        .filter(f => esSuperAdmin || empresasUsuarioSet.has(f.empresaId))
         .map(f => f.id);
       this.setTenantContext({
         empresaId: empresaIdActiva,
+        empresasIds: empresasUsuarioIds,
         esSuperAdmin,
         rol: appState.usuarioActual?.rol || (esSuperAdmin ? 'superadmin' : null),
         usuario: appState.usuarioActual?.usuario || null,
@@ -3099,7 +3115,7 @@ class SupabaseSyncService {
 
       // 0. Empresas + Directorio blindado
       if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
-        const empresasFiltradas = esSuperAdmin ? appState.empresas : appState.empresas.filter(e => e.id === empresaIdActiva);
+        const empresasFiltradas = esSuperAdmin ? appState.empresas : appState.empresas.filter(e => empresasUsuarioSet.has(e.id));
         if (empresasFiltradas.length > 0) {
           const full = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
           const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('empresas', full, r => r.id, forzarCompleta);
@@ -3121,8 +3137,16 @@ class SupabaseSyncService {
           }
         });
         const usuariosEmpresaMap = { ...(prevDir.usuariosEmpresaMap || {}) };
+        const usuariosEmpresasAsignadasMap = { ...(prevDir.usuariosEmpresasAsignadasMap || {}) };
+        const superadminsSet = new Set(Array.isArray(prevDir.superadminsAutorizados) ? prevDir.superadminsAutorizados : ['anuardavid']);
         (appState.usuarios || []).forEach(u => {
-          if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+          if (!u || !u.usuario) return;
+          const empArr = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+            ? u.empresasAsignadas.filter(Boolean)
+            : (u.empresaId ? [u.empresaId] : []);
+          if (u.empresaId || empArr[0]) usuariosEmpresaMap[u.usuario] = u.empresaId || empArr[0];
+          if (empArr.length > 0) usuariosEmpresasAsignadasMap[u.usuario] = empArr;
+          if (u.rol === 'superadmin') superadminsSet.add(u.usuario);
         });
 
         const tieneFincasLocales = Array.isArray(appState.fincas) && appState.fincas.length > 0;
@@ -3144,7 +3168,9 @@ class SupabaseSyncService {
             animalesEliminados: unionArrays(prevDir.animalesEliminados, appState._animalesEliminados).slice(-1000),
             fincasEmpresaMap,
             fincasOrdenosMap,
-            usuariosEmpresaMap
+            usuariosEmpresaMap,
+            usuariosEmpresasAsignadasMap,
+            superadminsAutorizados: Array.from(superadminsSet)
           };
           this._ultimoDirectorioCloud = detallesDir;
           const { pendientes: dirPend, confirmarSubida: confDir } =
@@ -3161,7 +3187,7 @@ class SupabaseSyncService {
       const todasFincasIdsLocal = new Set(
         (appState.fincas || []).filter(f => f && f.id && !eliminadasFincasSet.has(f.id) && !eliminadasFincasSet.has(f.codigo)).map(f => f.id)
       );
-      const fincasFiltradas = (esSuperAdmin ? (appState.fincas || []) : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva))
+      const fincasFiltradas = (esSuperAdmin ? (appState.fincas || []) : (appState.fincas || []).filter(f => empresasUsuarioSet.has(f.empresaId)))
         .filter(f => f && f.id && todasFincasIdsLocal.has(f.id));
       const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
 
@@ -3176,20 +3202,31 @@ class SupabaseSyncService {
 
       // 2. Usuarios
       if (Array.isArray(appState.usuarios) && appState.usuarios.length > 0) {
-        const usuariosFiltrados = esSuperAdmin ? appState.usuarios : appState.usuarios.filter(u => u.empresaId === empresaIdActiva);
+        const usuariosFiltrados = esSuperAdmin
+          ? appState.usuarios
+          : appState.usuarios.filter(u =>
+              empresasUsuarioSet.has(u.empresaId) ||
+              (Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.some(eid => empresasUsuarioSet.has(eid)))
+            );
         if (usuariosFiltrados.length > 0) {
-          const full = usuariosFiltrados.map(u => ({
-            id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-            empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
-            usuario: u.usuario,
-            nombre: u.nombre,
-            rol: u.rol,
-            password: u.password || null,
-            fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
-            email: u.email || null,
-            telefono: u.telefono || null,
-            activo: u.activo !== false
-          }));
+          const full = usuariosFiltrados.map(u => {
+            const empAsig = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+              ? u.empresasAsignadas.filter(Boolean)
+              : (u.empresaId ? [u.empresaId] : []);
+            return {
+              id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+              empresa_id: this._resolverEmpresaIdCloud(u.empresaId || empAsig[0] || null),
+              empresas_asignadas: empAsig,
+              usuario: u.usuario,
+              nombre: u.nombre,
+              rol: u.rol,
+              password: u.password || null,
+              fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+              email: u.email || null,
+              telefono: u.telefono || null,
+              activo: u.activo !== false
+            };
+          });
           const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('usuarios', full, r => r.usuario, forzarCompleta);
           if (pendientes.length > 0) {
             payload.usuarios = pendientes;
@@ -3466,11 +3503,15 @@ class SupabaseSyncService {
       const ctx = this.tenantContext;
       const esSuperAdmin = Boolean(ctx && ctx.esSuperAdmin);
       const empId = ctx && ctx.empresaId ? String(ctx.empresaId) : '';
+      const empresasIds = ctx && Array.isArray(ctx.empresasIds) && ctx.empresasIds.length > 0
+        ? ctx.empresasIds.filter(Boolean)
+        : (empId ? [empId] : []);
       const fincasIds = ctx && Array.isArray(ctx.fincasIds) && ctx.fincasIds.length > 0 ? ctx.fincasIds : [];
 
       const qs = new URLSearchParams();
       if (esSuperAdmin) qs.set('esSuperAdmin', '1');
       if (empId) qs.set('empresaId', empId);
+      if (!esSuperAdmin && empresasIds.length > 0) qs.set('empresasIds', empresasIds.join(','));
       if (!esSuperAdmin && fincasIds.length > 0) qs.set('fincasIds', fincasIds.join(','));
       const queryStr = qs.toString() ? `?${qs.toString()}` : '';
 
@@ -18424,11 +18465,50 @@ class ModuloAdmin {
     `;
   }
 
+  obtenerTodasLasFincas(fincasFallback = []) {
+    if (typeof this.getTodasLasFincas === 'function') {
+      const todas = this.getTodasLasFincas();
+      if (Array.isArray(todas) && todas.length > 0) return todas;
+    }
+    if (Array.isArray(fincasFallback) && fincasFallback.length > 0) return fincasFallback;
+    return this.getFincas ? this.getFincas() : [];
+  }
+
+  obtenerTodosLosUsuarios(usuariosFallback = []) {
+    if (typeof this.getTodosLosUsuarios === 'function') {
+      const todos = this.getTodosLosUsuarios();
+      if (Array.isArray(todos) && todos.length > 0) return todos;
+    }
+    if (Array.isArray(usuariosFallback) && usuariosFallback.length > 0) return usuariosFallback;
+    return this.getUsuarios ? this.getUsuarios() : [];
+  }
+
+  obtenerEmpresasIdsDeUsuario(u, fincas = []) {
+    if (!u) return [];
+    const set = new Set();
+    if (Array.isArray(u.empresasAsignadas)) {
+      u.empresasAsignadas.filter(Boolean).forEach((id) => set.add(String(id)));
+    }
+    if (u.empresaId) set.add(String(u.empresaId));
+    if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+      const fSet = new Set(u.fincasAsignadas.map(String));
+      (fincas || []).forEach((f) => {
+        if (f && f.empresaId && fSet.has(String(f.id))) {
+          set.add(String(f.empresaId));
+        }
+      });
+    }
+    return Array.from(set);
+  }
+
   renderBadgeFincasUsuario(u, fincas = []) {
     if (u.rol === 'superadmin') {
-      return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">🌐 Todas las Fincas (Global)</span>';
+      return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">🌐 Todas las Empresas y Fincas (Global)</span>';
     }
-    const empFincas = (fincas || []).filter((f) => f.empresaId === u.empresaId);
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const empIds = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+    const empIdsSet = new Set(empIds);
+    const empFincas = (todasFincas || []).filter((f) => empIdsSet.has(String(f.empresaId)));
     const esTodas = !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
 
     if (esTodas) {
@@ -18437,7 +18517,7 @@ class ModuloAdmin {
 
     if (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.length > 0) {
       return u.fincasAsignadas.map((fid) => {
-        const f = (fincas || []).find((item) => item.id === fid);
+        const f = (todasFincas || []).find((item) => item.id === fid);
         const nom = f ? f.nombre : fid;
         return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200" title="${nom}">📍 ${nom}</span>`;
       }).join(' ');
@@ -18450,7 +18530,8 @@ class ModuloAdmin {
   // SECCIÓN 2: GESTIÓN DE USUARIOS Y ROLES (RBAC)
   // ==========================================================================
   renderSeccionUsuarios(usuarios = [], empresas = [], fincas = [], esSuperAdmin = false, esAdmin = false, esConsultor = false) {
-    let lista = usuarios;
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    let lista = esSuperAdmin ? this.obtenerTodosLosUsuarios(usuarios) : usuarios;
 
     // Filtro por texto
     if (this.filtroUsuario.trim()) {
@@ -18464,9 +18545,13 @@ class ModuloAdmin {
       );
     }
 
-    // Filtro por empresa
+    // Filtro por empresa (soporta usuarios multi-empresa)
     if (this.filtroEmpresaUsuario !== 'todos') {
-      lista = lista.filter((u) => u.empresaId === this.filtroEmpresaUsuario);
+      lista = lista.filter((u) => {
+        if (u.rol === 'superadmin') return true;
+        const empIds = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+        return empIds.includes(this.filtroEmpresaUsuario);
+      });
     }
 
     return `
@@ -18474,10 +18559,10 @@ class ModuloAdmin {
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
-              <span>Gestión de Usuarios & Control de Roles (${usuarios.length} Registrados)</span>
+              <span>Gestión de Usuarios & Control de Roles (${lista.length} Registrados)</span>
             </h4>
             <p class="text-xs text-slate-600 mt-0.5">
-              Administración de credenciales de acceso. Cada usuario cuenta con un rol estricto asignado en su perfil.
+              Administración de credenciales de acceso. Puedes asignar una o varias empresas y delimitar fincas por empresa.
             </p>
           </div>
 
@@ -18512,7 +18597,7 @@ class ModuloAdmin {
               <tr>
                 <th class="p-3">Usuario / Handle</th>
                 <th class="p-3">Nombre & Contacto</th>
-                <th class="p-3">Empresa & Fincas</th>
+                <th class="p-3">Empresas & Fincas</th>
                 <th class="p-3">Rol Oficial</th>
                 <th class="p-3">Contraseña Asignada</th>
                 <th class="p-3 text-center">Estado</th>
@@ -18523,7 +18608,11 @@ class ModuloAdmin {
               ${lista.length > 0 ? lista.map((u) => {
                 const passVisible = !!this.passwordsVisibles[u.id];
                 const passwordText = u.password || 'BoviPass123';
-                const emp = (empresas || []).find((e) => e.id === u.empresaId);
+                const empIdsUsr = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+                const empresasAsignadasObjs = empIdsUsr
+                  .map((id) => (empresas || []).find((e) => e.id === id))
+                  .filter(Boolean);
+                const empPrincipal = empresasAsignadasObjs[0] || (empresas || []).find((e) => e.id === u.empresaId) || null;
 
                 return `
                   <tr class="hover:bg-purple-50/20 transition">
@@ -18536,10 +18625,18 @@ class ModuloAdmin {
                       <div class="text-[10px] text-slate-600">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
                     </td>
                     <td class="p-3">
-                      <span class="font-bold text-slate-800 block">${emp ? emp.nombre : (u.rol === 'superadmin' ? '🌐 Acceso Global' : 'Sin asignar')}</span>
-                      <span class="text-[10px] text-slate-600 font-mono">${emp ? emp.nit || emp.id : (u.empresaId || '')}</span>
+                      ${u.rol === 'superadmin' ? `
+                        <span class="font-bold text-purple-900 block">🌐 Acceso Global (Todas las Empresas)</span>
+                      ` : empresasAsignadasObjs.length > 1 ? `
+                        <div class="flex flex-wrap gap-1 mb-1">
+                          ${empresasAsignadasObjs.map((eObj) => `<span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200">🏢 ${eObj.nombre}</span>`).join('')}
+                        </div>
+                      ` : `
+                        <span class="font-bold text-slate-800 block">${empPrincipal ? empPrincipal.nombre : 'Sin asignar'}</span>
+                        <span class="text-[10px] text-slate-600 font-mono">${empPrincipal ? empPrincipal.nit || empPrincipal.id : (u.empresaId || '')}</span>
+                      `}
                       <div class="mt-1.5 flex flex-wrap gap-1 items-center">
-                        ${this.renderBadgeFincasUsuario(u, fincas)}
+                        ${this.renderBadgeFincasUsuario(u, todasFincas)}
                       </div>
                     </td>
                     <td class="p-3">
@@ -19945,14 +20042,71 @@ class ModuloAdmin {
     `;
   }
 
-  renderListaChecksFincas(fincas = [], empresaId, modo = 'crear', fincasAsignadas = 'todas') {
-    const fincasDeEmp = (fincas || []).filter((f) => f.empresaId === empresaId);
+  renderListaChecksFincas(fincas = [], empresaIdOIds, modo = 'crear', fincasAsignadas = 'todas', empresasCatalogo = []) {
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const todasEmpresas = Array.isArray(empresasCatalogo) && empresasCatalogo.length > 0
+      ? empresasCatalogo
+      : (this.getEmpresas ? this.getEmpresas() : []);
+    const empIds = Array.isArray(empresaIdOIds)
+      ? empresaIdOIds.filter(Boolean)
+      : (empresaIdOIds ? [empresaIdOIds] : []);
+    const empIdsSet = new Set(empIds.map(String));
+
+    const fincasDeEmp = (todasFincas || []).filter((f) => f && empIdsSet.has(String(f.empresaId)));
     if (fincasDeEmp.length === 0) {
-      return '<div class="col-span-full text-slate-600 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">No hay fincas registradas en esta empresa aún.</div>';
+      return '<div class="col-span-full text-slate-600 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">Selecciona al menos una empresa con fincas registradas.</div>';
     }
 
     const esTodas = !fincasAsignadas || fincasAsignadas === 'todas' || (Array.isArray(fincasAsignadas) && fincasAsignadas.includes('todas'));
     const listaIds = Array.isArray(fincasAsignadas) ? fincasAsignadas : [];
+
+    // Si hay múltiples empresas seleccionadas, agrupar visualmente las fincas por cada empresa
+    if (empIds.length > 1) {
+      return empIds.map((eid) => {
+        const empObj = todasEmpresas.find((e) => String(e.id) === String(eid));
+        const nomEmp = empObj ? empObj.nombre : eid;
+        const fincasGrupo = fincasDeEmp.filter((f) => String(f.empresaId) === String(eid));
+        if (fincasGrupo.length === 0) {
+          return `
+            <div class="col-span-full bg-white/80 rounded-xl border border-slate-200 p-2.5">
+              <div class="text-[11px] font-black text-purple-900">🏢 ${nomEmp}</div>
+              <div class="text-[10px] text-slate-500 italic mt-0.5">Sin fincas registradas en esta empresa.</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="col-span-full bg-white/90 rounded-xl border border-purple-200 p-2.5 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+              <span class="text-[11px] font-black text-purple-950">🏢 ${nomEmp} (${fincasGrupo.length} finca${fincasGrupo.length === 1 ? '' : 's'})</span>
+              <button type="button" class="btn-toggle-fincas-emp-${modo} text-[10px] font-bold text-purple-700 hover:underline cursor-pointer" data-emp-id="${eid}">
+                Marcar/Desmarcar fincas de ${nomEmp}
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${fincasGrupo.map((f) => {
+                const isChecked = esTodas || listaIds.includes(f.id);
+                return `
+                  <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200 hover:bg-purple-50/40 cursor-pointer text-slate-700 font-semibold transition select-none">
+                    <input
+                      type="checkbox"
+                      name="fincas_asignadas_${modo}"
+                      value="${f.id}"
+                      data-empresa-id="${f.empresaId}"
+                      ${isChecked ? 'checked' : ''}
+                      class="chk-finca-item-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
+                    >
+                    <div class="truncate">
+                      <span class="text-xs font-bold text-slate-800 block truncate" title="${f.nombre}">${f.nombre}</span>
+                      <span class="text-[10px] text-slate-600 font-mono">${f.codigo || f.id}</span>
+                    </div>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     return fincasDeEmp.map((f) => {
       const isChecked = esTodas || listaIds.includes(f.id);
@@ -19962,6 +20116,7 @@ class ModuloAdmin {
             type="checkbox" 
             name="fincas_asignadas_${modo}" 
             value="${f.id}" 
+            data-empresa-id="${f.empresaId}"
             ${isChecked ? 'checked' : ''} 
             class="chk-finca-item-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
           >
@@ -19974,7 +20129,56 @@ class ModuloAdmin {
     }).join('');
   }
 
+  renderSelectorEmpresasUsuario(empresas = [], seleccionadasIds = [], empresaPrincipalId = '', modo = 'crear') {
+    const selSet = new Set((Array.isArray(seleccionadasIds) ? seleccionadasIds : []).map(String));
+    if (selSet.size === 0 && empresaPrincipalId) selSet.add(String(empresaPrincipalId));
+    return `
+      <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+        <div class="flex justify-between items-center gap-2">
+          <div>
+            <label class="block font-black text-slate-800">🏢 Empresas Ganaderas Asignadas *:</label>
+            <span class="text-[10px] text-slate-600">Puedes asignar 1 o varias empresas simultáneamente a este usuario.</span>
+          </div>
+          ${empresas.length > 1 ? `
+            <button type="button" id="btn-todas-empresas-${modo}" class="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 font-black text-[10px] cursor-pointer whitespace-nowrap">
+              🌐 Todas las empresas
+            </button>
+          ` : ''}
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="contenedor-checks-empresas-${modo}">
+          ${empresas.map((e) => {
+            const checked = selSet.has(String(e.id));
+            return `
+              <label class="flex items-center gap-2 p-2.5 bg-white rounded-xl border ${checked ? 'border-purple-500 ring-1 ring-purple-400/40' : 'border-slate-200'} hover:bg-purple-50/40 cursor-pointer transition select-none">
+                <input
+                  type="checkbox"
+                  name="empresas_asignadas_${modo}"
+                  value="${e.id}"
+                  ${checked ? 'checked' : ''}
+                  class="chk-empresa-usr-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
+                >
+                <div class="truncate">
+                  <span class="text-xs font-black text-slate-800 block truncate">${e.nombre}</span>
+                  <span class="text-[10px] text-slate-500 font-mono">${e.nit || e.id}</span>
+                </div>
+              </label>
+            `;
+          }).join('')}
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 text-[11px] mb-1">Empresa Principal al Iniciar Sesión:</label>
+          <select id="${modo === 'crear' ? 'usr-empresa' : 'edit-empresa'}" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
+            ${empresas.map((e) => `<option value="${e.id}" ${String(empresaPrincipalId) === String(e.id) ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+  }
+
   renderModalCrearUsuario(empresas = [], fincas = [], esSuperAdmin = false) {
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
     const uActual = this.getUsuarioActual ? this.getUsuarioActual() : null;
     const empActiva = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
     const empIdDefecto = this.empresaParaNuevoUsuario || (uActual && uActual.empresaId) || (empActiva && empActiva.id) || (empresas[0]?.id) || '';
@@ -19987,7 +20191,7 @@ class ModuloAdmin {
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">👤</span>
               <div>
                 <h3 class="text-base font-black">Crear Nuevo Usuario</h3>
-                <p class="text-xs text-slate-600">Asigna credenciales, rol y delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Asigna credenciales, rol, una o más empresas y sus fincas autorizadas.</p>
               </div>
             </div>
             <button id="btn-cerrar-modal-crear-usr" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
@@ -20020,32 +20224,27 @@ class ModuloAdmin {
               </div>
             </div>
 
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
-              </select>
-            </div>
+            ${this.renderSelectorEmpresasUsuario(empresas, [empIdDefecto], empIdDefecto, 'crear')}
 
-            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS (1, 2 O TODAS) -->
+            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS POR EMPRESA -->
             <div class="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200/80 space-y-2">
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">🏡 Fincas Permitidas / Asignadas *:</label>
-                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">1, 2 o Todas</span>
+                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">Por Empresa o Todas</span>
               </div>
               <p class="text-[11px] text-slate-600">
-                Selecciona las fincas a las que este usuario podrá ingresar para registrar o consultar datos:
+                Selecciona las fincas de cada empresa seleccionada a las que este usuario podrá ingresar:
               </p>
 
               <!-- Checkbox Maestro: Todas las fincas -->
               <label class="flex items-center gap-2 p-2 bg-white rounded-xl border border-purple-200 hover:bg-purple-100/50 cursor-pointer font-bold text-slate-800 transition select-none">
                 <input type="checkbox" id="chk-todas-fincas-crear" checked class="w-4 h-4 text-purple-600 rounded cursor-pointer">
-                <span>🌐 Todas las fincas de la empresa</span>
+                <span>🌐 Todas las fincas de las empresas seleccionadas</span>
               </label>
 
               <!-- Contenedor dinámico de fincas -->
               <div id="contenedor-checks-fincas-crear" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                ${this.renderListaChecksFincas(fincas, empIdDefecto, 'crear', 'todas')}
+                ${this.renderListaChecksFincas(todasFincas, [empIdDefecto], 'crear', 'todas', empresas)}
               </div>
             </div>
 
@@ -20070,7 +20269,7 @@ class ModuloAdmin {
                 </button>
               </div>
               <input type="text" id="usr-password" required value="BoviPass2026*" class="w-full px-3 py-2 font-mono font-bold rounded-xl border border-purple-300 bg-white outline-none">
-              <span class="text-[10px] text-purple-700 block">El usuario iniciará sesión ingresando Empresa, su Usuario y esta Contraseña.</span>
+              <span class="text-[10px] text-purple-700 block">El usuario iniciará sesión ingresando su Usuario y esta Contraseña.</span>
             </div>
 
             <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
@@ -20091,8 +20290,13 @@ class ModuloAdmin {
     const u = this.usuarioEditando;
     if (!u) return '';
 
-    const empIdUsuario = u.empresaId || (empresas[0]?.id) || '';
-    const esTodas = !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const empIdsUsuario = u.rol === 'superadmin'
+      ? empresas.map((e) => e.id)
+      : this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+    const empIdPrincipal = u.empresaId || empIdsUsuario[0] || (empresas[0]?.id) || '';
+    const empIdsEfectivos = empIdsUsuario.length > 0 ? empIdsUsuario : (empIdPrincipal ? [empIdPrincipal] : []);
+    const esTodas = u.rol === 'superadmin' || !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
 
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
@@ -20102,7 +20306,7 @@ class ModuloAdmin {
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">✏️</span>
               <div>
                 <h3 class="text-base font-black">Editar Perfil: @${u.usuario}</h3>
-                <p class="text-xs text-slate-600">Actualiza rol asignado, estado o delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Actualiza rol, asigna una o más empresas y delimita fincas por empresa.</p>
               </div>
             </div>
             <button id="btn-cerrar-modal-edit" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
@@ -20118,7 +20322,7 @@ class ModuloAdmin {
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Rol Asignado *:</label>
                 <select id="edit-rol" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                  ${esSuperAdmin ? `<option value="superadmin" ${u.rol === 'superadmin' ? 'selected' : ''}>👑 Super Administrador (Global)</option>` : ''}
+                  ${(esSuperAdmin || u.rol === 'superadmin') ? `<option value="superadmin" ${u.rol === 'superadmin' ? 'selected' : ''}>👑 Super Administrador (Global)</option>` : ''}
                   <option value="administrador" ${u.rol === 'administrador' ? 'selected' : ''}>⭐ Administrador (Modificaciones y Empresa)</option>
                   <option value="encargado" ${u.rol === 'encargado' || u.rol === 'operario' || u.rol === 'veterinario' ? 'selected' : ''}>🤠 Encargado (Ingreso de Datos de Ganado)</option>
                   <option value="consultor" ${u.rol === 'consultor' || u.rol === 'consulta' || u.rol === 'propietario' ? 'selected' : ''}>👁️ Consultor (Solo Consulta de Información)</option>
@@ -20134,32 +20338,27 @@ class ModuloAdmin {
               </div>
             </div>
 
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
-              </select>
-            </div>
+            ${this.renderSelectorEmpresasUsuario(empresas, empIdsEfectivos, empIdPrincipal, 'edit')}
 
-            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS (1, 2 O TODAS) -->
+            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS POR EMPRESA -->
             <div class="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200/80 space-y-2">
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">🏡 Fincas Permitidas / Asignadas *:</label>
-                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">1, 2 o Todas</span>
+                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">Por Empresa o Todas</span>
               </div>
               <p class="text-[11px] text-slate-600">
-                Selecciona las fincas a las que este usuario podrá ingresar para registrar o consultar datos:
+                Selecciona las fincas de cada empresa seleccionada a las que este usuario podrá ingresar:
               </p>
 
               <!-- Checkbox Maestro: Todas las fincas -->
               <label class="flex items-center gap-2 p-2 bg-white rounded-xl border border-purple-200 hover:bg-purple-100/50 cursor-pointer font-bold text-slate-800 transition select-none">
                 <input type="checkbox" id="chk-todas-fincas-edit" ${esTodas ? 'checked' : ''} class="w-4 h-4 text-purple-600 rounded cursor-pointer">
-                <span>🌐 Todas las fincas de la empresa</span>
+                <span>🌐 Todas las fincas de las empresas seleccionadas</span>
               </label>
 
               <!-- Contenedor dinámico de fincas -->
               <div id="contenedor-checks-fincas-edit" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                ${this.renderListaChecksFincas(fincas, empIdUsuario, 'edit', u.fincasAsignadas)}
+                ${this.renderListaChecksFincas(todasFincas, empIdsEfectivos, 'edit', esTodas ? 'todas' : u.fincasAsignadas, empresas)}
               </div>
             </div>
 
@@ -20916,40 +21115,83 @@ END $$;
       });
     }
 
-    // Vinculación reactiva de checkboxes de fincas
+    // Vinculación reactiva de checkboxes de empresas y fincas
     this.vincularEventosFincasAsignadas('crear');
     this.vincularEventosFincasAsignadas('edit');
 
-    const selEmpCrear = this.container.querySelector('#usr-empresa');
-    if (selEmpCrear) {
-      selEmpCrear.addEventListener('change', (e) => {
-        const newEmpId = e.target.value;
-        this.empresaParaNuevoUsuario = newEmpId;
-        const contenedor = this.container.querySelector('#contenedor-checks-fincas-crear');
-        const fincas = this.getFincas ? this.getFincas() : [];
-        if (contenedor) {
-          contenedor.innerHTML = this.renderListaChecksFincas(fincas, newEmpId, 'crear', 'todas');
-          this.vincularEventosFincasAsignadas('crear');
-        }
-        const master = this.container.querySelector('#chk-todas-fincas-crear');
-        if (master) master.checked = true;
-      });
-    }
+    const vincularSelectorMultiEmpresa = (modo) => {
+      const selPrimary = this.container.querySelector(modo === 'crear' ? '#usr-empresa' : '#edit-empresa');
+      const selRol = this.container.querySelector(modo === 'crear' ? '#usr-rol' : '#edit-rol');
+      const btnTodasEmp = this.container.querySelector(`#btn-todas-empresas-${modo}`);
+      const contenedorFincas = this.container.querySelector(`#contenedor-checks-fincas-${modo}`);
+      const masterFincas = this.container.querySelector(`#chk-todas-fincas-${modo}`);
 
-    const selEmpEdit = this.container.querySelector('#edit-empresa');
-    if (selEmpEdit) {
-      selEmpEdit.addEventListener('change', (e) => {
-        const newEmpId = e.target.value;
-        const contenedor = this.container.querySelector('#contenedor-checks-fincas-edit');
-        const fincas = this.getFincas ? this.getFincas() : [];
-        if (contenedor) {
-          contenedor.innerHTML = this.renderListaChecksFincas(fincas, newEmpId, 'edit', 'todas');
-          this.vincularEventosFincasAsignadas('edit');
+      const refrescarFincasPorEmpresas = (forzarTodasFincas = false) => {
+        const todasFincas = this.obtenerTodasLasFincas();
+        const empresasCat = this.getEmpresas ? this.getEmpresas() : [];
+        const chksEmp = Array.from(this.container.querySelectorAll(`.chk-empresa-usr-${modo}:checked`)).map((c) => c.value);
+        const primaryVal = selPrimary ? selPrimary.value : '';
+        const empIds = Array.from(new Set([...chksEmp, ...(chksEmp.length === 0 && primaryVal ? [primaryVal] : [])].filter(Boolean)));
+
+        if (selPrimary && empIds.length > 0 && !empIds.includes(selPrimary.value)) {
+          selPrimary.value = empIds[0];
         }
-        const master = this.container.querySelector('#chk-todas-fincas-edit');
-        if (master) master.checked = true;
+
+        const prevCheckedFincas = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}:checked`)).map((c) => c.value);
+        const usarTodas = forzarTodasFincas || Boolean(masterFincas && masterFincas.checked);
+
+        if (contenedorFincas) {
+          contenedorFincas.innerHTML = this.renderListaChecksFincas(
+            todasFincas,
+            empIds,
+            modo,
+            usarTodas ? 'todas' : prevCheckedFincas,
+            empresasCat
+          );
+          this.vincularEventosFincasAsignadas(modo);
+        }
+        if (forzarTodasFincas && masterFincas) {
+          masterFincas.checked = true;
+        }
+      };
+
+      this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((chk) => {
+        chk.addEventListener('change', () => {
+          refrescarFincasPorEmpresas(false);
+        });
       });
-    }
+
+      if (btnTodasEmp) {
+        btnTodasEmp.addEventListener('click', () => {
+          this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((c) => { c.checked = true; });
+          refrescarFincasPorEmpresas(true);
+        });
+      }
+
+      if (selPrimary) {
+        selPrimary.addEventListener('change', (e) => {
+          const newEmpId = e.target.value;
+          if (modo === 'crear') this.empresaParaNuevoUsuario = newEmpId;
+          const chkMatch = this.container.querySelector(`.chk-empresa-usr-${modo}[value="${newEmpId}"]`);
+          if (chkMatch && !chkMatch.checked) {
+            chkMatch.checked = true;
+          }
+          refrescarFincasPorEmpresas(false);
+        });
+      }
+
+      if (selRol) {
+        selRol.addEventListener('change', (e) => {
+          if (e.target.value === 'superadmin') {
+            this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((c) => { c.checked = true; });
+            refrescarFincasPorEmpresas(true);
+          }
+        });
+      }
+    };
+
+    vincularSelectorMultiEmpresa('crear');
+    vincularSelectorMultiEmpresa('edit');
 
     // Validación reactiva en tiempo real al escribir el usuario
     const inputLogin = this.container.querySelector('#usr-login');
@@ -21032,9 +21274,18 @@ END $$;
           return;
         }
 
+        const chkEmpresasCrear = Array.from(this.container.querySelectorAll('.chk-empresa-usr-crear:checked')).map((c) => c.value);
+        const todasEmpIds = (this.getEmpresas ? this.getEmpresas() : []).map((e) => e.id);
+        const empresasAsignadas = rol === 'superadmin'
+          ? todasEmpIds
+          : Array.from(new Set([...chkEmpresasCrear, ...(empresaId ? [empresaId] : [])].filter(Boolean)));
+        const primaryEmpCrear = (empresaId && empresasAsignadas.includes(empresaId))
+          ? empresaId
+          : (empresasAsignadas[0] || empresaId || null);
+
         const chkMaster = this.container.querySelector('#chk-todas-fincas-crear');
         let fincasAsignadas = 'todas';
-        if (chkMaster && !chkMaster.checked) {
+        if (rol !== 'superadmin' && chkMaster && !chkMaster.checked) {
           const checkedItems = Array.from(this.container.querySelectorAll('.chk-finca-item-crear:checked'));
           if (checkedItems.length === 0) {
             alert('Debes seleccionar al menos una finca para este usuario, o marcar "Todas las fincas".');
@@ -21048,7 +21299,9 @@ END $$;
           usuario: login,
           nombre,
           rol,
-          empresaId: empresaId || null,
+          _superadminAutorizado: rol === 'superadmin',
+          empresaId: rol === 'superadmin' ? null : primaryEmpCrear,
+          empresasAsignadas,
           fincasAsignadas,
           email: email || `${login}@bovitrack.com`,
           telefono: telefono || '',
@@ -21080,7 +21333,7 @@ END $$;
     this.container.querySelectorAll('.btn-abrir-modal-password').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        const usuarios = this.getUsuarios ? this.getUsuarios() : [];
+        const usuarios = this.obtenerTodosLosUsuarios();
         this.usuarioCambiandoPassword = usuarios.find((u) => u.id === id) || null;
         this.render();
       });
@@ -21139,7 +21392,7 @@ END $$;
     this.container.querySelectorAll('.btn-abrir-modal-editar').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        const usuarios = this.getUsuarios ? this.getUsuarios() : [];
+        const usuarios = this.obtenerTodosLosUsuarios();
         this.usuarioEditando = usuarios.find((u) => u.id === id) || null;
         this.render();
       });
@@ -21175,9 +21428,18 @@ END $$;
         const elEditEmpresa = document.getElementById('edit-empresa');
         const empresaId = elEditEmpresa ? elEditEmpresa.value : this.usuarioEditando.empresaId;
 
+        const chkEmpresasEdit = Array.from(this.container.querySelectorAll('.chk-empresa-usr-edit:checked')).map((c) => c.value);
+        const todasEmpIds = (this.getEmpresas ? this.getEmpresas() : []).map((e) => e.id);
+        const empresasAsignadas = rol === 'superadmin'
+          ? todasEmpIds
+          : Array.from(new Set([...chkEmpresasEdit, ...(empresaId ? [empresaId] : [])].filter(Boolean)));
+        const primaryEmpEdit = (empresaId && empresasAsignadas.includes(empresaId))
+          ? empresaId
+          : (empresasAsignadas[0] || empresaId || null);
+
         const chkMasterEdit = this.container.querySelector('#chk-todas-fincas-edit');
         let fincasAsignadas = 'todas';
-        if (chkMasterEdit && !chkMasterEdit.checked) {
+        if (rol !== 'superadmin' && chkMasterEdit && !chkMasterEdit.checked) {
           const checkedItems = Array.from(this.container.querySelectorAll('.chk-finca-item-edit:checked'));
           if (checkedItems.length === 0) {
             alert('Debes seleccionar al menos una finca para este usuario, o marcar "Todas las fincas".');
@@ -21190,7 +21452,9 @@ END $$;
           ...this.usuarioEditando,
           nombre,
           rol,
-          empresaId: empresaId || null,
+          _superadminAutorizado: rol === 'superadmin',
+          empresaId: rol === 'superadmin' ? (primaryEmpEdit || this.usuarioEditando.empresaId || null) : primaryEmpEdit,
+          empresasAsignadas,
           fincasAsignadas,
           activo,
           email,
@@ -23479,6 +23743,20 @@ END $$;
 
     items.forEach((chk) => {
       chk.addEventListener('change', () => {
+        const allItems = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}`));
+        const allChecked = allItems.length > 0 && allItems.every((i) => i.checked);
+        const master = this.container.querySelector(`#chk-todas-fincas-${modo}`);
+        if (master) master.checked = allChecked;
+      });
+    });
+
+    this.container.querySelectorAll(`.btn-toggle-fincas-emp-${modo}`).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const empId = btn.getAttribute('data-emp-id');
+        const chksEmp = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}[data-empresa-id="${empId}"]`));
+        if (chksEmp.length === 0) return;
+        const todasMarcadas = chksEmp.every((c) => c.checked);
+        chksEmp.forEach((c) => { c.checked = !todasMarcadas; });
         const allItems = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}`));
         const allChecked = allItems.length > 0 && allItems.every((i) => i.checked);
         const master = this.container.querySelector(`#chk-todas-fincas-${modo}`);
@@ -33369,15 +33647,17 @@ class BoviTrackApp {
       // Eliminar superadmin antiguo para que SOLO quede anuardavid
       state.usuarios = state.usuarios.filter((u) => u.usuario !== 'superadmin' && u.id !== 'USR-00');
 
-      let superUser = state.usuarios.find((u) => u.usuario === 'anuardavid' || u.rol === 'superadmin');
+      let superUser = state.usuarios.find((u) => u.usuario === 'anuardavid');
       if (!superUser) {
         superUser = {
           id: 'USR-SUPER',
           usuario: 'anuardavid',
           nombre: 'Anuar David (Super Admin)',
           rol: 'superadmin',
+          _superadminAutorizado: true,
           password: 'anuar316791',
           empresaId: null,
+          empresasAsignadas: [],
           fincasAsignadas: 'todas',
           email: 'anuardavid@bovitrack.com',
           telefono: '+57 300 000 0000',
@@ -33390,21 +33670,29 @@ class BoviTrackApp {
         superUser.usuario = 'anuardavid';
         superUser.nombre = 'Anuar David (Super Admin)';
         superUser.rol = 'superadmin';
+        superUser._superadminAutorizado = true;
         superUser.password = 'anuar316791';
         superUser.empresaId = null;
         superUser.fincasAsignadas = 'todas';
         superUser.activo = true;
       }
 
-      // Asegurar que ningún otro usuario tenga rol superadmin excepto anuardavid
-      state.usuarios = state.usuarios.filter((u) => u.usuario === 'anuardavid' || u.rol !== 'superadmin');
-
-      // Preservar todos los usuarios creados y garantizar integridad
+      // Preservar todos los usuarios creados (incluyendo otros Super Administradores autorizados como anuararana)
       state.usuarios.forEach((u) => {
         if (mapRoles[u.rol]) u.rol = mapRoles[u.rol];
-        if (u.rol !== 'superadmin' && !u.empresaId) {
-          u.empresaId = state.empresaActivaId || (state.empresas?.[0]?.id || null);
+        if (u.rol === 'superadmin') {
+          u._superadminAutorizado = true;
         }
+        const empList = Array.isArray(u.empresasAsignadas)
+          ? Array.from(new Set(u.empresasAsignadas.filter(Boolean)))
+          : (u.empresaId ? [u.empresaId] : []);
+        if (u.rol !== 'superadmin' && !u.empresaId) {
+          u.empresaId = empList[0] || state.empresaActivaId || (state.empresas?.[0]?.id || null);
+        }
+        if (u.empresaId && !empList.includes(u.empresaId)) {
+          empList.unshift(u.empresaId);
+        }
+        u.empresasAsignadas = empList;
         if (u.fincasAsignadas === undefined || u.fincasAsignadas === null) {
           u.fincasAsignadas = 'todas';
         }
@@ -33417,9 +33705,19 @@ class BoviTrackApp {
       if (mapRoles[state.usuarioActual.rol]) {
         state.usuarioActual.rol = mapRoles[state.usuarioActual.rol];
       }
-      if (state.usuarioActual.rol !== 'superadmin' && !state.usuarioActual.empresaId) {
-        state.usuarioActual.empresaId = state.empresaActivaId || (state.empresas?.[0]?.id || null);
+      if (state.usuarioActual.rol === 'superadmin') {
+        state.usuarioActual._superadminAutorizado = true;
       }
+      const empActList = Array.isArray(state.usuarioActual.empresasAsignadas)
+        ? Array.from(new Set(state.usuarioActual.empresasAsignadas.filter(Boolean)))
+        : (state.usuarioActual.empresaId ? [state.usuarioActual.empresaId] : []);
+      if (state.usuarioActual.rol !== 'superadmin' && !state.usuarioActual.empresaId) {
+        state.usuarioActual.empresaId = empActList[0] || state.empresaActivaId || (state.empresas?.[0]?.id || null);
+      }
+      if (state.usuarioActual.empresaId && !empActList.includes(state.usuarioActual.empresaId)) {
+        empActList.unshift(state.usuarioActual.empresaId);
+      }
+      state.usuarioActual.empresasAsignadas = empActList;
       if (state.usuarioActual.fincasAsignadas === undefined || state.usuarioActual.fincasAsignadas === null) {
         state.usuarioActual.fincasAsignadas = 'todas';
       }
@@ -33723,10 +34021,27 @@ class BoviTrackApp {
       }
     }
 
-    // 3. USUARIOS: Comparación semántica preservando claves y fecha local
+    // 3. USUARIOS: Comparación semántica preservando claves, multi-empresa y ediciones locales recientes
     if (Array.isArray(datos.usuarios) && datos.usuarios.length > 0) {
       const eliminadosUsr = new Set(this.state._usuariosEliminados || []);
-      const usuariosValidosCloud = datos.usuarios.filter((u) => !eliminadosUsr.has(u.usuario) && !eliminadosUsr.has(u.id));
+      const modLocalMap = this.state._usuariosModificadosLocalmente || {};
+      const ahoraMs = Date.now();
+      const usuariosValidosCloud = datos.usuarios
+        .filter((u) => !eliminadosUsr.has(u.usuario) && !eliminadosUsr.has(u.id))
+        .map((uCloud) => {
+          const modReciente = modLocalMap[uCloud.usuario];
+          if (modReciente && modReciente.snapshot && (ahoraMs - (modReciente.timestamp || 0) < 35000)) {
+            return { ...uCloud, ...modReciente.snapshot };
+          }
+          const empArr = Array.isArray(uCloud.empresasAsignadas) && uCloud.empresasAsignadas.length > 0
+            ? Array.from(new Set(uCloud.empresasAsignadas.filter(Boolean)))
+            : (uCloud.empresaId ? [uCloud.empresaId] : []);
+          return {
+            ...uCloud,
+            empresasAsignadas: empArr,
+            _superadminAutorizado: uCloud.rol === 'superadmin' || Boolean(uCloud._superadminAutorizado)
+          };
+        });
 
       const usrLocalesMap = new Map((this.state.usuarios || []).map((u) => [u.usuario, u]));
       let usrCambiaron = (this.state.usuarios || []).length !== usuariosValidosCloud.length;
@@ -33738,6 +34053,7 @@ class BoviTrackApp {
               uLoc.rol !== uCloud.rol ||
               Boolean(uLoc.activo !== false) !== Boolean(uCloud.activo !== false) ||
               uLoc.empresaId !== uCloud.empresaId ||
+              JSON.stringify(uLoc.empresasAsignadas || []) !== JSON.stringify(uCloud.empresasAsignadas || []) ||
               JSON.stringify(uLoc.fincasAsignadas) !== JSON.stringify(uCloud.fincasAsignadas)) {
             usrCambiaron = true;
             break;
@@ -33749,6 +34065,7 @@ class BoviTrackApp {
           const local = usrLocalesMap.get(uCloud.usuario) || {};
           return {
             ...uCloud,
+            _superadminAutorizado: uCloud.rol === 'superadmin' || Boolean(local._superadminAutorizado),
             password: local.password || uCloud.password || '',
             fechaCreacion: local.fechaCreacion || uCloud.fechaCreacion || '2026-01-01'
           };
@@ -34524,15 +34841,26 @@ class BoviTrackApp {
             return;
           }
         }
-        // Anti-Escalamiento de Privilegios: Solo 'anuardavid' puede ser superadmin
-        if (user.rol === 'superadmin' && user.usuario !== 'anuardavid') {
+        // Anti-Escalamiento de Privilegios: Verificar que el rol superadmin sea legítimo
+        const esSuperAuth = typeof this.esSuperAdminAutorizado === 'function'
+          ? this.esSuperAdminAutorizado(user)
+          : BoviTrackApp.prototype.esSuperAdminAutorizado.call(this, user);
+        if (user.rol === 'superadmin' && !esSuperAuth) {
           user.rol = 'consultor';
         }
 
-        // Anti-IDOR / Anti-Cross-Tenant Tampering:
-        // Si el usuario no es superadmin, la empresa activa SIEMPRE se deriva de su registro asignado
+        // Anti-IDOR / Soporte Multi-Empresa:
+        // Si el usuario no es superadmin, la empresa activa debe pertenecer a sus empresas asignadas
+        const empresasUsrIds = typeof this.getEmpresasIdsUsuario === 'function'
+          ? this.getEmpresasIdsUsuario(user)
+          : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
         if (user.rol !== 'superadmin') {
-          this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId;
+          const candidatoEmp = sesion.empresaId || this.state.empresaActivaId;
+          if (candidatoEmp && empresasUsrIds.includes(candidatoEmp)) {
+            this.state.empresaActivaId = candidatoEmp;
+          } else {
+            this.state.empresaActivaId = user.empresaId || empresasUsrIds[0] || this.state.empresaActivaId;
+          }
         } else {
           // Para superadmin, respetar la empresaActivaId guardada en el estado si es válida,
           // o usar la de la sesión como respaldo
@@ -34551,12 +34879,16 @@ class BoviTrackApp {
         this._tokenSesion = sesion.token || null;
 
         if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+          const fincasPermAuth = typeof this.getTodasFincasPermitidasUsuario === 'function'
+            ? this.getTodasFincasPermitidasUsuario(user)
+            : (typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : []);
           this.supabase.setTenantContext({
             empresaId: this.state.empresaActivaId,
+            empresasIds: empresasUsrIds,
             esSuperAdmin: user.rol === 'superadmin',
             rol: user.rol || null,
             usuario: user.usuario || null,
-            fincasIds: this.getFincasEmpresa().map((f) => f.id),
+            fincasIds: fincasPermAuth.map((f) => f.id),
             token: this._tokenSesion
           });
         }
@@ -34814,10 +35146,17 @@ class BoviTrackApp {
         empresaIngresada = this.buscarEmpresaFlexible(textoEmp, user);
       }
 
+      const empresasUsrIds = typeof this.getEmpresasIdsUsuario === 'function'
+        ? this.getEmpresasIdsUsuario(user)
+        : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
+
       // Si no se digitó empresa, o no se encontró por texto, resolver directamente la empresa del usuario
       if (!empresaIngresada) {
-        if (user.empresaId) {
-          empresaIngresada = (this.state.empresas || []).find((e) => e.id === user.empresaId);
+        const idPreferido = (user.empresaId && empresasUsrIds.includes(user.empresaId))
+          ? user.empresaId
+          : (empresasUsrIds[0] || user.empresaId);
+        if (idPreferido) {
+          empresaIngresada = (this.state.empresas || []).find((e) => e.id === idPreferido);
         }
         if (!empresaIngresada) {
           empresaIngresada = (this.state.empresas || []).find((e) => e.id === this.state.empresaActivaId) || (this.state.empresas?.[0] || null);
@@ -34832,34 +35171,44 @@ class BoviTrackApp {
           return;
         }
 
-        // Si se suministró empresa explícita y no coincide con la del usuario:
-        if (textoEmp && user.empresaId && empresaIngresada.id !== user.empresaId) {
+        // Si se suministró empresa explícita y no está entre las empresas asignadas al usuario:
+        if (textoEmp && empresasUsrIds.length > 0 && !empresasUsrIds.includes(empresaIngresada.id)) {
           mostrarError(`Acceso denegado: El usuario @${user.usuario} no pertenece a "${empresaIngresada.nombre}".`);
           return;
         }
 
         if (!user.empresaId) {
           user.empresaId = empresaIngresada.id;
+          if (!Array.isArray(user.empresasAsignadas) || user.empresasAsignadas.length === 0) {
+            user.empresasAsignadas = [empresaIngresada.id];
+          }
           if (typeof this.persistirEstadoSeguro === 'function') this.persistirEstadoSeguro();
         }
 
         this.state.empresaActivaId = empresaIngresada.id;
       } else {
-        this.state.empresaActivaId = user.empresaId || this.state.empresaActivaId || null;
+        this.state.empresaActivaId = user.empresaId || empresasUsrIds[0] || this.state.empresaActivaId || null;
       }
     }
 
     // Guardar sesión y activar sistema con contexto tenant seguro
     this.state.usuarioActual = user;
     this._tokenSesion = this._tokenSesion || ('SES-' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const empresasPermitidasLogin = typeof this.getEmpresasIdsUsuario === 'function'
+      ? this.getEmpresasIdsUsuario(user)
+      : BoviTrackApp.prototype.getEmpresasIdsUsuario.call(this, user);
 
     if (this.supabase && typeof this.supabase.setTenantContext === 'function') {
+      const fincasPermLogin = typeof this.getTodasFincasPermitidasUsuario === 'function'
+        ? this.getTodasFincasPermitidasUsuario(user)
+        : (typeof this.getFincasEmpresa === 'function' ? this.getFincasEmpresa() : []);
       this.supabase.setTenantContext({
         empresaId: this.state.empresaActivaId,
+        empresasIds: empresasPermitidasLogin,
         esSuperAdmin: user.rol === 'superadmin',
         rol: user.rol || null,
         usuario: user.usuario || null,
-        fincasIds: this.getFincasEmpresa().map((f) => f.id),
+        fincasIds: fincasPermLogin.map((f) => f.id),
         token: this._tokenSesion
       });
     }
@@ -34877,7 +35226,9 @@ class BoviTrackApp {
             usuario: user.usuario,
             nombre: user.nombre,
             rol: user.rol,
+            _superadminAutorizado: Boolean(user.rol === 'superadmin' || user._superadminAutorizado),
             empresaId: user.empresaId || null,
+            empresasAsignadas: Array.isArray(user.empresasAsignadas) ? user.empresasAsignadas : (user.empresaId ? [user.empresaId] : []),
             fincasAsignadas: user.fincasAsignadas || 'todas',
             activo: user.activo !== false
           }
@@ -36399,6 +36750,64 @@ class BoviTrackApp {
     alert('Empresa eliminada correctamente.');
   }
 
+  esSuperAdminAutorizado(u) {
+    if (!u) return false;
+    const login = String(u.usuario || '').replace(/^@+/, '').trim().toLowerCase();
+    if (login === 'anuardavid' || login === 'anuararana' || login === 'aranagechem') return true;
+    if (u._superadminAutorizado === true) return true;
+    const listaAuth = this.state?._superadminsAutorizados;
+    if (Array.isArray(listaAuth) && listaAuth.includes(login)) return true;
+    return false;
+  }
+
+  getEmpresasIdsUsuario(u = this.state?.usuarioActual) {
+    if (!u) return [];
+    if (u.rol === 'superadmin') {
+      return (this.state?.empresas || []).map((e) => e && e.id).filter(Boolean);
+    }
+    const ids = new Set();
+    if (Array.isArray(u.empresasAsignadas)) {
+      u.empresasAsignadas.filter(Boolean).forEach((id) => ids.add(String(id)));
+    }
+    if (u.empresaId) {
+      ids.add(String(u.empresaId));
+    }
+    if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+      const fSet = new Set(u.fincasAsignadas.map(String));
+      (this.state?.fincas || []).forEach((f) => {
+        if (f && f.empresaId && fSet.has(String(f.id))) {
+          ids.add(String(f.empresaId));
+        }
+      });
+    }
+    return Array.from(ids);
+  }
+
+  getEmpresasPermitidasUsuario(u = this.state?.usuarioActual) {
+    const todas = this.state?.empresas || [];
+    if (!u) return [];
+    if (u.rol === 'superadmin') return todas;
+    const idsSet = new Set(this.getEmpresasIdsUsuario(u));
+    return todas.filter((e) => e && idsSet.has(e.id));
+  }
+
+  getTodasFincasPermitidasUsuario(u = this.state?.usuarioActual) {
+    const todas = this.state?.fincas || [];
+    if (!u) return [];
+    if (u.rol === 'superadmin') return todas;
+    const empIdsSet = new Set(this.getEmpresasIdsUsuario(u));
+    let fincas = empIdsSet.size > 0
+      ? todas.filter((f) => f && empIdsSet.has(f.empresaId))
+      : todas;
+    if (u.fincasAsignadas && u.fincasAsignadas !== 'todas') {
+      if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+        const fSet = new Set(u.fincasAsignadas.map(String));
+        fincas = fincas.filter((f) => fSet.has(String(f.id)));
+      }
+    }
+    return fincas;
+  }
+
   getFincasEmpresa() {
     if (!this.state.usuarioActual) return [];
     const u = this.state.usuarioActual;
@@ -36411,12 +36820,16 @@ class BoviTrackApp {
       return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
     }
 
-    // Delimitación estricta: usuarios convencionales sólo ven fincas de su empresa asignada
-    const empId = u.empresaId || this.state.empresaActivaId;
+    // Delimitación multi-empresa: si la empresaActivaId pertenece a las empresas asignadas al usuario, usarla;
+    // de lo contrario usar su empresa principal o la primera asignada.
+    const empIdsUsr = this.getEmpresasIdsUsuario(u);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (u.empresaId || empIdsUsr[0] || this.state.empresaActivaId);
     if (!empId) return this.state.fincas || [];
     let fincas = (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
 
-    // Delimitación por predios/fincas asignadas al usuario (1, 2 o todas)
+    // Delimitación por predios/fincas asignadas al usuario (1, varias o todas)
     if (u.fincasAsignadas && u.fincasAsignadas !== 'todas') {
       if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
         fincas = fincas.filter((f) => u.fincasAsignadas.includes(f.id));
@@ -36440,6 +36853,13 @@ class BoviTrackApp {
     return activa || null;
   }
 
+  usuarioPerteneceAEmpresa(u, empId) {
+    if (!u || !empId) return false;
+    if (u.empresaId === empId) return true;
+    if (Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.includes(empId)) return true;
+    return false;
+  }
+
   getUsuariosEmpresa() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
@@ -36448,22 +36868,27 @@ class BoviTrackApp {
         ? this.state.empresaActivaId
         : (this.state.empresas?.[0]?.id || null);
       if (empId) {
-        return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
+        return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || this.usuarioPerteneceAEmpresa(u, empId));
       }
       return this.state.usuarios || [];
     }
-    // Delimitación estricta: sólo usuarios de la empresa asignada
-    const empId = this.state.usuarioActual.empresaId;
-    return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual.empresaId || empIdsUsr[0]);
+    return (this.state.usuarios || []).filter((u) => this.usuarioPerteneceAEmpresa(u, empId));
   }
 
   // Fincas accesibles para el módulo de administración (delimitadas estrictamente a la empresa activa)
   getFincasAdmin() {
     if (!this.state.usuarioActual) return [];
     const rol = this.state.usuarioActual.rol;
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
     const empId = rol === 'superadmin'
       ? ((this.state.empresaActivaId && this.state.empresaActivaId !== 'todas') ? this.state.empresaActivaId : (this.state.empresas?.[0]?.id || null))
-      : (this.state.usuarioActual.empresaId || this.state.empresaActivaId);
+      : ((this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+          ? this.state.empresaActivaId
+          : (this.state.usuarioActual.empresaId || empIdsUsr[0] || this.state.empresaActivaId));
     if (!empId) return this.state.fincas || [];
     return (this.state.fincas || []).filter((f) => f && f.empresaId === empId);
   }
@@ -36477,10 +36902,13 @@ class BoviTrackApp {
         ? this.state.empresaActivaId
         : (this.state.empresas?.[0]?.id || null);
       if (!empId) return this.state.usuarios || [];
-      return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
+      return (this.state.usuarios || []).filter((u) => u.rol === 'superadmin' || this.usuarioPerteneceAEmpresa(u, empId));
     }
-    const empId = this.state.usuarioActual.empresaId;
-    return (this.state.usuarios || []).filter((u) => u.empresaId === empId);
+    const empIdsUsr = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+    const empId = (this.state.empresaActivaId && empIdsUsr.includes(this.state.empresaActivaId))
+      ? this.state.empresaActivaId
+      : (this.state.usuarioActual.empresaId || empIdsUsr[0]);
+    return (this.state.usuarios || []).filter((u) => this.usuarioPerteneceAEmpresa(u, empId));
   }
 
   crearFinca(finca) {
@@ -37897,6 +38325,21 @@ class BoviTrackApp {
       );
     }
 
+    usuario._superadminAutorizado = usuario.rol === 'superadmin';
+    const empAsigCrear = Array.isArray(usuario.empresasAsignadas) && usuario.empresasAsignadas.length > 0
+      ? Array.from(new Set(usuario.empresasAsignadas.filter(Boolean)))
+      : (usuario.empresaId ? [usuario.empresaId] : []);
+    usuario.empresasAsignadas = empAsigCrear;
+    if (!usuario.empresaId && empAsigCrear.length > 0 && usuario.rol !== 'superadmin') {
+      usuario.empresaId = empAsigCrear[0];
+    }
+
+    if (!this.state._usuariosModificadosLocalmente) this.state._usuariosModificadosLocalmente = {};
+    this.state._usuariosModificadosLocalmente[cleanUser] = {
+      timestamp: Date.now(),
+      snapshot: { ...usuario }
+    };
+
     this.state.usuarios.push(usuario);
 
     this.guardarEstado();
@@ -37905,12 +38348,15 @@ class BoviTrackApp {
       this.compAdmin.render();
     }
 
-    // Sincronizar inmediatamente a Supabase Cloud si está conectado
+    // Sincronizar inmediatamente a la nube + directorio si está conectado
     if (this.supabase && typeof this.supabase.estaConfigurado === 'function' && this.supabase.estaConfigurado()) {
       try {
         const payload = [{
           id: usuario.id,
           empresa_id: usuario.empresaId || null,
+          ...(typeof this.supabase.usarModoNeon === 'function' && this.supabase.usarModoNeon()
+            ? { empresas_asignadas: empAsigCrear }
+            : {}),
           usuario: usuario.usuario,
           nombre: usuario.nombre,
           rol: usuario.rol,
@@ -37921,9 +38367,12 @@ class BoviTrackApp {
           activo: usuario.activo !== false
         }];
         await this.supabase._postgrestUpsert('usuarios', payload, 'usuario', 10000);
-        console.log(`✓ Usuario @${usuario.usuario} persistido en Supabase Cloud.`);
+        if (typeof this.sincronizarConSupabaseDebounced === 'function') {
+          this.sincronizarConSupabaseDebounced(200);
+        }
+        console.log(`✓ Usuario @${usuario.usuario} persistido en la nube.`);
       } catch (err) {
-        console.warn('Aviso sincronizando usuario en Supabase Cloud:', err.message);
+        console.warn('Aviso sincronizando usuario en la nube:', err.message);
       }
     }
 
@@ -37977,14 +38426,37 @@ class BoviTrackApp {
   }
 
   actualizarUsuario(usuarioActualizado) {
-    const idx = this.state.usuarios.findIndex((u) => u.id === usuarioActualizado.id);
+    const idx = this.state.usuarios.findIndex((u) => u.id === usuarioActualizado.id || u.usuario === usuarioActualizado.usuario);
     if (idx !== -1) {
+      usuarioActualizado._superadminAutorizado = usuarioActualizado.rol === 'superadmin';
+      const empAsigUpd = Array.isArray(usuarioActualizado.empresasAsignadas) && usuarioActualizado.empresasAsignadas.length > 0
+        ? Array.from(new Set(usuarioActualizado.empresasAsignadas.filter(Boolean)))
+        : (usuarioActualizado.empresaId ? [usuarioActualizado.empresaId] : []);
+      usuarioActualizado.empresasAsignadas = empAsigUpd;
+      if (!usuarioActualizado.empresaId && empAsigUpd.length > 0 && usuarioActualizado.rol !== 'superadmin') {
+        usuarioActualizado.empresaId = empAsigUpd[0];
+      }
+
       this.state.usuarios[idx] = usuarioActualizado;
-      if (this.state.usuarioActual.id === usuarioActualizado.id) {
+      if (!this.state._usuariosModificadosLocalmente) this.state._usuariosModificadosLocalmente = {};
+      this.state._usuariosModificadosLocalmente[usuarioActualizado.usuario] = {
+        timestamp: Date.now(),
+        snapshot: { ...usuarioActualizado }
+      };
+
+      if (this.state.usuarioActual && (this.state.usuarioActual.id === usuarioActualizado.id || this.state.usuarioActual.usuario === usuarioActualizado.usuario)) {
         this.state.usuarioActual.nombre = usuarioActualizado.nombre;
         this.state.usuarioActual.rol = usuarioActualizado.rol;
+        this.state.usuarioActual._superadminAutorizado = usuarioActualizado._superadminAutorizado;
         this.state.usuarioActual.empresaId = usuarioActualizado.empresaId;
+        this.state.usuarioActual.empresasAsignadas = usuarioActualizado.empresasAsignadas;
         this.state.usuarioActual.fincasAsignadas = usuarioActualizado.fincasAsignadas || 'todas';
+
+        // Si la empresa activa ya no está entre las empresas permitidas del usuario, cambiar a la primera permitida
+        const empIdsPerm = this.getEmpresasIdsUsuario(this.state.usuarioActual);
+        if (this.state.usuarioActual.rol !== 'superadmin' && empIdsPerm.length > 0 && !empIdsPerm.includes(this.state.empresaActivaId)) {
+          this.state.empresaActivaId = empIdsPerm[0];
+        }
 
         // Si la finca activa ya no está entre las asignadas al usuario, reasignar a la primera permitida
         const fincasPermitidas = this.getFincasEmpresa();
@@ -38001,6 +38473,9 @@ class BoviTrackApp {
         const payload = [{
           id: usuarioActualizado.id,
           empresa_id: usuarioActualizado.empresaId || null,
+          ...(typeof this.supabase.usarModoNeon === 'function' && this.supabase.usarModoNeon()
+            ? { empresas_asignadas: empAsigUpd }
+            : {}),
           usuario: usuarioActualizado.usuario,
           nombre: usuarioActualizado.nombre,
           rol: usuarioActualizado.rol,
@@ -38011,6 +38486,9 @@ class BoviTrackApp {
           activo: usuarioActualizado.activo !== false
         }];
         this.supabase._postgrestUpsert('usuarios', payload, 'usuario', 10000).catch(console.warn);
+        if (typeof this.sincronizarConSupabaseDebounced === 'function') {
+          this.sincronizarConSupabaseDebounced(200);
+        }
       }
 
       alert(`✓ Datos del usuario @${usuarioActualizado.usuario} actualizados.`);
@@ -39299,19 +39777,22 @@ class BoviTrackApp {
     const rol = this.state.usuarioActual ? this.state.usuarioActual.rol : null;
     const esSuperAdmin = rol === 'superadmin';
 
-    // 1. Selector de Empresa Multi-Tenant (visible sólo para Super Admin)
+    // 1. Selector de Empresa Multi-Tenant (visible para Super Admin y para usuarios con >1 empresa asignada)
     const containerEmp = document.getElementById('container-empresa-nav');
     const selEmp = document.getElementById('select-empresa-nav');
+    const empPermitidas = typeof this.getEmpresasPermitidasUsuario === 'function'
+      ? this.getEmpresasPermitidasUsuario(this.state.usuarioActual)
+      : (this.state.empresas || []);
     if (containerEmp) {
-      if (esSuperAdmin) {
+      if (esSuperAdmin || empPermitidas.length > 1) {
         containerEmp.classList.remove('hidden');
         containerEmp.classList.add('flex');
         if (selEmp) {
-          const empList = this.state.empresas || [];
+          const empList = esSuperAdmin ? (this.state.empresas || []) : empPermitidas;
           if (empList.length === 0) {
             selEmp.innerHTML = '<option value="">(Sin Empresas Registradas)</option>';
           } else {
-            const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas')
+            const empActiva = (this.state.empresaActivaId && this.state.empresaActivaId !== 'todas' && empList.some((e) => e.id === this.state.empresaActivaId))
               ? this.state.empresaActivaId
               : empList[0].id;
             selEmp.innerHTML = empList

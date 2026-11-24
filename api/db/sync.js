@@ -131,6 +131,11 @@ async function handleGet(req, res, sql) {
     const esSuperAdmin = String(req.query?.esSuperAdmin || '') === '1' ||
         String(req.headers?.['x-ganadero-rol'] || '').toLowerCase() === 'superadmin';
     const empId = String(req.query?.empresaId || req.headers?.['x-empresa-id'] || '').trim() || null;
+    const empresasParam = String(req.query?.empresasIds || '').trim();
+    const empresasReqIds = empresasParam
+        ? empresasParam.split(',').map((s) => s.trim()).filter(Boolean)
+        : (empId ? [empId] : []);
+    const empresasReqSet = new Set(empresasReqIds);
     const fincasParam = String(req.query?.fincasIds || '').trim();
     const fincasReqIds = fincasParam ? fincasParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
 
@@ -162,18 +167,24 @@ async function handleGet(req, res, sql) {
     });
 
     let fincas = (fincasRows || []).map(mapFincaDbToApp);
-    let usuarios = (usuariosRows || []).map((r) => ({
-        id: r.id,
-        empresaId: r.empresa_id || null,
-        usuario: r.usuario,
-        nombre: r.nombre,
-        rol: r.rol,
-        password: r.password || '',
-        fincasAsignadas: r.fincas_asignadas !== undefined && r.fincas_asignadas !== null ? r.fincas_asignadas : 'todas',
-        email: r.email || '',
-        telefono: r.telefono || '',
-        activo: r.activo !== false
-    }));
+    let usuarios = (usuariosRows || []).map((r) => {
+        const empAsigRaw = Array.isArray(r.empresas_asignadas) ? r.empresas_asignadas.filter(Boolean) : [];
+        const primaryEmp = r.empresa_id || empAsigRaw[0] || null;
+        return {
+            id: r.id,
+            empresaId: primaryEmp,
+            empresasAsignadas: empAsigRaw.length > 0 ? empAsigRaw : (primaryEmp ? [primaryEmp] : []),
+            usuario: r.usuario,
+            nombre: r.nombre,
+            rol: r.rol,
+            _superadminAutorizado: r.rol === 'superadmin',
+            password: r.password || '',
+            fincasAsignadas: r.fincas_asignadas !== undefined && r.fincas_asignadas !== null ? r.fincas_asignadas : 'todas',
+            email: r.email || '',
+            telefono: r.telefono || '',
+            activo: r.activo !== false
+        };
+    });
 
     let empresasEliminadas = [];
     let fincasEliminadas = [];
@@ -191,7 +202,7 @@ async function handleGet(req, res, sql) {
         if (Array.isArray(det.empresas)) {
             det.empresas.forEach((eDir) => {
                 if (!eDir || !eDir.id || elimEmpSet.has(eDir.id)) return;
-                if (!esSuperAdmin && empId && eDir.id !== empId) return;
+                if (!esSuperAdmin && empresasReqSet.size > 0 && !empresasReqSet.has(eDir.id)) return;
                 const idx = empresas.findIndex((ec) => ec.id === eDir.id);
                 if (idx === -1) empresas.push(eDir);
                 else empresas[idx] = { ...empresas[idx], ...eDir };
@@ -221,16 +232,31 @@ async function handleGet(req, res, sql) {
                 }
             });
         }
+        if (det.usuariosEmpresasAsignadasMap && typeof det.usuariosEmpresasAsignadasMap === 'object') {
+            usuarios.forEach((u) => {
+                const arr = det.usuariosEmpresasAsignadasMap[u.usuario];
+                if (Array.isArray(arr) && arr.length > 0) {
+                    u.empresasAsignadas = Array.from(new Set([...arr, ...(u.empresaId ? [u.empresaId] : [])].filter(Boolean)));
+                    if (!u.empresaId) u.empresaId = u.empresasAsignadas[0];
+                } else if ((!u.empresasAsignadas || u.empresasAsignadas.length === 0) && u.empresaId) {
+                    u.empresasAsignadas = [u.empresaId];
+                }
+            });
+        }
     } else {
         fincas.forEach((f) => { if (!f.empresaId) f.empresaId = 'EMP-01'; });
     }
 
     let empresasFinal = empresas;
     let fincasIdsFilter = null;
-    if (!esSuperAdmin && empId) {
-        empresasFinal = empresas.filter((e) => e.id === empId);
-        fincas = fincas.filter((f) => f.empresaId === empId);
-        usuarios = usuarios.filter((u) => u.rol === 'superadmin' || u.empresaId === empId);
+    if (!esSuperAdmin && empresasReqSet.size > 0) {
+        empresasFinal = empresas.filter((e) => empresasReqSet.has(e.id));
+        fincas = fincas.filter((f) => empresasReqSet.has(f.empresaId));
+        usuarios = usuarios.filter((u) =>
+            u.rol === 'superadmin' ||
+            empresasReqSet.has(u.empresaId) ||
+            (Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.some((eid) => empresasReqSet.has(eid)))
+        );
         fincasIdsFilter = fincasReqIds.length > 0 ? fincasReqIds : fincas.map((f) => f.id).filter(Boolean);
     }
 
@@ -491,7 +517,9 @@ async function handlePost(req, res, sql) {
             fincasPurgadas: { ...(prevDet.fincasPurgadas || {}), ...(nuevoDet.fincasPurgadas || {}) },
             fincasEmpresaMap: { ...(prevDet.fincasEmpresaMap || {}), ...(nuevoDet.fincasEmpresaMap || {}) },
             fincasOrdenosMap: { ...(prevDet.fincasOrdenosMap || {}), ...(nuevoDet.fincasOrdenosMap || {}) },
-            usuariosEmpresaMap: { ...(prevDet.usuariosEmpresaMap || {}), ...(nuevoDet.usuariosEmpresaMap || {}) }
+            usuariosEmpresaMap: { ...(prevDet.usuariosEmpresaMap || {}), ...(nuevoDet.usuariosEmpresaMap || {}) },
+            usuariosEmpresasAsignadasMap: { ...(prevDet.usuariosEmpresasAsignadasMap || {}), ...(nuevoDet.usuariosEmpresasAsignadasMap || {}) },
+            superadminsAutorizados: union(prevDet.superadminsAutorizados, nuevoDet.superadminsAutorizados)
         };
         await bulkUpsert(sql, {
             table: 'operaciones_diarias',
@@ -517,11 +545,16 @@ async function handlePost(req, res, sql) {
     if (Array.isArray(body.usuarios) && body.usuarios.length > 0) {
         resultados.usuarios = await bulkUpsert(sql, {
             table: 'usuarios',
-            columns: ['id', 'empresa_id', 'usuario', 'nombre', 'rol', 'password', 'fincas_asignadas', 'email', 'telefono', 'activo'],
-            jsonColumns: ['fincas_asignadas'],
+            columns: ['id', 'empresa_id', 'empresas_asignadas', 'usuario', 'nombre', 'rol', 'password', 'fincas_asignadas', 'email', 'telefono', 'activo'],
+            jsonColumns: ['fincas_asignadas', 'empresas_asignadas'],
             conflictTarget: 'usuario',
-            updateColumns: ['empresa_id', 'nombre', 'rol', 'password', 'fincas_asignadas', 'email', 'telefono', 'activo'],
-            rows: body.usuarios
+            updateColumns: ['empresa_id', 'empresas_asignadas', 'nombre', 'rol', 'password', 'fincas_asignadas', 'email', 'telefono', 'activo'],
+            rows: body.usuarios.map((u) => ({
+                ...u,
+                empresas_asignadas: Array.isArray(u.empresas_asignadas)
+                    ? u.empresas_asignadas
+                    : (Array.isArray(u.empresasAsignadas) ? u.empresasAsignadas : (u.empresa_id ? [u.empresa_id] : []))
+            }))
         });
     }
 

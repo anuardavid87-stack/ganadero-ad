@@ -784,11 +784,50 @@ export class ModuloAdmin {
     `;
   }
 
+  obtenerTodasLasFincas(fincasFallback = []) {
+    if (typeof this.getTodasLasFincas === 'function') {
+      const todas = this.getTodasLasFincas();
+      if (Array.isArray(todas) && todas.length > 0) return todas;
+    }
+    if (Array.isArray(fincasFallback) && fincasFallback.length > 0) return fincasFallback;
+    return this.getFincas ? this.getFincas() : [];
+  }
+
+  obtenerTodosLosUsuarios(usuariosFallback = []) {
+    if (typeof this.getTodosLosUsuarios === 'function') {
+      const todos = this.getTodosLosUsuarios();
+      if (Array.isArray(todos) && todos.length > 0) return todos;
+    }
+    if (Array.isArray(usuariosFallback) && usuariosFallback.length > 0) return usuariosFallback;
+    return this.getUsuarios ? this.getUsuarios() : [];
+  }
+
+  obtenerEmpresasIdsDeUsuario(u, fincas = []) {
+    if (!u) return [];
+    const set = new Set();
+    if (Array.isArray(u.empresasAsignadas)) {
+      u.empresasAsignadas.filter(Boolean).forEach((id) => set.add(String(id)));
+    }
+    if (u.empresaId) set.add(String(u.empresaId));
+    if (Array.isArray(u.fincasAsignadas) && !u.fincasAsignadas.includes('todas')) {
+      const fSet = new Set(u.fincasAsignadas.map(String));
+      (fincas || []).forEach((f) => {
+        if (f && f.empresaId && fSet.has(String(f.id))) {
+          set.add(String(f.empresaId));
+        }
+      });
+    }
+    return Array.from(set);
+  }
+
   renderBadgeFincasUsuario(u, fincas = []) {
     if (u.rol === 'superadmin') {
-      return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">🌐 Todas las Fincas (Global)</span>';
+      return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">🌐 Todas las Empresas y Fincas (Global)</span>';
     }
-    const empFincas = (fincas || []).filter((f) => f.empresaId === u.empresaId);
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const empIds = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+    const empIdsSet = new Set(empIds);
+    const empFincas = (todasFincas || []).filter((f) => empIdsSet.has(String(f.empresaId)));
     const esTodas = !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
 
     if (esTodas) {
@@ -797,7 +836,7 @@ export class ModuloAdmin {
 
     if (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.length > 0) {
       return u.fincasAsignadas.map((fid) => {
-        const f = (fincas || []).find((item) => item.id === fid);
+        const f = (todasFincas || []).find((item) => item.id === fid);
         const nom = f ? f.nombre : fid;
         return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200" title="${nom}">📍 ${nom}</span>`;
       }).join(' ');
@@ -810,7 +849,8 @@ export class ModuloAdmin {
   // SECCIÓN 2: GESTIÓN DE USUARIOS Y ROLES (RBAC)
   // ==========================================================================
   renderSeccionUsuarios(usuarios = [], empresas = [], fincas = [], esSuperAdmin = false, esAdmin = false, esConsultor = false) {
-    let lista = usuarios;
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    let lista = esSuperAdmin ? this.obtenerTodosLosUsuarios(usuarios) : usuarios;
 
     // Filtro por texto
     if (this.filtroUsuario.trim()) {
@@ -824,9 +864,13 @@ export class ModuloAdmin {
       );
     }
 
-    // Filtro por empresa
+    // Filtro por empresa (soporta usuarios multi-empresa)
     if (this.filtroEmpresaUsuario !== 'todos') {
-      lista = lista.filter((u) => u.empresaId === this.filtroEmpresaUsuario);
+      lista = lista.filter((u) => {
+        if (u.rol === 'superadmin') return true;
+        const empIds = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+        return empIds.includes(this.filtroEmpresaUsuario);
+      });
     }
 
     return `
@@ -834,10 +878,10 @@ export class ModuloAdmin {
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h4 class="font-black text-slate-800 text-sm flex items-center gap-2">
-              <span>Gestión de Usuarios & Control de Roles (${usuarios.length} Registrados)</span>
+              <span>Gestión de Usuarios & Control de Roles (${lista.length} Registrados)</span>
             </h4>
             <p class="text-xs text-slate-600 mt-0.5">
-              Administración de credenciales de acceso. Cada usuario cuenta con un rol estricto asignado en su perfil.
+              Administración de credenciales de acceso. Puedes asignar una o varias empresas y delimitar fincas por empresa.
             </p>
           </div>
 
@@ -872,7 +916,7 @@ export class ModuloAdmin {
               <tr>
                 <th class="p-3">Usuario / Handle</th>
                 <th class="p-3">Nombre & Contacto</th>
-                <th class="p-3">Empresa & Fincas</th>
+                <th class="p-3">Empresas & Fincas</th>
                 <th class="p-3">Rol Oficial</th>
                 <th class="p-3">Contraseña Asignada</th>
                 <th class="p-3 text-center">Estado</th>
@@ -883,7 +927,11 @@ export class ModuloAdmin {
               ${lista.length > 0 ? lista.map((u) => {
                 const passVisible = !!this.passwordsVisibles[u.id];
                 const passwordText = u.password || 'BoviPass123';
-                const emp = (empresas || []).find((e) => e.id === u.empresaId);
+                const empIdsUsr = this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+                const empresasAsignadasObjs = empIdsUsr
+                  .map((id) => (empresas || []).find((e) => e.id === id))
+                  .filter(Boolean);
+                const empPrincipal = empresasAsignadasObjs[0] || (empresas || []).find((e) => e.id === u.empresaId) || null;
 
                 return `
                   <tr class="hover:bg-purple-50/20 transition">
@@ -896,10 +944,18 @@ export class ModuloAdmin {
                       <div class="text-[10px] text-slate-600">${u.email || 'Sin correo'} • ${u.telefono || 'Sin tel'}</div>
                     </td>
                     <td class="p-3">
-                      <span class="font-bold text-slate-800 block">${emp ? emp.nombre : (u.rol === 'superadmin' ? '🌐 Acceso Global' : 'Sin asignar')}</span>
-                      <span class="text-[10px] text-slate-600 font-mono">${emp ? emp.nit || emp.id : (u.empresaId || '')}</span>
+                      ${u.rol === 'superadmin' ? `
+                        <span class="font-bold text-purple-900 block">🌐 Acceso Global (Todas las Empresas)</span>
+                      ` : empresasAsignadasObjs.length > 1 ? `
+                        <div class="flex flex-wrap gap-1 mb-1">
+                          ${empresasAsignadasObjs.map((eObj) => `<span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200">🏢 ${eObj.nombre}</span>`).join('')}
+                        </div>
+                      ` : `
+                        <span class="font-bold text-slate-800 block">${empPrincipal ? empPrincipal.nombre : 'Sin asignar'}</span>
+                        <span class="text-[10px] text-slate-600 font-mono">${empPrincipal ? empPrincipal.nit || empPrincipal.id : (u.empresaId || '')}</span>
+                      `}
                       <div class="mt-1.5 flex flex-wrap gap-1 items-center">
-                        ${this.renderBadgeFincasUsuario(u, fincas)}
+                        ${this.renderBadgeFincasUsuario(u, todasFincas)}
                       </div>
                     </td>
                     <td class="p-3">
@@ -2305,14 +2361,71 @@ export class ModuloAdmin {
     `;
   }
 
-  renderListaChecksFincas(fincas = [], empresaId, modo = 'crear', fincasAsignadas = 'todas') {
-    const fincasDeEmp = (fincas || []).filter((f) => f.empresaId === empresaId);
+  renderListaChecksFincas(fincas = [], empresaIdOIds, modo = 'crear', fincasAsignadas = 'todas', empresasCatalogo = []) {
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const todasEmpresas = Array.isArray(empresasCatalogo) && empresasCatalogo.length > 0
+      ? empresasCatalogo
+      : (this.getEmpresas ? this.getEmpresas() : []);
+    const empIds = Array.isArray(empresaIdOIds)
+      ? empresaIdOIds.filter(Boolean)
+      : (empresaIdOIds ? [empresaIdOIds] : []);
+    const empIdsSet = new Set(empIds.map(String));
+
+    const fincasDeEmp = (todasFincas || []).filter((f) => f && empIdsSet.has(String(f.empresaId)));
     if (fincasDeEmp.length === 0) {
-      return '<div class="col-span-full text-slate-600 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">No hay fincas registradas en esta empresa aún.</div>';
+      return '<div class="col-span-full text-slate-600 text-[11px] italic p-2.5 text-center bg-white rounded-xl border border-slate-200">Selecciona al menos una empresa con fincas registradas.</div>';
     }
 
     const esTodas = !fincasAsignadas || fincasAsignadas === 'todas' || (Array.isArray(fincasAsignadas) && fincasAsignadas.includes('todas'));
     const listaIds = Array.isArray(fincasAsignadas) ? fincasAsignadas : [];
+
+    // Si hay múltiples empresas seleccionadas, agrupar visualmente las fincas por cada empresa
+    if (empIds.length > 1) {
+      return empIds.map((eid) => {
+        const empObj = todasEmpresas.find((e) => String(e.id) === String(eid));
+        const nomEmp = empObj ? empObj.nombre : eid;
+        const fincasGrupo = fincasDeEmp.filter((f) => String(f.empresaId) === String(eid));
+        if (fincasGrupo.length === 0) {
+          return `
+            <div class="col-span-full bg-white/80 rounded-xl border border-slate-200 p-2.5">
+              <div class="text-[11px] font-black text-purple-900">🏢 ${nomEmp}</div>
+              <div class="text-[10px] text-slate-500 italic mt-0.5">Sin fincas registradas en esta empresa.</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="col-span-full bg-white/90 rounded-xl border border-purple-200 p-2.5 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+              <span class="text-[11px] font-black text-purple-950">🏢 ${nomEmp} (${fincasGrupo.length} finca${fincasGrupo.length === 1 ? '' : 's'})</span>
+              <button type="button" class="btn-toggle-fincas-emp-${modo} text-[10px] font-bold text-purple-700 hover:underline cursor-pointer" data-emp-id="${eid}">
+                Marcar/Desmarcar fincas de ${nomEmp}
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${fincasGrupo.map((f) => {
+                const isChecked = esTodas || listaIds.includes(f.id);
+                return `
+                  <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200 hover:bg-purple-50/40 cursor-pointer text-slate-700 font-semibold transition select-none">
+                    <input
+                      type="checkbox"
+                      name="fincas_asignadas_${modo}"
+                      value="${f.id}"
+                      data-empresa-id="${f.empresaId}"
+                      ${isChecked ? 'checked' : ''}
+                      class="chk-finca-item-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
+                    >
+                    <div class="truncate">
+                      <span class="text-xs font-bold text-slate-800 block truncate" title="${f.nombre}">${f.nombre}</span>
+                      <span class="text-[10px] text-slate-600 font-mono">${f.codigo || f.id}</span>
+                    </div>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     return fincasDeEmp.map((f) => {
       const isChecked = esTodas || listaIds.includes(f.id);
@@ -2322,6 +2435,7 @@ export class ModuloAdmin {
             type="checkbox" 
             name="fincas_asignadas_${modo}" 
             value="${f.id}" 
+            data-empresa-id="${f.empresaId}"
             ${isChecked ? 'checked' : ''} 
             class="chk-finca-item-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
           >
@@ -2334,7 +2448,56 @@ export class ModuloAdmin {
     }).join('');
   }
 
+  renderSelectorEmpresasUsuario(empresas = [], seleccionadasIds = [], empresaPrincipalId = '', modo = 'crear') {
+    const selSet = new Set((Array.isArray(seleccionadasIds) ? seleccionadasIds : []).map(String));
+    if (selSet.size === 0 && empresaPrincipalId) selSet.add(String(empresaPrincipalId));
+    return `
+      <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+        <div class="flex justify-between items-center gap-2">
+          <div>
+            <label class="block font-black text-slate-800">🏢 Empresas Ganaderas Asignadas *:</label>
+            <span class="text-[10px] text-slate-600">Puedes asignar 1 o varias empresas simultáneamente a este usuario.</span>
+          </div>
+          ${empresas.length > 1 ? `
+            <button type="button" id="btn-todas-empresas-${modo}" class="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 font-black text-[10px] cursor-pointer whitespace-nowrap">
+              🌐 Todas las empresas
+            </button>
+          ` : ''}
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="contenedor-checks-empresas-${modo}">
+          ${empresas.map((e) => {
+            const checked = selSet.has(String(e.id));
+            return `
+              <label class="flex items-center gap-2 p-2.5 bg-white rounded-xl border ${checked ? 'border-purple-500 ring-1 ring-purple-400/40' : 'border-slate-200'} hover:bg-purple-50/40 cursor-pointer transition select-none">
+                <input
+                  type="checkbox"
+                  name="empresas_asignadas_${modo}"
+                  value="${e.id}"
+                  ${checked ? 'checked' : ''}
+                  class="chk-empresa-usr-${modo} w-4 h-4 text-purple-600 rounded cursor-pointer"
+                >
+                <div class="truncate">
+                  <span class="text-xs font-black text-slate-800 block truncate">${e.nombre}</span>
+                  <span class="text-[10px] text-slate-500 font-mono">${e.nit || e.id}</span>
+                </div>
+              </label>
+            `;
+          }).join('')}
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 text-[11px] mb-1">Empresa Principal al Iniciar Sesión:</label>
+          <select id="${modo === 'crear' ? 'usr-empresa' : 'edit-empresa'}" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
+            ${empresas.map((e) => `<option value="${e.id}" ${String(empresaPrincipalId) === String(e.id) ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+  }
+
   renderModalCrearUsuario(empresas = [], fincas = [], esSuperAdmin = false) {
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
     const uActual = this.getUsuarioActual ? this.getUsuarioActual() : null;
     const empActiva = this.getEmpresaActiva ? this.getEmpresaActiva() : null;
     const empIdDefecto = this.empresaParaNuevoUsuario || (uActual && uActual.empresaId) || (empActiva && empActiva.id) || (empresas[0]?.id) || '';
@@ -2347,7 +2510,7 @@ export class ModuloAdmin {
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">👤</span>
               <div>
                 <h3 class="text-base font-black">Crear Nuevo Usuario</h3>
-                <p class="text-xs text-slate-600">Asigna credenciales, rol y delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Asigna credenciales, rol, una o más empresas y sus fincas autorizadas.</p>
               </div>
             </div>
             <button id="btn-cerrar-modal-crear-usr" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
@@ -2380,32 +2543,27 @@ export class ModuloAdmin {
               </div>
             </div>
 
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="usr-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdDefecto === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
-              </select>
-            </div>
+            ${this.renderSelectorEmpresasUsuario(empresas, [empIdDefecto], empIdDefecto, 'crear')}
 
-            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS (1, 2 O TODAS) -->
+            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS POR EMPRESA -->
             <div class="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200/80 space-y-2">
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">🏡 Fincas Permitidas / Asignadas *:</label>
-                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">1, 2 o Todas</span>
+                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">Por Empresa o Todas</span>
               </div>
               <p class="text-[11px] text-slate-600">
-                Selecciona las fincas a las que este usuario podrá ingresar para registrar o consultar datos:
+                Selecciona las fincas de cada empresa seleccionada a las que este usuario podrá ingresar:
               </p>
 
               <!-- Checkbox Maestro: Todas las fincas -->
               <label class="flex items-center gap-2 p-2 bg-white rounded-xl border border-purple-200 hover:bg-purple-100/50 cursor-pointer font-bold text-slate-800 transition select-none">
                 <input type="checkbox" id="chk-todas-fincas-crear" checked class="w-4 h-4 text-purple-600 rounded cursor-pointer">
-                <span>🌐 Todas las fincas de la empresa</span>
+                <span>🌐 Todas las fincas de las empresas seleccionadas</span>
               </label>
 
               <!-- Contenedor dinámico de fincas -->
               <div id="contenedor-checks-fincas-crear" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                ${this.renderListaChecksFincas(fincas, empIdDefecto, 'crear', 'todas')}
+                ${this.renderListaChecksFincas(todasFincas, [empIdDefecto], 'crear', 'todas', empresas)}
               </div>
             </div>
 
@@ -2430,7 +2588,7 @@ export class ModuloAdmin {
                 </button>
               </div>
               <input type="text" id="usr-password" required value="BoviPass2026*" class="w-full px-3 py-2 font-mono font-bold rounded-xl border border-purple-300 bg-white outline-none">
-              <span class="text-[10px] text-purple-700 block">El usuario iniciará sesión ingresando Empresa, su Usuario y esta Contraseña.</span>
+              <span class="text-[10px] text-purple-700 block">El usuario iniciará sesión ingresando su Usuario y esta Contraseña.</span>
             </div>
 
             <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
@@ -2451,8 +2609,13 @@ export class ModuloAdmin {
     const u = this.usuarioEditando;
     if (!u) return '';
 
-    const empIdUsuario = u.empresaId || (empresas[0]?.id) || '';
-    const esTodas = !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
+    const todasFincas = this.obtenerTodasLasFincas(fincas);
+    const empIdsUsuario = u.rol === 'superadmin'
+      ? empresas.map((e) => e.id)
+      : this.obtenerEmpresasIdsDeUsuario(u, todasFincas);
+    const empIdPrincipal = u.empresaId || empIdsUsuario[0] || (empresas[0]?.id) || '';
+    const empIdsEfectivos = empIdsUsuario.length > 0 ? empIdsUsuario : (empIdPrincipal ? [empIdPrincipal] : []);
+    const esTodas = u.rol === 'superadmin' || !u.fincasAsignadas || u.fincasAsignadas === 'todas' || (Array.isArray(u.fincasAsignadas) && u.fincasAsignadas.includes('todas'));
 
     return `
       <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
@@ -2462,7 +2625,7 @@ export class ModuloAdmin {
               <span class="text-2xl p-2 bg-purple-900/50 rounded-xl border border-purple-600">✏️</span>
               <div>
                 <h3 class="text-base font-black">Editar Perfil: @${u.usuario}</h3>
-                <p class="text-xs text-slate-600">Actualiza rol asignado, estado o delimita fincas autorizadas.</p>
+                <p class="text-xs text-slate-600">Actualiza rol, asigna una o más empresas y delimita fincas por empresa.</p>
               </div>
             </div>
             <button id="btn-cerrar-modal-edit" class="p-1.5 rounded-xl bg-slate-800 text-slate-600 hover:text-slate-800 cursor-pointer">✕</button>
@@ -2478,7 +2641,7 @@ export class ModuloAdmin {
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Rol Asignado *:</label>
                 <select id="edit-rol" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white">
-                  ${esSuperAdmin ? `<option value="superadmin" ${u.rol === 'superadmin' ? 'selected' : ''}>👑 Super Administrador (Global)</option>` : ''}
+                  ${(esSuperAdmin || u.rol === 'superadmin') ? `<option value="superadmin" ${u.rol === 'superadmin' ? 'selected' : ''}>👑 Super Administrador (Global)</option>` : ''}
                   <option value="administrador" ${u.rol === 'administrador' ? 'selected' : ''}>⭐ Administrador (Modificaciones y Empresa)</option>
                   <option value="encargado" ${u.rol === 'encargado' || u.rol === 'operario' || u.rol === 'veterinario' ? 'selected' : ''}>🤠 Encargado (Ingreso de Datos de Ganado)</option>
                   <option value="consultor" ${u.rol === 'consultor' || u.rol === 'consulta' || u.rol === 'propietario' ? 'selected' : ''}>👁️ Consultor (Solo Consulta de Información)</option>
@@ -2494,32 +2657,27 @@ export class ModuloAdmin {
               </div>
             </div>
 
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Empresa Ganadera Asignada *:</label>
-              <select id="edit-empresa" class="w-full px-3 py-2 font-bold rounded-xl border border-slate-300 outline-none bg-white text-slate-800">
-                ${empresas.map((e) => `<option value="${e.id}" ${empIdUsuario === e.id ? 'selected' : ''}>${e.nombre} (${e.nit || e.id})</option>`).join('')}
-              </select>
-            </div>
+            ${this.renderSelectorEmpresasUsuario(empresas, empIdsEfectivos, empIdPrincipal, 'edit')}
 
-            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS (1, 2 O TODAS) -->
+            <!-- ASIGNACIÓN DE FINCAS PERMITIDAS POR EMPRESA -->
             <div class="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200/80 space-y-2">
               <div class="flex justify-between items-center">
                 <label class="block font-black text-purple-950">🏡 Fincas Permitidas / Asignadas *:</label>
-                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">1, 2 o Todas</span>
+                <span class="text-[10px] text-purple-800 font-bold bg-purple-200/70 px-2 py-0.5 rounded-full">Por Empresa o Todas</span>
               </div>
               <p class="text-[11px] text-slate-600">
-                Selecciona las fincas a las que este usuario podrá ingresar para registrar o consultar datos:
+                Selecciona las fincas de cada empresa seleccionada a las que este usuario podrá ingresar:
               </p>
 
               <!-- Checkbox Maestro: Todas las fincas -->
               <label class="flex items-center gap-2 p-2 bg-white rounded-xl border border-purple-200 hover:bg-purple-100/50 cursor-pointer font-bold text-slate-800 transition select-none">
                 <input type="checkbox" id="chk-todas-fincas-edit" ${esTodas ? 'checked' : ''} class="w-4 h-4 text-purple-600 rounded cursor-pointer">
-                <span>🌐 Todas las fincas de la empresa</span>
+                <span>🌐 Todas las fincas de las empresas seleccionadas</span>
               </label>
 
               <!-- Contenedor dinámico de fincas -->
               <div id="contenedor-checks-fincas-edit" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                ${this.renderListaChecksFincas(fincas, empIdUsuario, 'edit', u.fincasAsignadas)}
+                ${this.renderListaChecksFincas(todasFincas, empIdsEfectivos, 'edit', esTodas ? 'todas' : u.fincasAsignadas, empresas)}
               </div>
             </div>
 
@@ -3276,40 +3434,83 @@ END $$;
       });
     }
 
-    // Vinculación reactiva de checkboxes de fincas
+    // Vinculación reactiva de checkboxes de empresas y fincas
     this.vincularEventosFincasAsignadas('crear');
     this.vincularEventosFincasAsignadas('edit');
 
-    const selEmpCrear = this.container.querySelector('#usr-empresa');
-    if (selEmpCrear) {
-      selEmpCrear.addEventListener('change', (e) => {
-        const newEmpId = e.target.value;
-        this.empresaParaNuevoUsuario = newEmpId;
-        const contenedor = this.container.querySelector('#contenedor-checks-fincas-crear');
-        const fincas = this.getFincas ? this.getFincas() : [];
-        if (contenedor) {
-          contenedor.innerHTML = this.renderListaChecksFincas(fincas, newEmpId, 'crear', 'todas');
-          this.vincularEventosFincasAsignadas('crear');
-        }
-        const master = this.container.querySelector('#chk-todas-fincas-crear');
-        if (master) master.checked = true;
-      });
-    }
+    const vincularSelectorMultiEmpresa = (modo) => {
+      const selPrimary = this.container.querySelector(modo === 'crear' ? '#usr-empresa' : '#edit-empresa');
+      const selRol = this.container.querySelector(modo === 'crear' ? '#usr-rol' : '#edit-rol');
+      const btnTodasEmp = this.container.querySelector(`#btn-todas-empresas-${modo}`);
+      const contenedorFincas = this.container.querySelector(`#contenedor-checks-fincas-${modo}`);
+      const masterFincas = this.container.querySelector(`#chk-todas-fincas-${modo}`);
 
-    const selEmpEdit = this.container.querySelector('#edit-empresa');
-    if (selEmpEdit) {
-      selEmpEdit.addEventListener('change', (e) => {
-        const newEmpId = e.target.value;
-        const contenedor = this.container.querySelector('#contenedor-checks-fincas-edit');
-        const fincas = this.getFincas ? this.getFincas() : [];
-        if (contenedor) {
-          contenedor.innerHTML = this.renderListaChecksFincas(fincas, newEmpId, 'edit', 'todas');
-          this.vincularEventosFincasAsignadas('edit');
+      const refrescarFincasPorEmpresas = (forzarTodasFincas = false) => {
+        const todasFincas = this.obtenerTodasLasFincas();
+        const empresasCat = this.getEmpresas ? this.getEmpresas() : [];
+        const chksEmp = Array.from(this.container.querySelectorAll(`.chk-empresa-usr-${modo}:checked`)).map((c) => c.value);
+        const primaryVal = selPrimary ? selPrimary.value : '';
+        const empIds = Array.from(new Set([...chksEmp, ...(chksEmp.length === 0 && primaryVal ? [primaryVal] : [])].filter(Boolean)));
+
+        if (selPrimary && empIds.length > 0 && !empIds.includes(selPrimary.value)) {
+          selPrimary.value = empIds[0];
         }
-        const master = this.container.querySelector('#chk-todas-fincas-edit');
-        if (master) master.checked = true;
+
+        const prevCheckedFincas = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}:checked`)).map((c) => c.value);
+        const usarTodas = forzarTodasFincas || Boolean(masterFincas && masterFincas.checked);
+
+        if (contenedorFincas) {
+          contenedorFincas.innerHTML = this.renderListaChecksFincas(
+            todasFincas,
+            empIds,
+            modo,
+            usarTodas ? 'todas' : prevCheckedFincas,
+            empresasCat
+          );
+          this.vincularEventosFincasAsignadas(modo);
+        }
+        if (forzarTodasFincas && masterFincas) {
+          masterFincas.checked = true;
+        }
+      };
+
+      this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((chk) => {
+        chk.addEventListener('change', () => {
+          refrescarFincasPorEmpresas(false);
+        });
       });
-    }
+
+      if (btnTodasEmp) {
+        btnTodasEmp.addEventListener('click', () => {
+          this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((c) => { c.checked = true; });
+          refrescarFincasPorEmpresas(true);
+        });
+      }
+
+      if (selPrimary) {
+        selPrimary.addEventListener('change', (e) => {
+          const newEmpId = e.target.value;
+          if (modo === 'crear') this.empresaParaNuevoUsuario = newEmpId;
+          const chkMatch = this.container.querySelector(`.chk-empresa-usr-${modo}[value="${newEmpId}"]`);
+          if (chkMatch && !chkMatch.checked) {
+            chkMatch.checked = true;
+          }
+          refrescarFincasPorEmpresas(false);
+        });
+      }
+
+      if (selRol) {
+        selRol.addEventListener('change', (e) => {
+          if (e.target.value === 'superadmin') {
+            this.container.querySelectorAll(`.chk-empresa-usr-${modo}`).forEach((c) => { c.checked = true; });
+            refrescarFincasPorEmpresas(true);
+          }
+        });
+      }
+    };
+
+    vincularSelectorMultiEmpresa('crear');
+    vincularSelectorMultiEmpresa('edit');
 
     // Validación reactiva en tiempo real al escribir el usuario
     const inputLogin = this.container.querySelector('#usr-login');
@@ -3392,9 +3593,18 @@ END $$;
           return;
         }
 
+        const chkEmpresasCrear = Array.from(this.container.querySelectorAll('.chk-empresa-usr-crear:checked')).map((c) => c.value);
+        const todasEmpIds = (this.getEmpresas ? this.getEmpresas() : []).map((e) => e.id);
+        const empresasAsignadas = rol === 'superadmin'
+          ? todasEmpIds
+          : Array.from(new Set([...chkEmpresasCrear, ...(empresaId ? [empresaId] : [])].filter(Boolean)));
+        const primaryEmpCrear = (empresaId && empresasAsignadas.includes(empresaId))
+          ? empresaId
+          : (empresasAsignadas[0] || empresaId || null);
+
         const chkMaster = this.container.querySelector('#chk-todas-fincas-crear');
         let fincasAsignadas = 'todas';
-        if (chkMaster && !chkMaster.checked) {
+        if (rol !== 'superadmin' && chkMaster && !chkMaster.checked) {
           const checkedItems = Array.from(this.container.querySelectorAll('.chk-finca-item-crear:checked'));
           if (checkedItems.length === 0) {
             alert('Debes seleccionar al menos una finca para este usuario, o marcar "Todas las fincas".');
@@ -3408,7 +3618,9 @@ END $$;
           usuario: login,
           nombre,
           rol,
-          empresaId: empresaId || null,
+          _superadminAutorizado: rol === 'superadmin',
+          empresaId: rol === 'superadmin' ? null : primaryEmpCrear,
+          empresasAsignadas,
           fincasAsignadas,
           email: email || `${login}@bovitrack.com`,
           telefono: telefono || '',
@@ -3440,7 +3652,7 @@ END $$;
     this.container.querySelectorAll('.btn-abrir-modal-password').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        const usuarios = this.getUsuarios ? this.getUsuarios() : [];
+        const usuarios = this.obtenerTodosLosUsuarios();
         this.usuarioCambiandoPassword = usuarios.find((u) => u.id === id) || null;
         this.render();
       });
@@ -3499,7 +3711,7 @@ END $$;
     this.container.querySelectorAll('.btn-abrir-modal-editar').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.getAttribute('data-id');
-        const usuarios = this.getUsuarios ? this.getUsuarios() : [];
+        const usuarios = this.obtenerTodosLosUsuarios();
         this.usuarioEditando = usuarios.find((u) => u.id === id) || null;
         this.render();
       });
@@ -3535,9 +3747,18 @@ END $$;
         const elEditEmpresa = document.getElementById('edit-empresa');
         const empresaId = elEditEmpresa ? elEditEmpresa.value : this.usuarioEditando.empresaId;
 
+        const chkEmpresasEdit = Array.from(this.container.querySelectorAll('.chk-empresa-usr-edit:checked')).map((c) => c.value);
+        const todasEmpIds = (this.getEmpresas ? this.getEmpresas() : []).map((e) => e.id);
+        const empresasAsignadas = rol === 'superadmin'
+          ? todasEmpIds
+          : Array.from(new Set([...chkEmpresasEdit, ...(empresaId ? [empresaId] : [])].filter(Boolean)));
+        const primaryEmpEdit = (empresaId && empresasAsignadas.includes(empresaId))
+          ? empresaId
+          : (empresasAsignadas[0] || empresaId || null);
+
         const chkMasterEdit = this.container.querySelector('#chk-todas-fincas-edit');
         let fincasAsignadas = 'todas';
-        if (chkMasterEdit && !chkMasterEdit.checked) {
+        if (rol !== 'superadmin' && chkMasterEdit && !chkMasterEdit.checked) {
           const checkedItems = Array.from(this.container.querySelectorAll('.chk-finca-item-edit:checked'));
           if (checkedItems.length === 0) {
             alert('Debes seleccionar al menos una finca para este usuario, o marcar "Todas las fincas".');
@@ -3550,7 +3771,9 @@ END $$;
           ...this.usuarioEditando,
           nombre,
           rol,
-          empresaId: empresaId || null,
+          _superadminAutorizado: rol === 'superadmin',
+          empresaId: rol === 'superadmin' ? (primaryEmpEdit || this.usuarioEditando.empresaId || null) : primaryEmpEdit,
+          empresasAsignadas,
           fincasAsignadas,
           activo,
           email,
@@ -5839,6 +6062,20 @@ END $$;
 
     items.forEach((chk) => {
       chk.addEventListener('change', () => {
+        const allItems = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}`));
+        const allChecked = allItems.length > 0 && allItems.every((i) => i.checked);
+        const master = this.container.querySelector(`#chk-todas-fincas-${modo}`);
+        if (master) master.checked = allChecked;
+      });
+    });
+
+    this.container.querySelectorAll(`.btn-toggle-fincas-emp-${modo}`).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const empId = btn.getAttribute('data-emp-id');
+        const chksEmp = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}[data-empresa-id="${empId}"]`));
+        if (chksEmp.length === 0) return;
+        const todasMarcadas = chksEmp.every((c) => c.checked);
+        chksEmp.forEach((c) => { c.checked = !todasMarcadas; });
         const allItems = Array.from(this.container.querySelectorAll(`.chk-finca-item-${modo}`));
         const allChecked = allItems.length > 0 && allItems.every((i) => i.checked);
         const master = this.container.querySelector(`#chk-todas-fincas-${modo}`);

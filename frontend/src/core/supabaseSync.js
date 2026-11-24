@@ -168,18 +168,26 @@ export class SupabaseSyncService {
 
     guardarMapa('empresas', datosLocales.empresas, (e) => this.mapearEmpresaLocalACloud(e), (r) => r.id);
     guardarMapa('fincas', datosLocales.fincas, (f) => this.mapearFincaLocalACloud(f), (r) => r.id);
-    guardarMapa('usuarios', datosLocales.usuarios, (u) => ({
-      id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-      empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
-      usuario: u.usuario,
-      nombre: u.nombre,
-      rol: u.rol,
-      password: u.password || null,
-      fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
-      email: u.email || null,
-      telefono: u.telefono || null,
-      activo: u.activo !== false
-    }), (r) => r.usuario);
+    guardarMapa('usuarios', datosLocales.usuarios, (u) => {
+      const base = {
+        id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+        empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
+        usuario: u.usuario,
+        nombre: u.nombre,
+        rol: u.rol,
+        password: u.password || null,
+        fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+        email: u.email || null,
+        telefono: u.telefono || null,
+        activo: u.activo !== false
+      };
+      if (this.usarModoNeon()) {
+        base.empresas_asignadas = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+          ? u.empresasAsignadas
+          : (u.empresaId ? [u.empresaId] : []);
+      }
+      return base;
+    }, (r) => r.usuario);
     guardarMapa('animales', datosLocales.animales, (a) => this.mapearAnimalLocalACloud(a, fincaActivaFallback), (r) => `${r.finca_id}__${r.identificacion_tag}`);
     guardarMapa('servicios_reproductivos', datosLocales.servicios, (s) => this.mapearServicioLocalACloud(s, fincaActivaFallback), (r) => r.id);
     guardarMapa('inversiones_diferidas', datosLocales.inversiones, (i) => ({
@@ -289,6 +297,7 @@ export class SupabaseSyncService {
     }
     this.tenantContext = {
       empresaId: context.empresaId || null,
+      empresasIds: Array.isArray(context.empresasIds) ? context.empresasIds.filter(Boolean) : (context.empresaId ? [context.empresaId] : []),
       esSuperAdmin: Boolean(context.esSuperAdmin),
       rol: context.rol || (context.esSuperAdmin ? 'superadmin' : null),
       usuario: context.usuario || null,
@@ -826,13 +835,20 @@ export class SupabaseSyncService {
     const esSuperAdmin = appState.usuarioActual && appState.usuarioActual.rol === 'superadmin';
     const empresaIdActiva = appState.empresaActivaId || (appState.usuarioActual && appState.usuarioActual.empresaId);
     const fincaActiva = appState.fincaActivaId || (appState.fincas?.[0]?.id || null);
+    const empresasUsuarioIds = Array.from(new Set([
+      ...(Array.isArray(appState.usuarioActual?.empresasAsignadas) ? appState.usuarioActual.empresasAsignadas : []),
+      ...(appState.usuarioActual?.empresaId ? [appState.usuarioActual.empresaId] : []),
+      ...(empresaIdActiva ? [empresaIdActiva] : [])
+    ].filter(Boolean)));
+    const empresasUsuarioSet = new Set(empresasUsuarioIds);
 
-    if (empresaIdActiva || esSuperAdmin) {
+    if (empresaIdActiva || esSuperAdmin || empresasUsuarioIds.length > 0) {
       const fincasPermitidasIds = (appState.fincas || [])
-        .filter(f => esSuperAdmin || f.empresaId === empresaIdActiva)
+        .filter(f => esSuperAdmin || empresasUsuarioSet.has(f.empresaId))
         .map(f => f.id);
       this.setTenantContext({
         empresaId: empresaIdActiva,
+        empresasIds: empresasUsuarioIds,
         esSuperAdmin,
         rol: appState.usuarioActual?.rol || (esSuperAdmin ? 'superadmin' : null),
         usuario: appState.usuarioActual?.usuario || null,
@@ -854,7 +870,7 @@ export class SupabaseSyncService {
 
       // 0. Empresas + Directorio blindado
       if (Array.isArray(appState.empresas) && appState.empresas.length > 0) {
-        const empresasFiltradas = esSuperAdmin ? appState.empresas : appState.empresas.filter(e => e.id === empresaIdActiva);
+        const empresasFiltradas = esSuperAdmin ? appState.empresas : appState.empresas.filter(e => empresasUsuarioSet.has(e.id));
         if (empresasFiltradas.length > 0) {
           const full = empresasFiltradas.map(e => this.mapearEmpresaLocalACloud(e));
           const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('empresas', full, r => r.id, forzarCompleta);
@@ -876,8 +892,16 @@ export class SupabaseSyncService {
           }
         });
         const usuariosEmpresaMap = { ...(prevDir.usuariosEmpresaMap || {}) };
+        const usuariosEmpresasAsignadasMap = { ...(prevDir.usuariosEmpresasAsignadasMap || {}) };
+        const superadminsSet = new Set(Array.isArray(prevDir.superadminsAutorizados) ? prevDir.superadminsAutorizados : ['anuardavid']);
         (appState.usuarios || []).forEach(u => {
-          if (u && u.usuario && u.empresaId) usuariosEmpresaMap[u.usuario] = u.empresaId;
+          if (!u || !u.usuario) return;
+          const empArr = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+            ? u.empresasAsignadas.filter(Boolean)
+            : (u.empresaId ? [u.empresaId] : []);
+          if (u.empresaId || empArr[0]) usuariosEmpresaMap[u.usuario] = u.empresaId || empArr[0];
+          if (empArr.length > 0) usuariosEmpresasAsignadasMap[u.usuario] = empArr;
+          if (u.rol === 'superadmin') superadminsSet.add(u.usuario);
         });
 
         const tieneFincasLocales = Array.isArray(appState.fincas) && appState.fincas.length > 0;
@@ -899,7 +923,9 @@ export class SupabaseSyncService {
             animalesEliminados: unionArrays(prevDir.animalesEliminados, appState._animalesEliminados).slice(-1000),
             fincasEmpresaMap,
             fincasOrdenosMap,
-            usuariosEmpresaMap
+            usuariosEmpresaMap,
+            usuariosEmpresasAsignadasMap,
+            superadminsAutorizados: Array.from(superadminsSet)
           };
           this._ultimoDirectorioCloud = detallesDir;
           const { pendientes: dirPend, confirmarSubida: confDir } =
@@ -916,7 +942,7 @@ export class SupabaseSyncService {
       const todasFincasIdsLocal = new Set(
         (appState.fincas || []).filter(f => f && f.id && !eliminadasFincasSet.has(f.id) && !eliminadasFincasSet.has(f.codigo)).map(f => f.id)
       );
-      const fincasFiltradas = (esSuperAdmin ? (appState.fincas || []) : (appState.fincas || []).filter(f => f.empresaId === empresaIdActiva))
+      const fincasFiltradas = (esSuperAdmin ? (appState.fincas || []) : (appState.fincas || []).filter(f => empresasUsuarioSet.has(f.empresaId)))
         .filter(f => f && f.id && todasFincasIdsLocal.has(f.id));
       const fincasIdsValidas = new Set(fincasFiltradas.map(f => f.id));
 
@@ -931,20 +957,31 @@ export class SupabaseSyncService {
 
       // 2. Usuarios
       if (Array.isArray(appState.usuarios) && appState.usuarios.length > 0) {
-        const usuariosFiltrados = esSuperAdmin ? appState.usuarios : appState.usuarios.filter(u => u.empresaId === empresaIdActiva);
+        const usuariosFiltrados = esSuperAdmin
+          ? appState.usuarios
+          : appState.usuarios.filter(u =>
+              empresasUsuarioSet.has(u.empresaId) ||
+              (Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.some(eid => empresasUsuarioSet.has(eid)))
+            );
         if (usuariosFiltrados.length > 0) {
-          const full = usuariosFiltrados.map(u => ({
-            id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
-            empresa_id: this._resolverEmpresaIdCloud(u.empresaId),
-            usuario: u.usuario,
-            nombre: u.nombre,
-            rol: u.rol,
-            password: u.password || null,
-            fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
-            email: u.email || null,
-            telefono: u.telefono || null,
-            activo: u.activo !== false
-          }));
+          const full = usuariosFiltrados.map(u => {
+            const empAsig = Array.isArray(u.empresasAsignadas) && u.empresasAsignadas.length > 0
+              ? u.empresasAsignadas.filter(Boolean)
+              : (u.empresaId ? [u.empresaId] : []);
+            return {
+              id: u.usuario === 'anuardavid' ? 'USR-SUPER' : u.id,
+              empresa_id: this._resolverEmpresaIdCloud(u.empresaId || empAsig[0] || null),
+              empresas_asignadas: empAsig,
+              usuario: u.usuario,
+              nombre: u.nombre,
+              rol: u.rol,
+              password: u.password || null,
+              fincas_asignadas: Array.isArray(u.fincasAsignadas) ? u.fincasAsignadas : (u.fincasAsignadas || 'todas'),
+              email: u.email || null,
+              telefono: u.telefono || null,
+              activo: u.activo !== false
+            };
+          });
           const { pendientes, confirmarSubida } = this._filtrarRegistrosModificados('usuarios', full, r => r.usuario, forzarCompleta);
           if (pendientes.length > 0) {
             payload.usuarios = pendientes;
@@ -1221,11 +1258,15 @@ export class SupabaseSyncService {
       const ctx = this.tenantContext;
       const esSuperAdmin = Boolean(ctx && ctx.esSuperAdmin);
       const empId = ctx && ctx.empresaId ? String(ctx.empresaId) : '';
+      const empresasIds = ctx && Array.isArray(ctx.empresasIds) && ctx.empresasIds.length > 0
+        ? ctx.empresasIds.filter(Boolean)
+        : (empId ? [empId] : []);
       const fincasIds = ctx && Array.isArray(ctx.fincasIds) && ctx.fincasIds.length > 0 ? ctx.fincasIds : [];
 
       const qs = new URLSearchParams();
       if (esSuperAdmin) qs.set('esSuperAdmin', '1');
       if (empId) qs.set('empresaId', empId);
+      if (!esSuperAdmin && empresasIds.length > 0) qs.set('empresasIds', empresasIds.join(','));
       if (!esSuperAdmin && fincasIds.length > 0) qs.set('fincasIds', fincasIds.join(','));
       const queryStr = qs.toString() ? `?${qs.toString()}` : '';
 

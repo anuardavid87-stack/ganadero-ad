@@ -147,6 +147,7 @@ export async function ensureNeonSchema(sql = getSql(), force = false) {
         `CREATE TABLE IF NOT EXISTS public.usuarios (
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
             empresa_id TEXT,
+            empresas_asignadas JSONB DEFAULT '[]'::jsonb,
             usuario TEXT UNIQUE NOT NULL,
             nombre TEXT NOT NULL,
             rol TEXT NOT NULL DEFAULT 'encargado',
@@ -157,6 +158,7 @@ export async function ensureNeonSchema(sql = getSql(), force = false) {
             activo BOOLEAN DEFAULT TRUE,
             creado_en TIMESTAMPTZ DEFAULT now()
         )`,
+        `ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS empresas_asignadas JSONB DEFAULT '[]'::jsonb`,
         `CREATE INDEX IF NOT EXISTS idx_usuarios_empresa_id ON public.usuarios (empresa_id)`,
 
         `CREATE TABLE IF NOT EXISTS public.costos_fijos_finca (

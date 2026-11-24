@@ -2,7 +2,7 @@
 // GANADERO AD PWA: SERVICE WORKER v5.0.0 (MIGRACIÓN COMPLETA A NEON POSTGRES)
 // ============================================================================
 
-const CACHE_NAME = 'ganadero-ad-v5.0.2-wa-disabled';
+const CACHE_NAME = 'ganadero-ad-v5.1.0-usuarios-multiempresa';
 const CORE_FILES = [
   './',
   './index.html',
